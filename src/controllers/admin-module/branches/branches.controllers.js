@@ -1,0 +1,173 @@
+const {
+  AdminModel,
+} = require("../../../models/admin-module/admin/admin.model");
+const {
+  BranchModel,
+} = require("../../../models/admin-module/branch/branches.model");
+const statusCode = require("../../../utils/constants/statusCode");
+const {
+  validateRequestBody,
+  validateMongooseId,
+} = require("../../../utils/reqFunctions/reqFunction");
+const ApiError = require("../../../utils/response/ApiError");
+const ApiResponse = require("../../../utils/response/ApiResponse");
+const catchAsyncError = require("../../../utils/response/catchAsyncError");
+
+// ADD BRANCH
+const addBranch = catchAsyncError(async (req, res, next) => {
+  const { name, location, latitude, longitude } = req.body;
+
+  const reqField = ["name", "location", "latitude", "longitude"];
+  validateRequestBody(reqField, req.body);
+
+  let assignedAdmin = null;
+
+  if (adminId) {
+    validateMongooseId(adminId);
+
+    const findAdmin = await AdminModel.findById(adminId).select("_id branch");
+
+    if (!findAdmin) {
+      throw new ApiError(statusCode.NOT_FOUND, "Admin not found");
+    }
+
+    if (findAdmin.branch) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "This admin is already assigned to another branch"
+      );
+    }
+
+    assignedAdmin = findAdmin._id;
+  }
+
+  const branch = await BranchModel.create({
+    name,
+    location,
+    coordinates: {
+      latitude,
+      longitude,
+    },
+  });
+
+  if (assignedAdmin) {
+    await AdminModel.findByIdAndUpdate(assignedAdmin, { branch: branch._id });
+  }
+
+  return res
+    .status(statusCode.CREATED)
+    .json(
+      new ApiResponse(statusCode.OK, branch, "Branch created successfully")
+    );
+});
+
+// GET ALL BRANCHES
+const getAllBranches = catchAsyncError(async (req, res, next) => {
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const startIndex = (page - 1) * limit;
+  const { name, location } = req.query;
+
+  const query = {};
+  if (name) {
+    query.$or.push({
+      name: { $regex: name, $options: "i" },
+    });
+  }
+  if (location) {
+    query.$or.push({
+      location: { $regex: location, $options: "i" },
+    });
+  }
+
+  const branches = await BranchModel.find(query)
+    .sort({ createdAt: -1 })
+    .limit(limit)
+    .skip(startIndex);
+
+  if (!branches || branches.length === 0) {
+    throw new ApiError(statusCode.NOT_FOUND, "Branches not found");
+  }
+
+  const totalData = await BranchModel.countDocuments(query).exec();
+
+  const data = {
+    branches,
+    totalPages: Math.ceil(totalData / limit),
+    currentPage: page,
+    totalCount: totalData,
+  };
+
+  return res
+    .status(statusCode.OK)
+    .json(new ApiResponse(statusCode.OK, data, "Data found"));
+});
+
+// GET BRANCH BY ID
+const getBranchById = catchAsyncError(async (req, res, next) => {
+  const { branchId } = req.params;
+
+  const branch = await BranchModel.findById(branchId);
+  if (!branch) {
+    throw new ApiError(statusCode.NOT_FOUND, "Branch not found");
+  }
+
+  return res
+    .status(statusCode.OK)
+    .json(new ApiResponse(statusCode.OK, branch, "Branch Found Successfully"));
+});
+
+// DELETE BRANCH BY ID
+const deleteBranchById = catchAsyncError(async (req, res, next) => {
+  const { branchId } = req.params;
+
+  const deletedBranch = await BranchModel.findByIdAndDelete(branchId);
+
+  if (!deletedBranch) {
+    throw new ApiError(statusCode.NOT_FOUND, "Not Found");
+  }
+
+  return res
+    .status()
+    .json(new ApiResponse(statusCode.OK, {}, "Deleted Successfully"));
+});
+
+// UPDATE BRANCH BY ID
+const updateBranchById = catchAsyncError(async (req, res, next) => {
+  const { branchId } = req.params;
+  const { name, location, latitude, longitude, adminId } = req.body;
+  const updateData = {
+    name,
+    location,
+    coordinates: {
+      latitude,
+      longitude,
+    },
+  };
+  const updatedBranch = await BranchModel.findByIdAndUpdate(
+    branchId,
+    updateData,
+    {
+      new: true,
+      runValidators: true,
+    }
+  );
+
+  if (!updatedBranch) {
+    throw new ApiError(statusCode.NOT_FOUND, "Not found");
+  }
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(statusCode.OK, updatedBranch, "Updated Successfully")
+    );
+});
+
+module.exports = {
+  addBranch,
+  getAllBranches,
+  getBranchById,
+  deleteBranchById,
+  updateBranchById,
+};

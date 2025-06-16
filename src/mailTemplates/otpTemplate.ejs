@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Your OTP</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f9f9f9;
+        color: #333;
+        line-height: 1.6;
+        margin: 0;
+        padding: 0;
+      }
+      .container {
+        max-width: 600px;
+        margin: 20px auto;
+        padding: 20px;
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      .header {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+      .header h1 {
+        color: #007bff;
+        margin: 0;
+      }
+      .content p {
+        margin: 10px 0;
+      }
+      .otp {
+        font-size: 2rem;
+        color: #007bff;
+        font-weight: bold;
+        text-align: center;
+        margin: 20px 0;
+      }
+      .footer {
+        text-align: center;
+        margin-top: 20px;
+        font-size: 0.9em;
+        color: #666;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>Hi <%= name %>!</h1>
+      </div>
+      <div class="content">
+        <div>Your OTP is:</div>
+        <div class="otp"><%= otp %></div>
+        <div>Please use this OTP. This OTP is valid for a 10 minutes.</div>
+        <div>
+          If you didn't request this, please ignore this email or contact
+          support immediately.
+        </div>
+      </div>
+      <div class="footer">
+        <p>Thanks</p>
+        <p>We move</p>
+      </div>
+    </div>
+  </body>
+</html>

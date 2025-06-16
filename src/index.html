@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>Captain Duty Tracker</title>
+    <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+  </head>
+  <body>
+    <h2>Captain Duty Tracker</h2>
+    <button onclick="goOnDuty()">Go On Duty</button>
+    <button onclick="goOffDuty()">Go Off Duty</button>
+    <button onclick="updateLocation()">Update Location</button>
+
+    <h3>Nearby Captains:</h3>
+    <ul id="nearbyCaptainsList"></ul>
+
+    <script>
+      const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2N2ExYjJlMThlODgxODBjNWFkMzI4NjgiLCJlbWFpbCI6ImFydW5rdW1hckBnbWFpbC5jb20iLCJyb2xlcyI6WyJkcml2ZXIiXSwiaWF0IjoxNzM4NzUwNTYxLCJleHAiOjE3Mzg4MzY5NjF9.j9I8nOejli7e7JAgOakFFHYURdb1sed0HI4XwPjTxhY"; 
+
+      const socket = io("http://localhost:8000", {
+        extraHeaders: {
+          accesstoken: token,
+        },
+      });
+
+      // Function to simulate getting GPS location
+      function getCurrentLocation(callback) {
+        if (navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            (position) => {
+              const coords = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude,
+              };
+              callback(coords);
+            },
+            (error) => {
+              console.error("Error getting location:", error);
+              alert("Please allow location access.");
+            }
+          );
+        } else {
+          alert("Geolocation is not supported by this browser.");
+        }
+      }
+
+      // Captain goes on duty
+      function goOnDuty() {
+
+        getCurrentLocation((coords) => {
+          console.log("Going on duty with coords:", coords);
+          socket.emit("goOnDuty", coords);
+        });
+      }
+
+      // Captain goes off duty
+      function goOffDuty() {
+        console.log("Going off duty");
+        socket.emit("goOffDuty");
+      }
+
+      // Update Captain's location
+      function updateLocation() {
+        getCurrentLocation((coords) => {
+          console.log("Updating location:", coords);
+          socket.emit("updateLocation", coords);
+        });
+      }
+
+      // Receive nearby captains list
+      socket.on("nearbyCaptains", (captains) => {
+        console.log("Nearby captains:", captains);
+        const list = document.getElementById("nearbyCaptainsList");
+        list.innerHTML = ""; // Clear previous list
+        captains.forEach((captain) => {
+          const listItem = document.createElement("li");
+          listItem.textContent = `Captain ID: ${captain.id} | Coords: ${JSON.stringify(captain.coords)}`;
+          list.appendChild(listItem);
+        });
+      });
+
+      // Handle disconnection
+      socket.on("disconnect", () => {
+        console.log("Disconnected from server");
+      });
+    </script>
+  </body>
+</html>
