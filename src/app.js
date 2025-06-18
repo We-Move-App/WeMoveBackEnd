@@ -89,18 +89,19 @@ if (node_env !== "production") {
 
 const allowedOrigins = allowed_origin;
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, origin);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true,
-  })
-);
+// app.use(
+//   cors({
+//     origin: function (origin, callback) {
+//       if (!origin || allowedOrigins.includes(origin)) {
+//         callback(null, origin);
+//       } else {
+//         callback(new Error("Not allowed by CORS"));
+//       }
+//     },
+//     credentials: true,
+//   })
+// );
+app.use(cors());
 // app.options("*", (req, res) => {
 //   const origin = req.headers.origin;
 //   if (allowedOrigins.includes(origin)) {
@@ -217,7 +218,7 @@ app.use((req, res, next) => {
   console.log("📥 Incoming:", req.method, req.url);
   next();
 });
-
+app.use(cors)
 
 app.use(errorHandler);
 module.exports = app;
