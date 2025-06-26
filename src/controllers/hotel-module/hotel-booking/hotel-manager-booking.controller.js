@@ -560,9 +560,8 @@ const getBookingsByHotelManager = catchAsyncError(async (req, res) => {
   );
 });
 const allotRoomToBooking = catchAsyncError(async (req, res) => {
-  const { bookingId } = req.query;
-  const { roomId } = req.body;
-
+  const { bookingId,roomId }= req.query;
+  
   if (!bookingId || !roomId) {
     throw new ApiError(statusCode.BAD_REQUEST, "Booking ID and room ID are required.");
   }
