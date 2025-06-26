@@ -25,9 +25,10 @@ const createBookingByHotelManager = catchAsyncError(async (req, res) => {
     paymentStatus,
     noOfAdults,
     noOfKids,
-    noOfRoom,
+
     user,
   } = req.body;
+const noOfRoom = parseInt(req.body.noOfRoom) || 1;
 
   // Parse user data
   let parsedUser = {};
@@ -40,7 +41,7 @@ const createBookingByHotelManager = catchAsyncError(async (req, res) => {
   // Check for required fields
   if (
     !bookedBy || !hotelId || !roomTypeId ||
-    !checkInDate || !checkOutDate || !noOfRoom
+    !checkInDate || !checkOutDate
   ) {
     throw new ApiError(statusCode.BAD_REQUEST, "Missing required booking details.");
   }

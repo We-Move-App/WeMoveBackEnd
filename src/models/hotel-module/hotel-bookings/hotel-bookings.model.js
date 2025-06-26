@@ -65,7 +65,7 @@ const HotelBookingSchema = new mongoose.Schema(
     },
     noOfAdults: { type: Number, required: true },
     noOfKids: { type: Number, default: 0 },
-    noOfRoom: { type: Number },
+    noOfRoom: { type: Number ,  },
     user: [passengerSchema],
     status: {
       type: String,
