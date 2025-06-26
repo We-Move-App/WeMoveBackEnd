@@ -531,13 +531,14 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
 
   const query = {
     bookedBy: userId,
-    checkInDate: { $gte: today }, // Upcoming bookings (today or later)
+    checkInDate: { $gte: today },
   };
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
+  // Step 1: Fetch bookings with hotel and roomType
   const bookings = await HotelBooking.find(query)
-    .sort({ checkInDate: 1 }) // Upcoming soonest first
+    .sort({ checkInDate: 1 })
     .skip(skip)
     .limit(parseInt(limit))
     .populate({
@@ -559,11 +560,35 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
       path: "assignedRooms",
       model: individualRoom,
       select: "-__v -roomStatus"
-    });
+    })
+    .lean(); // Use .lean() to allow modification
 
+  // Step 2: Enhance each booking with hotel image and nights
+  const bookingsWithExtras = await Promise.all(
+    bookings.map(async (booking) => {
+      // Calculate nights
+      const checkIn = new Date(booking.checkInDate);
+      const checkOut = new Date(booking.checkOutDate);
+      const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+      console.log("Nights:", nights);
+
+      // Get hotel image
+      const hotelImages = await hotelImagesModel.findOne({ hotelId: booking.hotelId._id }).select("images").lean();
+      const hotelImage = hotelImages?.images || [];
+
+      return {
+        ...booking,
+        nights,
+        hotelImage, // returns all hotel images
+      };
+    })
+  );
+
+  // Step 3: Pagination info
   const totalBookings = await HotelBooking.countDocuments(query);
   const totalPages = Math.ceil(totalBookings / parseInt(limit));
 
+  // Step 4: Send response
   return res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
@@ -572,12 +597,14 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
         totalPages,
         currentPage: parseInt(page),
         limit: parseInt(limit),
-        bookings,
+        bookings: bookingsWithExtras,
+        
       },
       "Upcoming bookings fetched successfully"
     )
   );
 });
+
 
 
 //--------------------- get past bookings for user --------------------
