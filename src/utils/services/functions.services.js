@@ -384,6 +384,8 @@ const resendOtpWithoutTokenFunc = async ({ req, res, reqModel }) => {
 const verifyOtpFunc = async ({ req, reqModel, res }) => {
   const { emailOrPhone, otp } = req.body;
 
+  console.log("req.body", req.body);
+
   if (!otp) {
     throw new ApiError(statusCode.BAD_REQUEST, "Please enter OTP");
   }
@@ -403,10 +405,12 @@ const verifyOtpFunc = async ({ req, reqModel, res }) => {
     }
 
     query = isEmail ? { email: emailOrPhone } : { phoneNumber: emailOrPhone };
+    
 
     user = await reqModel.findOne(
       isEmail ? { email: emailOrPhone } : { phoneNumber: emailOrPhone }
     );
+   
 
     if (!user) {
       throw new ApiError(
@@ -420,7 +424,10 @@ const verifyOtpFunc = async ({ req, reqModel, res }) => {
     }
 
     query = { ownerId: req.user._id };
+   
+  
     user = await reqModel.findById(req.user._id);
+   
 
     if (!user) {
       throw new ApiError(statusCode.NOT_FOUND, "User not found");
@@ -428,6 +435,8 @@ const verifyOtpFunc = async ({ req, reqModel, res }) => {
   }
 
   const otpInDb = await OtpModel.findOne({ ...query, isUsed: false });
+  console.log("otpInDb", otpInDb);
+ 
 
   if (!otpInDb || otpInDb.otp !== otp || otpInDb.expiresAt < Date.now()) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid or expired OTP");
