@@ -13,6 +13,7 @@ const { uploadDocuments } = require("../../../utils/uploadFiles/multer");
 const { deleteImageFromAws } = require("../../../utils/uploadFiles/uploadFilestoAws");
 const { uploadMultipleImagesToAws } = require("../../../utils/uploadFiles/images/uploadImages");
 const UserModel = require("../../../models/user-module/users/user.model");
+const HotelPolicyModel = require("../../../models/hotel-module/hotel-registration/hotel-policy.model");
 const createBookingByHotelManager = catchAsyncError(async (req, res) => {
   const bookedBy = req.user._id;
   const {
@@ -20,8 +21,6 @@ const createBookingByHotelManager = catchAsyncError(async (req, res) => {
     roomTypeId,
     checkInDate,
     checkOutDate,
-    checkInTime,
-    checkOutTime,
     totalAmount,
     paymentStatus,
     noOfAdults,
@@ -30,6 +29,7 @@ const createBookingByHotelManager = catchAsyncError(async (req, res) => {
     user,
   } = req.body;
 
+  // Parse user data
   let parsedUser = {};
   try {
     parsedUser = typeof user === "string" ? JSON.parse(user) : user;
@@ -37,37 +37,23 @@ const createBookingByHotelManager = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid user object format.");
   }
 
-  console.log("Files received:", Object.keys(req.files || {}));
-
-
-
-
+  // Check for required fields
   if (
-    !bookedBy ||
-    !hotelId ||
-    !checkInDate ||
-    !checkOutDate ||
-    !checkInTime ||
-    !checkOutTime ||
-    !noOfRoom
-    || !roomTypeId
+    !bookedBy || !hotelId || !roomTypeId ||
+    !checkInDate || !checkOutDate || !noOfRoom
   ) {
     throw new ApiError(statusCode.BAD_REQUEST, "Missing required booking details.");
   }
-if (checkOutDateTime <= checkInDateTime) {
-  throw new ApiError(statusCode.BAD_REQUEST, "Check-out time must be after check-in time.");
-}
 
-  if (formattedCheckIn <= currentDate) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Check-in date must be greater than the current date.");
-  }
-  if (formattedCheckIn >= formattedCheckOut) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Check-out date must be greater than check-in date.");
+  // Get policy times and hotel manager validation
+  const hotelPolicy = await HotelPolicyModel.findOne({ hotelId }).select("checkInTime checkOutTime");
+  if (!hotelPolicy) {
+    throw new ApiError(statusCode.NOT_FOUND, "Hotel policy not found.");
   }
 
   const userExists = await HotelManagerModel.findById(bookedBy);
   if (!userExists) {
-    throw new ApiError(statusCode.NOT_FOUND, "User not registered.");
+    throw new ApiError(statusCode.NOT_FOUND, "Hotel manager not found.");
   }
 
   const hotelExists = await Hotel.findById(hotelId);
@@ -75,65 +61,84 @@ if (checkOutDateTime <= checkInDateTime) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
   }
 
-  // Find all rooms of this hotel & type that are available
+  // Format dates and times
+  const currentDate = new Date();
+  const formattedCheckIn = new Date(checkInDate);
+  const formattedCheckOut = new Date(checkOutDate);
+
+  const checkInDateTime = new Date(`${checkInDate}T${hotelPolicy.checkInTime || "12:00"}:00`);
+  const checkOutDateTime = new Date(`${checkOutDate}T${hotelPolicy.checkOutTime || "11:00"}:00`);
+
+  // Validations
+  if (checkOutDateTime <= checkInDateTime) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Check-out must be after check-in.");
+  }
+
+  if (formattedCheckIn <= currentDate) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Check-in date must be in the future.");
+  }
+
+  if (formattedCheckIn >= formattedCheckOut) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Check-out date must be after check-in date.");
+  }
+
+  // Find all available rooms
   const allHotelRooms = await individualRoom.find({
     hotelId,
+    roomTypeId,
     status: "available",
     isAvailable: true,
-    roomTypeId,
   });
 
+  // Check for overlapping bookings
   const overlappingBookings = await HotelBooking.find({
     hotelId,
     checkInDate: { $lt: formattedCheckOut },
     checkOutDate: { $gt: formattedCheckIn },
-    status: { $in: ["Booked"] },
+    status: "Booked",
     assignedRooms: { $exists: true, $ne: [] },
   });
 
-
   const bookedRoomIds = new Set();
-  overlappingBookings.forEach((booking) => {
-    booking.assignedRooms.forEach((roomId) => {
+  overlappingBookings.forEach(booking => {
+    booking.assignedRooms.forEach(roomId => {
       bookedRoomIds.add(roomId.toString());
     });
   });
 
   const trulyAvailableRooms = allHotelRooms.filter(
-    (room) => !bookedRoomIds.has(room._id.toString())
+    room => !bookedRoomIds.has(room._id.toString())
   );
 
   if (trulyAvailableRooms.length < noOfRoom) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      `Only ${trulyAvailableRooms.length} rooms are available during your selected time. Requested: ${noOfRoom}`
+      `Only ${trulyAvailableRooms.length} rooms are available. Requested: ${noOfRoom}`
     );
   }
 
-  // ✅ Upload identity card image if exists
+  // Upload identity card if exists
   let identityCard = null;
-
-  if (req.files?.identity_card && req.files.identity_card.length > 0) {
+  if (req.files?.identity_card?.length > 0) {
     const uploaded = await uploadMultipleImagesToAws(req.files.identity_card);
     identityCard = {
       url: uploaded[0].url,
       key: uploaded[0].key,
       uploadedAt: new Date(),
-      bookedBy: bookedBy,
+      bookedBy,
     };
   }
 
-
-
+  // Create booking
   const booking = await HotelBooking.create({
     bookedBy,
     roomTypeId,
     hotelId,
     checkInDate: formattedCheckIn,
     checkOutDate: formattedCheckOut,
-    assignedRooms: [],
     checkInTime: checkInDateTime,
     checkOutTime: checkOutDateTime,
+    assignedRooms: [],
     totalAmount,
     paymentStatus,
     noOfAdults,
@@ -143,13 +148,14 @@ if (checkOutDateTime <= checkInDateTime) {
     user: {
       ...parsedUser,
       identityCard,
-    }
+    },
   });
 
   return res.status(statusCode.CREATED).json(
     new ApiResponse(statusCode.CREATED, booking, "Booking created successfully")
   );
 });
+
 
 const getRoomsstatus = catchAsyncError(async (req, res) => {
   const { hotelId } = req.params;
@@ -565,7 +571,7 @@ const allotRoomToBooking = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.NOT_FOUND, "Booking not found.");
   }
 
-    if (booking.status !== "Booked") {
+  if (booking.status !== "Booked") {
     throw new ApiError(statusCode.BAD_REQUEST, `Booking is already ${booking.status}.`);
   }
 
@@ -575,7 +581,7 @@ const allotRoomToBooking = catchAsyncError(async (req, res) => {
 
   const { hotelId, checkInDate, checkOutDate, noOfRoom, assignedRooms = [] } = booking;
 
-   if (new Date(checkInDate) >= new Date(checkOutDate)) {
+  if (new Date(checkInDate) >= new Date(checkOutDate)) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid check-in/check-out dates.");
   }
 
@@ -586,7 +592,7 @@ const allotRoomToBooking = catchAsyncError(async (req, res) => {
     );
   }
 
-  
+
   const room = await individualRoom.findOne({ _id: roomId, hotelId, roomTypeId: booking.roomTypeId });
   if (!room) {
     throw new ApiError(
@@ -594,7 +600,7 @@ const allotRoomToBooking = catchAsyncError(async (req, res) => {
       "Room not found or does not belong to the same hotel/room type."
     );
   }
-   if (room.status === "booked" || room.isAvailable === false) {
+  if (room.status === "booked" || room.isAvailable === false) {
     throw new ApiError(statusCode.BAD_REQUEST, "Room is not available.");
   }
 
