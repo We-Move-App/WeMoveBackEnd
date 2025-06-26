@@ -371,49 +371,150 @@ const createRoom = catchAsyncError(async (req, res, next) => {
 
 const getRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
   const { hotelId, roomType } = req.query;
- 
+
   if (!hotelId || !roomType) {
     return next(new ApiError(statusCode.BAD_REQUEST, "hotelId and roomType are required."));
   }
- 
-const room = await Room.findOne({ hotelId, roomType: roomType.toLowerCase() });
+
+  const normalizedRoomType = roomType.toLowerCase();
+  const mongoose = require("mongoose");
+
+  if (!mongoose.Types.ObjectId.isValid(hotelId)) {
+    return next(new ApiError(statusCode.BAD_REQUEST, "Invalid hotelId."));
+  }
+
+  const hotelObjectId = new mongoose.Types.ObjectId(hotelId);
+
+  // 🔍 Room of requested type
+  const room = await Room.findOne({ hotelId: hotelObjectId, roomType: normalizedRoomType });
   if (!room) {
     return next(new ApiError(statusCode.NOT_FOUND, "Room not found."));
   }
- 
-  const hotel = await Hotel.findById(hotelId);
-  if (!hotel) {
-    return next(new ApiError(statusCode.NOT_FOUND, "Hotel not found."));
-  }
 
-  const rooms = await Room.find({ hotelId, roomType });
-  // console.log(rooms);
+  const rooms = await Room.find({ hotelId: hotelObjectId, roomType: normalizedRoomType });
   if (rooms.length === 0) {
     return next(new ApiError(statusCode.NOT_FOUND, "No rooms found for the specified hotel and type."));
   }
 
+  // ✅ Room Type specific stats
   const bookedRoomsCount = await individualRoom.countDocuments({ roomTypeId: rooms[0]._id, isAvailable: false });
   const availableRoomsCount = await individualRoom.countDocuments({ roomTypeId: rooms[0]._id, isAvailable: true });
-  // const bookedRoomsCount = rooms.filter(room => room.isAvalaible).length;
-  // const availableRoomsCount = rooms.length - bookedRoomsCount;
 
-  const roomImages = await HotelRoomImagesModel.findOne({ hotelId, roomType });
+  // ✅ Hotel-wide stats
+  const hotelRoomTypes = await Room.find({ hotelId: hotelObjectId });
+  const hotelRoomTypeIds = hotelRoomTypes.map(r => r._id);
 
+  const hotelBookedCount = await individualRoom.countDocuments({
+    roomTypeId: { $in: hotelRoomTypeIds },
+    isAvailable: false
+  });
+
+  const hotelAvailableCount = await individualRoom.countDocuments({
+    roomTypeId: { $in: hotelRoomTypeIds },
+    isAvailable: true
+  });
+
+  // ✅ Room images (top 3)
+  const roomImages = await HotelRoomImagesModel.find({
+    roomId: room._id,
+    roomType: normalizedRoomType
+  });
+  const roomImagesData = roomImages.length > 0 ? roomImages[0].images.slice(0, 3) : [];
 
   const baseRoom = rooms[0];
 
   res.status(statusCode.OK).json(
     new ApiResponse(statusCode.OK, {
-      totalRooms: bookedRoomsCount+availableRoomsCount,
+      // 👇 Specific room type stats
+      totalRooms: bookedRoomsCount + availableRoomsCount,
       bookedRooms: bookedRoomsCount,
       availableRooms: availableRoomsCount,
+
+      // 👇 Hotel-wide stats
+      hotelTotalRooms: hotelBookedCount + hotelAvailableCount,
+      hotelBookedRooms: hotelBookedCount,
+      hotelAvailableRooms: hotelAvailableCount,
+
+      // 👇 Room preview
       sampleRoom: {
         ...baseRoom.toObject(),
-        images: roomImages ? roomImages.images.slice(0, 3) : [],
+        images: roomImagesData
       }
     }, "Room data fetched successfully.")
   );
 });
+// ......fetchAllRoomsByHotel
+
+const getAllRooms = catchAsyncError(async (req, res, next) => {
+  const { hotelId } = req.query;
+
+  if (!hotelId) {
+    return next(new ApiError(statusCode.BAD_REQUEST, "hotelId is required."));
+  }
+
+  const mongoose = require("mongoose");
+  if (!mongoose.Types.ObjectId.isValid(hotelId)) {
+    return next(new ApiError(statusCode.BAD_REQUEST, "Invalid hotelId."));
+  }
+
+  const hotelObjectId = new mongoose.Types.ObjectId(hotelId);
+
+  // Get all room types for this hotel
+  const roomTypes = await Room.find({ hotelId: hotelObjectId });
+  if (roomTypes.length === 0) {
+    return next(new ApiError(statusCode.NOT_FOUND, "No rooms found for this hotel."));
+  }
+
+  // Get all individual rooms (booked & available)
+  const roomTypeIds = roomTypes.map(r => r._id);
+
+  const hotelBookedCount = await individualRoom.countDocuments({
+    roomTypeId: { $in: roomTypeIds },
+    isAvailable: false
+  });
+
+  const hotelAvailableCount = await individualRoom.countDocuments({
+    roomTypeId: { $in: roomTypeIds },
+    isAvailable: true
+  });
+
+  // For each roomType, get its stats and top 3 images
+  const roomDetails = await Promise.all(
+    roomTypes.map(async (room) => {
+      const booked = await individualRoom.countDocuments({ roomTypeId: room._id, isAvailable: false });
+      const available = await individualRoom.countDocuments({ roomTypeId: room._id, isAvailable: true });
+
+      const roomImages = await HotelRoomImagesModel.findOne({
+        roomId: room._id,
+        roomType: room.roomType.toLowerCase()
+      });
+
+      const topImages = roomImages ? roomImages.images.slice(0, 3) : [];
+
+      return {
+        roomType: room.roomType,
+        numberOfRoom: room.numberOfRoom,
+        roomPrice: room.roomPrice,
+        amenities: room.amenities,
+        bookedRooms: booked,
+        availableRooms: available,
+        totalRooms: booked + available,
+        images: topImages
+      };
+    })
+  );
+
+  // Final response
+  res.status(statusCode.OK).json(
+    new ApiResponse(statusCode.OK, {
+      hotelTotalRooms: hotelBookedCount + hotelAvailableCount,
+      hotelBookedRooms: hotelBookedCount,
+      hotelAvailableRooms: hotelAvailableCount,
+      roomTypes: roomDetails
+    }, "Hotel room details fetched successfully.")
+  );
+});
+
 const updateRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
   const { _id } = req.user;
   const {
@@ -573,7 +674,8 @@ const deleteRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
 });
 module.exports = {
   createRoom,
-  getRoomByHotelAndType,
+   getRoomByHotelAndType ,
+  getAllRooms,
   updateRoomByHotelAndType,
   deleteRoomByHotelAndType,
 };

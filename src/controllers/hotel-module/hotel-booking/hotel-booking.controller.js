@@ -379,9 +379,10 @@ const getHotelById = catchAsyncError(async (req, res) => {
     Room.find({ hotelId }).select("roomType roomPrice numberOfRoom").lean()
   ]);
 
-  const selectedImage = hotelImages?.images?.[0] || null;
+  // 🖼️ Return ALL hotel images
+  const allHotelImages = hotelImages?.images || [];
 
-  // Get room type images (first image only)
+  // 🛏️ Get room type images (ALL images)
   const roomTypesWithImages = await Promise.all(
     roomTypes.map(async (room) => {
       const roomImageData = await HotelRoomImagesModel.findOne({
@@ -389,14 +390,14 @@ const getHotelById = catchAsyncError(async (req, res) => {
         roomType: room.roomType
       }).select("images").lean();
 
-      const thumbnailImage = roomImageData?.images?.[0] || null;
+      const allImages = roomImageData?.images || [];
 
       return {
         _id: room._id,
         roomType: room.roomType,
         roomPrice: room.roomPrice,
         numberOfRoom: room.numberOfRoom,
-        image: thumbnailImage // 🖼️ First image only
+        images: allImages // ✅ ALL images for room type
       };
     })
   );
@@ -409,14 +410,15 @@ const getHotelById = catchAsyncError(async (req, res) => {
         rating: hotel.rating,
         totalRoom: hotel.totalRoom
       },
-      hotelImage: selectedImage,
+      hotelImages: allHotelImages, // ✅ return array
       hotelAddress,
       hotelPolicies,
       hotelFeedbacks,
-      roomTypes: roomTypesWithImages
+      roomTypes: roomTypesWithImages // ✅ each room has full images array
     }, "Hotel details fetched successfully.")
   );
 });
+
 //--------------------- get upcoming bookings for user --------------------
 // const getUpcomingBookings = catchAsyncError(async (req, res) => {
 //   const userId = req.user?._id;

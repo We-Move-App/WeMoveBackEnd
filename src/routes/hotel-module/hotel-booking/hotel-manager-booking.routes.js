@@ -16,7 +16,7 @@ const hotelmanagerBookingRoutes = express.Router();
 
 
  hotelmanagerBookingRoutes
-  .route("/create-booking")
+  .route("/bookHotel")
   .post(isHotelManagerAuthenticated,uploadDocuments, createBookingByHotelManager);
 
     

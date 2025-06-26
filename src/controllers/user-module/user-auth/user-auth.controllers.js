@@ -14,11 +14,13 @@ const {
 const { TypeOfUser } = require("../../../utils/constants/constants");
 const {
   registerUserWithEmailOrPhoneAndOtp,
+  sendOtpOnlyWithoutUserCreation ,
   registerUserWithEmailAndPhoneNumber,
   loginUserWithEmailAndPhoneNumber,
   logoutUserFunc,
   refreshTokenFunc,
   resendOtpFunc,
+  verifyOtpFunction,
   verifyOtpFunc,
   checkUserVerificationStatus,
   addEmailOrPhoneNumberFunc,
