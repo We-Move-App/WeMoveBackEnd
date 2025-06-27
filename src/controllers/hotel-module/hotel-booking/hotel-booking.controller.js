@@ -712,9 +712,8 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
 //     new ApiResponse(statusCode.OK, result, "Past bookings fetched successfully.")
 //   );
 // });
-const getPastBookings= catchAsyncError(async (req, res) => {
+const getPastBookings = catchAsyncError(async (req, res) => {
   const { page = 1, limit = 10 } = req.query;
-
   const userId = req.user._id;
 
   const today = new Date();
@@ -722,19 +721,39 @@ const getPastBookings= catchAsyncError(async (req, res) => {
 
   const query = {
     bookedBy: userId,
-    checkInDate: { $lt: today }  // Use the correct date field here
+    checkInDate: { $lt: today }
   };
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
   const bookings = await HotelBooking.find(query)
-    .sort({ checkInDate: -1 }) // Sort by actual booking date
+    .sort({ checkInDate: -1 })
     .skip(skip)
     .limit(parseInt(limit))
     .populate({ path: "hotelId", model: Hotel, select: "-__v" })
     .populate({ path: "roomTypeId", model: Room, select: "-__v" })
     .populate({ path: "bookedBy", model: User, select: "-password -__v" })
-    .populate({ path: "assignedRooms", model: individualRoom, select: "-__v" });
+    .populate({ path: "assignedRooms", model: individualRoom, select: "-__v" })
+    .lean(); // Allow editing results
+
+  const bookingsWithExtras = await Promise.all(
+    bookings.map(async (booking) => {
+      // Calculate number of nights
+      const checkIn = new Date(booking.checkInDate);
+      const checkOut = new Date(booking.checkOutDate);
+      const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+
+      // Get hotel images
+      const hotelImages = await hotelImagesModel.findOne({ hotelId: booking.hotelId._id }).select("images").lean();
+      const hotelImage = hotelImages?.images || [];
+
+      return {
+        ...booking,
+        nights,
+        hotelImage, // all hotel images
+      };
+    })
+  );
 
   const totalBookings = await HotelBooking.countDocuments(query);
   const totalPages = Math.ceil(totalBookings / parseInt(limit));
@@ -747,12 +766,13 @@ const getPastBookings= catchAsyncError(async (req, res) => {
         totalPages,
         currentPage: parseInt(page),
         limit: parseInt(limit),
-        bookings,
+        bookings: bookingsWithExtras,
       },
       "Past bookings fetched successfully"
     )
   );
 });
+
 
 
 

@@ -28,22 +28,17 @@ const hotelFeedbackSchema = new Schema(
     comment: {
       type: String,
       trim: true,
-    },
-    totalRatingCount :{
-      type: Number,
-      default: 0,     
     }
   },
   {
     timestamps: true,
   }
-  
 );
 
-// Helper function to update hotel stats (avg rating & total count)
+// ✅ Helper to update Hotel's avg rating and count
 async function updateHotelRatingStats(hotelId, model) {
   const stats = await model.aggregate([
-    { $match: { hotelId: hotelId } },
+    { $match: { hotelId: new mongoose.Types.ObjectId(hotelId) } },
     {
       $group: {
         _id: "$hotelId",
@@ -53,7 +48,7 @@ async function updateHotelRatingStats(hotelId, model) {
     },
   ]);
 
-  const rating = stats.length > 0 ? stats[0].avgRating : 0;
+  const rating = stats.length > 0 ? parseFloat(stats[0].avgRating.toFixed(2)) : 0;
   const totalRatingCount = stats.length > 0 ? stats[0].totalRatingCount : 0;
 
   await HotelModel.findByIdAndUpdate(hotelId, {
@@ -62,7 +57,10 @@ async function updateHotelRatingStats(hotelId, model) {
   });
 }
 
-// Update average rating and count after saving feedback
+hotelFeedbackSchema.index({ hotelId: 1, bookingId: 1, userId: 1 }, { unique: true });
+
+
+// ✅ After new feedback is saved
 hotelFeedbackSchema.post("save", async function (doc) {
   try {
     await updateHotelRatingStats(doc.hotelId, this.model);
@@ -71,7 +69,7 @@ hotelFeedbackSchema.post("save", async function (doc) {
   }
 });
 
-// Update average rating and count after deleting feedback
+// ✅ After feedback is deleted
 hotelFeedbackSchema.post("findOneAndDelete", async function (doc) {
   try {
     if (doc) {
@@ -79,6 +77,17 @@ hotelFeedbackSchema.post("findOneAndDelete", async function (doc) {
     }
   } catch (err) {
     console.error("Error updating hotel rating after delete:", err);
+  }
+});
+
+// ✅ After feedback is updated
+hotelFeedbackSchema.post("findOneAndUpdate", async function (doc) {
+  try {
+    if (doc) {
+      await updateHotelRatingStats(doc.hotelId, this.model);
+    }
+  } catch (err) {
+    console.error("Error updating hotel rating after update:", err);
   }
 });
 

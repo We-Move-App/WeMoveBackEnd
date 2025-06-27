@@ -3,6 +3,9 @@ const BlackListTokenModel = require("../../models/global-module/blacklist-tokens
 const emailVerifyModel = require("../../models/global-module/verifications/emailVerification.model");
 const phoneNumberVerifyModel = require("../../models/global-module/verifications/phoneNumberVerification");
 const statusCode = require("../constants/statusCode");
+// const {
+//   UserBankModel,
+// } = require("../../../models/user-module/user-banks/user-banks.model");
 const {
   generateTokens,
   setTokenCookies,
@@ -25,6 +28,7 @@ const {
   uploadSingleImageToAws,
 } = require("../uploadFiles/images/uploadImages");
 const { assignBranchToUserUsingGeolib } = require("./branches.services");
+const { UserBankModel } = require("../../models/user-module/user-banks/user-banks.model");
 
 // ==============================================
 const registerUserWithEmailAndPhoneNumber = async ({
@@ -458,6 +462,113 @@ const verifyOtpFunc = async ({ req, reqModel, res }) => {
     "OTP verified successfully"
   );
 };
+
+// version 2 of the function to verify otp without token
+const verifyOtpFuncversion = async ({ req, reqModel, res, typeOfUser }) => {
+  const { emailOrPhone, otp } = req.body;
+  console.log(emailOrPhone);
+
+
+  if (!otp) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Please enter OTP");
+  }
+
+  let query = {};
+  let user;
+
+  if (emailOrPhone) {
+    const isEmail = validateEmail(emailOrPhone);
+    const isPhoneNumber = validatePhoneNumber(emailOrPhone);
+
+    if (!isEmail && !isPhoneNumber) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "Invalid email or phone number"
+      );
+    }
+
+    // query = isEmail ? { email: emailOrPhone } : { phoneNumber: emailOrPhone };
+
+    user = await reqModel.findOne(
+      isEmail ? { email: emailOrPhone } : { phoneNumber: emailOrPhone }
+    );
+    console.log(user);
+    query = { ownerId: user?._id }
+
+    if (!user) {
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        "Please enter credentials which is registered"
+      );
+    }
+  } else {
+    if (!req.user?._id) {
+      throw new ApiError(statusCode.UNAUTHORIZED, "User not authenticated");
+    }
+
+    query = { ownerId: req.user._id };
+    user = await reqModel.findById(req.user._id);
+
+    if (!user) {
+      throw new ApiError(statusCode.NOT_FOUND, "User not found");
+    }
+  }
+  console.log(query);
+
+  const otpInDb = await OtpModel.findOne({ ...query, isUsed: false });
+
+  console.log(otpInDb);
+
+
+  if (!otpInDb || otpInDb.otp !== otp || otpInDb.expiresAt < Date.now()) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid or expired OTP");
+  }
+
+  if (!["approved", "submitted"].includes(user?.verificationStatus)) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      getStatusMessage(user?.verificationStatus)
+    );
+  }
+
+
+
+
+  const { accessToken, refreshToken } = await generateTokens(
+    user,
+    typeOfUser
+  );
+  setTokenCookies(res, accessToken, refreshToken);
+
+  const userData = {
+    _id: user?._id,
+    email: user?.email,
+    role: user?.role,
+    verificationStatus: user?.verificationStatus,
+    isAvatar: user.avatar ? true : false,
+    avatar: user?.avatar,
+    phoneNumber: user?.phoneNumber,
+  };
+
+
+  const bankDetails = await UserBankModel.findOne({ userId: user?._id })
+  console.log('bank deatils:', bankDetails);
+  const isBankdetails = bankDetails ? true : false
+
+
+  // return { accessToken, refreshToken, userData };
+
+
+  otpInDb.isUsed = true;
+  await otpInDb.save();
+
+  return new ApiResponse(
+    statusCode.OK,
+    { token: accessToken, refreshToken, userData, isBankdetails, bankDetails },
+    "OTP verified successfully"
+  );
+};
+
 const verifyOtpWithoutTokenFunc = async ({ req, reqModel, res }) => {
   const { emailOrPhone, otp } = req.body;
 
@@ -932,6 +1043,117 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
 
   return { accessToken, refreshToken, reqData };
 };
+// version2 code for registerUserWithEmailOrPhoneAndOtp
+const registerUserWithEmailOrPhoneAndOtpVersion = async ({
+  req,
+  res,
+  reqModel,
+  typeOfUser,
+}) => {
+  try {
+    const { emailOrPhone } = req.body;
+
+    if (!emailOrPhone) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Please enter email or phone");
+    }
+    const isEmail = validateEmail(emailOrPhone);
+    const isPhoneNumber = validatePhoneNumber(emailOrPhone);
+    if (!isEmail && !isPhoneNumber) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "Enter a valid email or phone number"
+      );
+    }
+
+    const findOrCreateUser = async (field, value, role) => {
+      if (!value) {
+        throw new ApiError(
+          statusCode.BAD_REQUEST,
+          `${field} cannot be null or empty`
+        );
+      }
+      let user = await reqModel.findOne({ [field]: value });
+
+      if (!user) {
+        const userData =
+          field === "email" ? { email: value } : { phoneNumber: value };
+
+        user = new reqModel({
+          ...userData,
+        });
+        await user.save();
+      }
+
+      return user;
+    };
+    const userField = isEmail ? "email" : "phoneNumber";
+    const createdUser = await findOrCreateUser(userField, emailOrPhone);
+    console.log(createdUser);
+
+
+    const otp = getOtp();
+    const emailData = { otp, name: createdUser?.fullName || "User" };
+    // const emailData = { otp, name: createdUser?.name || "User" };
+
+    // if (isPhoneNumber) {
+    //   const response = await sendOtpToPhoneNumbers(emailOrPhone, otp);
+    //   if (!response.success) {
+    //     throw new ApiError(
+    //       statusCode.INTERNAL_SERVER_ERROR,
+    //       "OTP is failed to triggered"
+    //     );
+    //   }
+    // }
+
+    // if (isEmail) {
+    //   try {
+    //     const res = await sendEmailUsingNodemailer({
+    //       to: createdUser?.email,
+    //       params: emailData,
+    //       template: "otpTemplate.ejs",
+    //       subject: "Verification Code for WeMOVE",
+    //     });
+    //   } catch (error) {
+    //     throw new ApiError(
+    //       statusCode.BAD_REQUEST,
+    //       "Error in sending email",
+    //       error
+    //     );
+    //   }
+    // }
+
+    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+
+    const otpdd = await OtpModel.findOneAndUpdate(
+      { ownerId: createdUser?._id },
+      { otp, expiresAt, isUsed: false },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+    console.log(otpdd);
+
+
+    // const { accessToken, refreshToken } = await generateTokens(
+    //   createdUser,
+    //   typeOfUser
+    // );
+    // setTokenCookies(res, accessToken, refreshToken);
+
+    // const reqData = {
+    //   _id: createdUser?._id,
+    //   email: createdUser?.email,
+    //   role: createdUser?.role,
+    //   verificationStatus: createdUser?.verificationStatus,
+    //   avatar: createdUser?.avatar,
+    //   phoneNumber: createdUser?.phoneNumber,
+    // };
+
+    // return { accessToken, refreshToken, reqData };
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
 
 const assignBranchToUserFunc = async ({ req, res, reqModel }) => {
   const { latitude, longitude } = req.body;
@@ -1043,6 +1265,7 @@ const updateUserLocationFunc = async ({ req, res, reqModel }) => {
 
 module.exports = {
   registerUserWithEmailAndPhoneNumber,
+  registerUserWithEmailOrPhoneAndOtpVersion,
   loginUserWithEmailAndPhoneNumber,
   logoutUserFunc,
   refreshTokenFunc,
@@ -1063,4 +1286,5 @@ module.exports = {
   resendOtpWithoutTokenFunc,
   verifyEmailExistFunc,
   updateUserLocationFunc,
+  verifyOtpFuncversion,
 };

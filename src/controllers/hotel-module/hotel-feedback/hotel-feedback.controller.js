@@ -8,47 +8,95 @@ const Hotel = require("../../../models/hotel-module/hotel-registration/hotel-det
 const HotelFeedbackModel = require("../../../models/hotel-module/hotel-feedback/hotel-feedback.model");
 
 // Create or update feedback
+// const addFeedbackToHotel = catchAsyncError(async (req, res, next) => {
+//     const { hotelId, rating, comment, bookingId } = req.body;
+
+//     if (!hotelId || !rating || !bookingId) {
+//         return next(
+//             new ApiError(
+//                 statusCode.BAD_REQUEST,
+//                 "Hotel ID, bookingId, and rating are required"
+//             )
+//         );
+//     }
+
+//     const hotel = await Hotel.findById(hotelId).select("_id");
+//     if (!hotel) {
+//         return next(new ApiError(statusCode.NOT_FOUND, "Hotel not found"));
+//     }
+
+//     let feedback = await HotelFeedbackModel.findOne({ hotelId, bookingId });
+
+//     let message = "Feedback added successfully";
+
+//     if (feedback) {
+//         feedback.rating = rating;
+//         feedback.comment = comment;
+//         await feedback.save();
+//         message = "Feedback updated successfully";
+//     } else {
+//         feedback = await HotelFeedbackModel.create({
+//             hotelId,
+//             userId: req.user._id,
+//             rating,
+//             comment,
+//             bookingId,
+//         });
+//         await feedback.save();
+//     }
+
+//     return res
+//         .status(statusCode.OK)
+//         .json(new ApiResponse(statusCode.OK, feedback, message));
+// });
+// -------NewVersion of addFeedbackToHotel function-------
 const addFeedbackToHotel = catchAsyncError(async (req, res, next) => {
-    const { hotelId, rating, comment, bookingId } = req.body;
+  const { hotelId, rating, comment, bookingId } = req.body;
 
-    if (!hotelId || !rating || !bookingId) {
-        return next(
-            new ApiError(
-                statusCode.BAD_REQUEST,
-                "Hotel ID, bookingId, and rating are required"
-            )
-        );
-    }
+  if (!hotelId || rating === undefined || !bookingId) {
+    return next(
+      new ApiError(
+        statusCode.BAD_REQUEST,
+        "Hotel ID, bookingId, and rating are required"
+      )
+    );
+  }
 
-    const hotel = await Hotel.findById(hotelId).select("_id");
-    if (!hotel) {
-        return next(new ApiError(statusCode.NOT_FOUND, "Hotel not found"));
-    }
+  const hotel = await Hotel.findById(hotelId).select("_id");
+  if (!hotel) {
+    return next(new ApiError(statusCode.NOT_FOUND, "Hotel not found"));
+  }
 
-    let feedback = await HotelFeedbackModel.findOne({ hotelId, bookingId });
+  // 🚫 Check if user already submitted feedback for this booking
+  const existingFeedback = await HotelFeedbackModel.findOne({
+    hotelId,
+    bookingId,
+    userId: req.user._id,
+  });
 
-    let message = "Feedback added successfully";
+  if (existingFeedback) {
+    return next(
+      new ApiError(
+        statusCode.CONFLICT,
+        "You have already submitted feedback for this booking"
+      )
+    );
+  }
 
-    if (feedback) {
-        feedback.rating = rating;
-        feedback.comment = comment;
-        await feedback.save();
-        message = "Feedback updated successfully";
-    } else {
-        feedback = await HotelFeedbackModel.create({
-            hotelId,
-            userId: req.user._id,
-            rating,
-            comment,
-            bookingId,
-        });
-        await feedback.save();
-    }
+  // ✅ Save new feedback
+  const feedback = await HotelFeedbackModel.create({
+    hotelId,
+    userId: req.user._id,
+    rating,
+    comment,
+    bookingId,
+  });
 
-    return res
-        .status(statusCode.OK)
-        .json(new ApiResponse(statusCode.OK, feedback, message));
+  return res
+    .status(statusCode.OK)
+    .json(new ApiResponse(statusCode.OK, feedback, "Feedback submitted successfully"));
 });
+
 
 // Get  All feedbacks for a specific hotel.
 const getHotelFeedback = catchAsyncError(async (req, res, next) => {
@@ -76,6 +124,7 @@ const getHotelFeedback = catchAsyncError(async (req, res, next) => {
             .populate("userId", "fullName email avatar")
             .populate("hotelId", "hotelName location")
             .select("rating comment createdAt updatedAt")
+            
 
         return res.status(statusCode.OK).json(
             new ApiResponse(statusCode.OK, {

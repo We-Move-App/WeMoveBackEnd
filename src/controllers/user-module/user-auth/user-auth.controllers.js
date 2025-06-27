@@ -3,6 +3,7 @@ const statusCode = require("../../../utils/constants/statusCode");
 const logger = require("../../../utils/logger/logger");
 const UserModel = require("../../../models/user-module/users/user.model");
 const ApiResponse = require("../../../utils/response/ApiResponse");
+const UserBankModel  = require( "../../../models/user-module/user-banks/user-banks.model");
 const {
   saveDeviceToken,
   removeDeviceToken,
@@ -14,6 +15,7 @@ const {
 const { TypeOfUser } = require("../../../utils/constants/constants");
 const {
   registerUserWithEmailOrPhoneAndOtp,
+  registerUserWithEmailOrPhoneAndOtpVersion, 
   sendOtpOnlyWithoutUserCreation ,
   registerUserWithEmailAndPhoneNumber,
   loginUserWithEmailAndPhoneNumber,
@@ -27,6 +29,7 @@ const {
   resendOtpWithoutTokenFunc,
   verifyOtpWithoutTokenFunc,
   verifyEmailExistFunc,
+  verifyOtpFuncversion,
 } = require("../../../utils/services/functions.services");
 
 //=====================|| REGISTER USER ||============================
@@ -53,6 +56,34 @@ const registerUserWithOtp = catchAsyncError(async (req, res, next) => {
       new ApiResponse(
         statusCode.OK,
         data,
+        `OTP is sent successfully to this ${req.body.emailOrPhone}`
+      )
+    );
+});
+const registerUserWithOtpUpdate = catchAsyncError(async (req, res, next) => {
+  logger.info("Driver is registering with OTP");
+
+  const result = await registerUserWithEmailOrPhoneAndOtpVersion({
+    req,
+    res,
+    reqModel: UserModel,
+    typeOfUser: TypeOfUser.USER,
+  });
+
+  // const { accessToken, refreshToken, reqData } = result;
+  const isSuccess = result;
+  // const data = {
+  //   accessToken,
+  //   refreshToken,
+  //   user: reqData,
+  // };
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        null,
         `OTP is sent successfully to this ${req.body.emailOrPhone}`
       )
     );
@@ -113,6 +144,7 @@ const resendOtp = catchAsyncError(async (req, res, next) => {
 // =====================|| VERIFY OTP ||=====================================
 const verifyOTP = catchAsyncError(async (req, res, next) => {
   const result = await verifyOtpFunc({
+
     req,
     res,
     reqModel: UserModel,
@@ -200,9 +232,20 @@ const verifyEmailExist = catchAsyncError(async (req, res, next) => {
 
   return res.status(statusCode.OK).json(result);
 });
+const verifyOTPUpdate= catchAsyncError(async (req, res, next) => {
+  const result = await verifyOtpFuncversion({
+    req,
+    res,
+    reqModel:UserModel,
+    typeOfUser: TypeOfUser.USER,
+  });
+  return res.status(statusCode.OK).json(result);
+});
 
 module.exports = {
   registerUserWithOtp,
+  registerUserWithOtpUpdate,
+  verifyOTPUpdate,
   loginUser,
   logoutUser,
   refreshToken,
