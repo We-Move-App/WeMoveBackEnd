@@ -15,56 +15,53 @@ const {
 const { TypeOfUser } = require("../../../utils/constants/constants");
 const {
   registerUserWithEmailOrPhoneAndOtp,
-  registerUserWithEmailOrPhoneAndOtpVersion, 
   sendOtpOnlyWithoutUserCreation ,
   registerUserWithEmailAndPhoneNumber,
   loginUserWithEmailAndPhoneNumber,
   logoutUserFunc,
   refreshTokenFunc,
   resendOtpFunc,
-  verifyOtpFunction,
-  verifyOtpFunc,
   checkUserVerificationStatus,
   addEmailOrPhoneNumberFunc,
   resendOtpWithoutTokenFunc,
   verifyOtpWithoutTokenFunc,
   verifyEmailExistFunc,
-  verifyOtpFuncversion,
+  verifyOtpFunc,
 } = require("../../../utils/services/functions.services");
 
 //=====================|| REGISTER USER ||============================
+// const registerUserWithOtp = catchAsyncError(async (req, res, next) => {
+//   logger.info("Driver is registering with OTP");
+
+//   const result = await registerUserWithEmailOrPhoneAndOtp({
+//     req,
+//     res,
+//     reqModel: UserModel,
+//     typeOfUser: TypeOfUser.USER,
+//   });
+
+//   const { accessToken, refreshToken, reqData } = result;
+//   const data = {
+//     accessToken,
+//     refreshToken,
+//     user: reqData,
+//   };
+
+//   return res
+//     .status(statusCode.OK)
+//     .json(
+//       new ApiResponse(
+//         statusCode.OK,
+//         data,
+//         `OTP is sent successfully to this ${req.body.emailOrPhone}`
+//       )
+//     );
+// });
+// NewVersion of registerUserWithOtp
 const registerUserWithOtp = catchAsyncError(async (req, res, next) => {
   logger.info("Driver is registering with OTP");
 
   const result = await registerUserWithEmailOrPhoneAndOtp({
-    req,
-    res,
-    reqModel: UserModel,
-    typeOfUser: TypeOfUser.USER,
-  });
-
-  const { accessToken, refreshToken, reqData } = result;
-  const data = {
-    accessToken,
-    refreshToken,
-    user: reqData,
-  };
-
-  return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(
-        statusCode.OK,
-        data,
-        `OTP is sent successfully to this ${req.body.emailOrPhone}`
-      )
-    );
-});
-// NewVersion of registerUserWithOtp
-const registerUserWithOtpUpdate = catchAsyncError(async (req, res, next) => {
-  logger.info("Driver is registering with OTP");
-
-  const result = await registerUserWithEmailOrPhoneAndOtpVersion({
     req,
     res,
     reqModel: UserModel,
@@ -143,15 +140,15 @@ const resendOtp = catchAsyncError(async (req, res, next) => {
 });
 
 // =====================|| VERIFY OTP ||=====================================
-const verifyOTP = catchAsyncError(async (req, res, next) => {
-  const result = await verifyOtpFunc({
+// const verifyOTP = catchAsyncError(async (req, res, next) => {
+//   const result = await verifyOtpFunc({
 
-    req,
-    res,
-    reqModel: UserModel,
-  });
-  return res.status(statusCode.OK).json(result);
-});
+//     req,
+//     res,
+//     reqModel: UserModel,
+//   });
+//   return res.status(statusCode.OK).json(result);
+// });
 // =====================|| RESEND OTP WITHOUT AUTH ||=====================================
 const resendOtpWithoutAuth = catchAsyncError(async (req, res, next) => {
   const result = await resendOtpWithoutTokenFunc({
@@ -233,26 +230,26 @@ const verifyEmailExist = catchAsyncError(async (req, res, next) => {
 
   return res.status(statusCode.OK).json(result);
 });
-const verifyOTPUpdate= catchAsyncError(async (req, res, next) => {
-  const result = await verifyOtpFuncversion({
+const verifyOTP= catchAsyncError(async (req, res, next) => {
+  const result = await verifyOtpFunc({
     req,
     res,
     reqModel:UserModel,
     typeOfUser: TypeOfUser.USER,
   });
+  const { accessToken, refreshToken, reqData } = result;
   return res.status(statusCode.OK).json(result);
 });
 
 module.exports = {
   registerUserWithOtp,
-  registerUserWithOtpUpdate,
-  verifyOTPUpdate,
+  verifyOTP,
   loginUser,
   logoutUser,
   refreshToken,
   registerUser,
   resendOtp,
-  verifyOTP,
+  // verifyOTP,
   verifyStatus,
   addEmailOrPhone,
   saveDeviceTokens,

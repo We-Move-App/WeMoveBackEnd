@@ -3,8 +3,6 @@ const {
   registerUser,
   loginUser,
   registerUserWithOtp,
-  registerUserWithOtpUpdate,
-  verifyOTPUpdate,
   verifyOTP,
   resendOtp,
   logoutUser,
@@ -21,12 +19,11 @@ const { isUserAuthenticated } = require("../../../middlewares/authUser");
 
 const userAuthRoutest = express.Router();
 
+// userAuthRoutest.route("/register-with-otp").post(registerUserWithOtp);
 userAuthRoutest.route("/register-with-otp").post(registerUserWithOtp);
-userAuthRoutest.route("/register").post(registerUserWithOtpUpdate);
 userAuthRoutest.route("/login").post(loginUser);
 userAuthRoutest.route("/register").post(registerUser);
-userAuthRoutest.route("/verify-otp").post( isUserAuthenticated, verifyOTP);
-userAuthRoutest.route("/verify").post( verifyOTPUpdate);
+userAuthRoutest.route("/verify").post( verifyOTP);
 userAuthRoutest.route("/resend-otp").post(isUserAuthenticated, resendOtp);
 userAuthRoutest.route("/verify-otp-without-auth").post( verifyOTPWithoutAuth);
 userAuthRoutest.route("/resend-otp-without-auth").post( resendOtpWithoutAuth);
