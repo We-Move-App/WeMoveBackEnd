@@ -60,6 +60,7 @@ const registerUserWithOtp = catchAsyncError(async (req, res, next) => {
       )
     );
 });
+// NewVersion of registerUserWithOtp
 const registerUserWithOtpUpdate = catchAsyncError(async (req, res, next) => {
   logger.info("Driver is registering with OTP");
 

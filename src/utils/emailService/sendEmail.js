@@ -12,8 +12,10 @@ const {
 require("dotenv").config();
 
 async function sendEmail({ to, name, otp, template }) {
+
   try {
-    const templatePath = path.join(__dirname, "../../mailTemplate", template);
+    const templatePath = path.join(__dirname, "../../mailTemplates", template);
+    console.log("Resolved template path:", templatePath);
     const emailContent = await ejs.renderFile(templatePath, { name, otp });
 
     const transporter = nodemailer.createTransport({

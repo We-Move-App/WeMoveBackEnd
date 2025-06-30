@@ -29,6 +29,7 @@ const {
 } = require("../uploadFiles/images/uploadImages");
 const { assignBranchToUserUsingGeolib } = require("./branches.services");
 const { UserBankModel } = require("../../models/user-module/user-banks/user-banks.model");
+const sendEmail = require("../emailService/sendEmail");
 
 // ==============================================
 const registerUserWithEmailAndPhoneNumber = async ({
@@ -988,35 +989,35 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
   const createdUser = await findOrCreateUser(userField, emailOrPhone);
 
   const otp = getOtp();
-  const emailData = { otp, name: createdUser?.fullName || "User" };
+  // const emailData = { otp, name: createdUser?.fullName || "User" };
   // const emailData = { otp, name: createdUser?.name || "User" };
 
-  // if (isPhoneNumber) {
-  //   const response = await sendOtpToPhoneNumbers(emailOrPhone, otp);
-  //   if (!response.success) {
-  //     throw new ApiError(
-  //       statusCode.INTERNAL_SERVER_ERROR,
-  //       "OTP is failed to triggered"
-  //     );
-  //   }
-  // }
+  if (isPhoneNumber) {
+    const response = await sendOtpToPhoneNumbers(emailOrPhone, otp);
+    if (!response.success) {
+      throw new ApiError(
+        statusCode.INTERNAL_SERVER_ERROR,
+        "OTP is failed to triggered"
+      );
+    }
+  }
 
-  // if (isEmail) {
-  //   try {
-  //     const res = await sendEmailUsingNodemailer({
-  //       to: createdUser?.email,
-  //       params: emailData,
-  //       template: "otpTemplate.ejs",
-  //       subject: "Verification Code for WeMOVE",
-  //     });
-  //   } catch (error) {
-  //     throw new ApiError(
-  //       statusCode.BAD_REQUEST,
-  //       "Error in sending email",
-  //       error
-  //     );
-  //   }
-  // }
+  if (isEmail) {
+    try {
+      await sendEmail({
+  to: createdUser?.email,
+  name: createdUser?.name || "User",
+  otp,
+  template: "otpTemplate.ejs",
+});
+    } catch (error) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "Error in sending email",
+        error
+      );
+    }
+  }
 
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
 
