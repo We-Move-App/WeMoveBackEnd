@@ -241,8 +241,10 @@ const deleteBusRoute = catchAsyncError(async (req, res, next) => {
 // =============|| GET ALL BUS ROUTES ||=============================
 const getAllBusRoutes = catchAsyncError(async (req, res, next) => {
   const { busId } = req.params;
+  console.log("Bus ID:", busId);
 
   const busRoutes = await BusRouteModel.find({ busId });
+  console.log("Bus Routes:", busRoutes);
 
   if (!busRoutes || busRoutes.length === 0) {
     throw new ApiError(statusCode.NOT_FOUND, "Bus routes not found");

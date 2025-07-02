@@ -157,6 +157,8 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     "termAndConditions",
   ];
   validateRequestBody(reqField, req.body);
+   console.log("📦 noOfPassengers:", noOfPassengers);
+console.log("👥 passengers.length:", passengers.length);
 
   // Validate passenger and seat count match
   if (noOfPassengers !== passengers.length) {
@@ -164,6 +166,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       statusCode.BAD_REQUEST,
       "Passenger count does not match the number of selected seats"
     );
+
   }
 
   isValidFutureDate(journeyDate);

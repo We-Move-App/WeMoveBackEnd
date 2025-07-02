@@ -1,6 +1,7 @@
 const {
   DocumentsModel,
 } = require("../../../models/global-module/documents/document.model");
+const { UserBankModel } = require("../../../models/user-module/user-banks/user-banks.model");
 
 const {
   UserDocumentModel,
@@ -33,10 +34,12 @@ const getProfile = catchAsyncError(async (req, res, next) => {
     res,
     reqModel: UserModel,
     reqDocModel: UserDocumentModel,
+    bankModel: UserBankModel // ✅ Correct key name
   });
 
   return res.status(statusCode.OK).json(result);
 });
+
 
 const getAvatar = catchAsyncError(async (req, res, next) => {
   const result = await getAvatarFunc({

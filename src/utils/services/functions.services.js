@@ -30,6 +30,7 @@ const {
 const { assignBranchToUserUsingGeolib } = require("./branches.services");
 const { UserBankModel } = require("../../models/user-module/user-banks/user-banks.model");
 const sendEmail = require("../emailService/sendEmail");
+const SecurePinModel = require("../../models/global-module/secure-pins/secure-pins.model");
 
 // ==============================================
 const registerUserWithEmailAndPhoneNumber = async ({
@@ -497,7 +498,6 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
 
     query = { ownerId: user._id };
   } else {
-    // This block only runs if identifier is NOT passed
     if (!req.user || !req.user._id) {
       throw new ApiError(statusCode.UNAUTHORIZED, "User not authenticated");
     }
@@ -524,9 +524,24 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
     );
   }
 
+  // ✅ Update verification flags BEFORE generating response
+  if (validateEmail(identifier)) {
+    user.emailVerified = true;
+  } else if (validatePhoneNumber(identifier)) {
+    user.phoneVerified = true;
+  }
+  await user.save(); // ✅ Save updated verification flags
+
   const { accessToken, refreshToken } = await generateTokens(user, typeOfUser);
   setTokenCookies(res, accessToken, refreshToken);
 
+  const bankDetails = await UserBankModel.findOne({ userId: user._id });
+  const isBankdetails = !!bankDetails;
+
+  const pinDetails = await SecurePinModel.findOne({ userId: user._id });
+  console.log(pinDetails);
+
+  // ✅ Create userData AFTER updating and saving user
   const userData = {
     _id: user._id,
     email: user.email,
@@ -535,20 +550,25 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
     verificationStatus: user.verificationStatus,
     isAvatar: !!user.avatar,
     avatar: user.avatar,
+    isEmailVerified: !!user.emailVerified,
+    isPhoneVerified: !!user.phoneVerified,
+    bankDetails,
+    isBankdetails,
+    isPinExist: pinDetails ? true : false,
   };
 
-  const bankDetails = await UserBankModel.findOne({ userId: user._id });
-  const isBankdetails = !!bankDetails;
+
 
   otpInDb.isUsed = true;
   await otpInDb.save();
 
   return new ApiResponse(
     statusCode.OK,
-    { token: accessToken, refreshToken, userData, isBankdetails, bankDetails },
+    { token: accessToken, refreshToken, user: userData },
     "OTP verified successfully"
   );
 };
+
 
 
 const verifyOtpWithoutTokenFunc = async ({ req, reqModel, res }) => {
@@ -649,8 +669,8 @@ const addEmailOrPhoneNumberFunc = async ({ req, res, reqModel }) => {
 
   if (isUserExistWithThis) {
     throw new ApiError(
-      statusCode.NOT_FOUND,
-      `User already exist with this ${isEmail ? "email" : "phoneNumber"}!`
+      statusCode.BAD_REQUEST,
+      `User already exists with this ${isEmail ? "email" : "phone number"}!`
     );
   }
 
@@ -669,47 +689,58 @@ const addEmailOrPhoneNumberFunc = async ({ req, res, reqModel }) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid OTP");
   }
 
-  otpInDb.isUsed = true;
+  // ✅ Update user and mark as verified
   if (isEmail) {
     user.email = emailOrPhone;
-    otpInDb.isUsed = true;
+    user.emailVerified = true; // <-- Set verified
   }
+
   if (isPhoneNumber) {
     user.phoneNumber = emailOrPhone;
-    otpInDb.isUsed = true;
+    user.phoneVerified = true; // <-- Set verified
   }
-  await otpInDb.save();
-  await user.save();
+
+  otpInDb.isUsed = true;
+
+  await Promise.all([otpInDb.save(), user.save()]);
 
   return new ApiResponse(
     statusCode.OK,
     {},
-    `User ${isEmail ? "email" : "Phone Number"} updated Successfully`
+    `User ${isEmail ? "email" : "phone number"} updated and verified successfully`
   );
 };
 
-const getUserProfileFunc = async ({ req, reqModel, reqDocModel, res }) => {
+const getUserProfileFunc = async ({ req, reqModel, reqDocModel, bankModel, res }) => {
   const { _id } = req.user;
 
-  const [isUserExist, documents] = await Promise.all([
-    reqModel.findById(_id).select("-password"),
-    reqDocModel
-      .findOne({
-        userId: _id,
-      })
-      .populate("documentIds"),
+  const [user, documents, bankDetails, pinDetails] = await Promise.all([
+    reqModel.findById(_id).select("-password").lean(),
+    reqDocModel.findOne({ userId: _id }).populate("documentIds").lean(),
+    bankModel.findOne({ userId: _id }).lean(),
+    SecurePinModel.findOne({ userId: _id })
   ]);
+  // const pinDetails = await SecurePinModel.findOne({ userId: user._id });
+  console.log(pinDetails);
 
-  if (!isUserExist) {
+  if (!user) {
     throw new ApiError(statusCode.NOT_FOUND, "User not found");
   }
+  const userData = {
+    ...user,
+    document: documents,
+    bankDetails: bankDetails || null,
+    isPinExist: pinDetails ? true : false,
+  };
 
   return new ApiResponse(
     statusCode.OK,
-    { user: isUserExist, documents },
-    `Profile found`
+    { user: userData },
+    "Profile found"
   );
 };
+
+
 
 const getAvatarFunc = async ({ req, res, reqModel }) => {
   const { _id } = req.user;

@@ -25,6 +25,7 @@ const registerBusDriver = catchAsyncError(async (req, res, next) => {
     req,
     busOperatorAuthoritiesFields.DRIVER_MANAGEMENT
   );
+  console.log("User ID:", userId);
 
   const { fullName, busRegNumber, phoneNumber } = req.body;
   const docsToUpload = req.files;
@@ -37,15 +38,16 @@ const registerBusDriver = catchAsyncError(async (req, res, next) => {
       "Driver license and Avatar is mandatory"
     );
   }
+  console.log('dddddddddddddddddddddddd', fullName, busRegNumber, phoneNumber);
+
   const keys = Object.keys(req.files);
   const busOperatorExisting = await BusOperatorModel.findById(userId);
   if (!busOperatorExisting) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Bus Operator not found.");
   }
 
-  const existingDriver = await BusDriverModel.findOne({
-    phoneNumber,
-  });
+  const existingDriver = await BusDriverModel.findOne({ phoneNumber });
+  console.log("Existing Driver:", existingDriver);
 
   if (existingDriver) {
     throw new ApiError(
@@ -58,11 +60,13 @@ const registerBusDriver = catchAsyncError(async (req, res, next) => {
     busRegNumber,
     status: "active",
   });
+
   if (!findBus) {
     throw new ApiError(statusCode.NOT_FOUND, "Bus not found");
   }
 
   if (findBus.assignedDriver) {
+    console.log("🚫 Bus is already assigned to driver ID:", findBus.assignedDriver);
     throw new ApiError(
       statusCode.CONFLICT,
       "Driver is already assigned for this bus"
@@ -75,7 +79,6 @@ const registerBusDriver = catchAsyncError(async (req, res, next) => {
     "avatar",
   ];
   const invalidKeys = keys.filter((key) => !validDocumentTypes.includes(key));
-
   if (invalidKeys.length > 0) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -88,6 +91,7 @@ const registerBusDriver = catchAsyncError(async (req, res, next) => {
   const uploadImageFront = await uploadSingleImageToAws(imgUpload);
   const avatar = await uploadSingleImageToAws(avatarUpload);
 
+  // 1️⃣ First save the driver
   const newDriver = new BusDriverModel({
     fullName,
     phoneNumber,
@@ -96,23 +100,25 @@ const registerBusDriver = catchAsyncError(async (req, res, next) => {
     driverLicenseFront: uploadImageFront,
     avatar,
   });
+  console.log("🆕 Driver ID before save:", newDriver._id);
 
-  findBus.assignedDriver = newDriver._id;
+  const savedDriver = await newDriver.save();
+
+  // 2️⃣ Then update the bus with driver's ID
+  findBus.assignedDriver = savedDriver._id;
   await findBus.save();
-  await newDriver.save();
 
-  const updateResult = { ...newDriver.toObject(), busRegNumber };
+  const updateResult = { ...savedDriver.toObject(), busRegNumber };
 
-  return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(
-        statusCode.OK,
-        updateResult,
-        "Bus driver registered successfully"
-      )
-    );
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      updateResult,
+      "Bus driver registered successfully"
+    )
+  );
 });
+
 
 const updateBusDriverDetails = catchAsyncError(async (req, res, next) => {
   console.log("hitting");
@@ -306,20 +312,27 @@ const deleteDrivers = catchAsyncError(async (req, res, next) => {
     .json(new ApiResponse(statusCode.OK, {}, "Driver deleted successfully."));
 });
 
+
+
+
 const getDriverById = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
-  const driver = await BusDriverModel.findById(id)
-    .populate("busOperator", "fullName")
-    .populate("assignedBus", "busRegNumber")
-    .select("driverLicenseFront fullName phoneNumber avatar");
+  const driver = await BusDriverModel.findById("6864ccf2da54b6f881473de4");
+  console.log("Driver found:", driver);
 
-  if (!driver) {
-    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
-  }
 
-  return res
-    .status(statusCode.OK)
-    .json(new ApiResponse(statusCode.OK, driver, "Data found successfully"));
+  // const driver = await BusDriverModel.findById(id)
+  //   .populate("busOperator", "fullName")
+  //   .populate("assignedBus", "busRegNumber")
+  //   .select("driverLicenseFront fullName phoneNumber avatar");
+
+  // if (!driver) {
+  //   throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+  // }
+
+  // return res
+  //   .status(statusCode.OK)
+  //   .json(new ApiResponse(statusCode.OK, driver, "Data found successfully"));
 });
 
 module.exports = {
