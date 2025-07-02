@@ -721,7 +721,7 @@ const getUserProfileFunc = async ({ req, reqModel, reqDocModel, bankModel, res }
     SecurePinModel.findOne({ userId: _id })
   ]);
   // const pinDetails = await SecurePinModel.findOne({ userId: user._id });
-  console.log(pinDetails);
+  // console.log(pinDetails);
 
   if (!user) {
     throw new ApiError(statusCode.NOT_FOUND, "User not found");
