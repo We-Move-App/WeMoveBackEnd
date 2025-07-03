@@ -719,7 +719,8 @@ const getUserProfileFunc = async ({ req, reqModel, reqDocModel, bankModel, res }
   const [user, documents, bankDetails, pinDetails] = await Promise.all([
     reqModel.findById(_id).select("-password").lean(),
     reqDocModel.findOne({ userId: _id }).populate("documentIds").lean(),
-    HotelManagerBankModel.findOne({ userId: _id }).lean(),
+    bankModel.findOne({ userId: _id }).lean(),
+  
     SecurePinModel.findOne({ userId: _id })
   ]);
   

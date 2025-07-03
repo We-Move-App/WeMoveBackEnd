@@ -31,6 +31,9 @@ const {
   resetPasswordFunc,
   changePasswordFunc,
 } = require("../../../utils/services/functions.services");
+const bcrypt = require("bcrypt");
+const { hash_rounds } = process.env;
+
 
 // Register Admin
 const addAdmins = catchAsyncError(async (req, res, next) => {
@@ -361,6 +364,55 @@ const resetPassword = catchAsyncError(async (req, res, next) => {
 
   return res.status(statusCode.OK).json(result);
 });
+const createSuperAdmin = async (req, res, next) => {
+  try {
+
+    const { email, userName, password, phoneNumber } = req.body;
+    console.log("Creating SuperAdmin with data:", req.body);
+
+    const requiredFields = ["email", "userName", "password", "phoneNumber"];
+    for (const field of requiredFields) {
+      if (!req.body[field]) {
+        return next(new ApiError(statusCode.BAD_REQUEST, `${field} is required`));
+      }
+    }
+
+    const existing = await AdminModel.findOne({
+      $or: [{ email }, { userName }, { phoneNumber }],
+    });
+
+    if (existing) {
+      return next(new ApiError(statusCode.CONFLICT, "SuperAdmin already exists"));
+    }
+
+    const hashedPassword = await bcrypt.hash(password, Number(hash_rounds));
+
+    const superAdmin = new AdminModel({
+      email: email.toLowerCase(),
+      userName,
+      phoneNumber,
+      password: hashedPassword,
+      role: "SuperAdmin", // 🧠 Force role
+      verificationStatus: "approved",
+    });
+
+    await superAdmin.save();
+
+    const result = superAdmin.toObject();
+    delete result.password;
+
+    return res.status(statusCode.CREATED).json(
+      new ApiResponse(
+        statusCode.CREATED,
+        result,
+        "🎉 SuperAdmin created successfully"
+      )
+    );
+  } catch (err) {
+    console.error("❌ SuperAdmin creation error:", err);
+    next(new ApiError(statusCode.INTERNAL_SERVER_ERROR, "Something went wrong"));
+  }
+};
 
 module.exports = {
   addAdmins,
@@ -374,4 +426,5 @@ module.exports = {
   updateAvatar,
   changePassword,
   resetPassword,
+  createSuperAdmin
 };

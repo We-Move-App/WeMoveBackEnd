@@ -34,7 +34,7 @@ const getProfile = catchAsyncError(async (req, res, next) => {
     res,
     reqModel: UserModel,
     reqDocModel: UserDocumentModel,
-    bankModel: UserBankModel // ✅ Correct key name
+    bankModel: UserBankModel 
   });
 
   return res.status(statusCode.OK).json(result);

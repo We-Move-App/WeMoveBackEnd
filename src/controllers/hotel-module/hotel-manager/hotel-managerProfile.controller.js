@@ -3,7 +3,7 @@ const {
   HotelManagerDocumentModel,
 } = require("../../../models/hotel-module/hotel-manager-documents/hotel-manager-documents.model");
 const{ DocumentsModel}= require("../../../models/global-module/documents/document.model");
-const  hotelManagerBankModel= require("../../../models/hotel-module/hotel-manager-banks/hotel-manager-banks.model")
+const { HotelManagerBankModel}= require("../../../models/hotel-module/hotel-manager-banks/hotel-manager-banks.model")
 const statusCode = require("../../../utils/constants/statusCode");
 const {
   validateRequestBody,
@@ -36,7 +36,7 @@ const getProfile = catchAsyncError(async (req, res, next) => {
     res,
     reqModel: HotelManagerModel,
     reqDocModel: HotelManagerDocumentModel,
-    bankModel: hotelManagerBankModel,
+    bankModel: HotelManagerBankModel,
   
   });
 

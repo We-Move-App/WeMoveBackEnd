@@ -1,6 +1,7 @@
 const express = require("express");
 const { isAdminAuthenticated } = require("../../../middlewares/authAdmins");
 const {
+  
   addAdmins,
   loginAdmin,
   removeDeviceTokens,
@@ -11,6 +12,7 @@ const {
   updateAvatar,
   changePassword,
   resetPassword,
+  createSuperAdmin
 } = require("../../../controllers/admin-module/admin-auth/admin-auth.controllers");
 const {
   authorizeRole,
@@ -72,6 +74,10 @@ adminAuthRoutes
 adminAuthRoutes
   .route("/delete-device-token")
   .put(isAdminAuthenticated, removeDeviceTokens);
+  adminAuthRoutes
+  .route("/")
+  .post(
+   createSuperAdmin );
 
 module.exports = {
   adminAuthRoutes,
