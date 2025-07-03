@@ -214,6 +214,7 @@ const updateBusRoute = catchAsyncError(async (req, res, next) => {
 const deleteBusRoute = catchAsyncError(async (req, res, next) => {
   const { routeId } = req.params;
 
+
   // Find the route by ID
   const existingRoute = await BusRouteModel.findById(routeId);
   if (!existingRoute) {
@@ -241,7 +242,7 @@ const deleteBusRoute = catchAsyncError(async (req, res, next) => {
 // =============|| GET ALL BUS ROUTES ||=============================
 const getAllBusRoutes = catchAsyncError(async (req, res, next) => {
   const { busId } = req.params;
-  console.log("Bus ID:", busId);
+
 
   const busRoutes = await BusRouteModel.find({ busId });
   console.log("Bus Routes:", busRoutes);
@@ -381,6 +382,7 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
   const startIndex = (page - 1) * limit;
   let { status, search, filter } = req.query;
 
+
   status = status || "active";
 
   const query = { createdBy: _id, status };
@@ -390,13 +392,12 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
       { startLocation: { $regex: search, $options: "i" } },
       { endLocation: { $regex: search, $options: "i" } },
     ];
-    // If busId is included in the search, ensure it's properly formatted
+  
     if (mongoose.Types.ObjectId.isValid(search)) {
       query.$or.push({ busId: new mongoose.Types.ObjectId(search) });
     }
   }
 
-  // ✅ Run queries in parallel for better performance
   const [routes, totalBus] = await Promise.all([
     BusRouteModel.find(query)
       .sort({ createdAt: -1 })
@@ -422,14 +423,15 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
 
   const newRoutes = await Promise.all(
     routes?.map(async (route) => {
-      const pricePerSeat = await getFinalPrice(
-        "bus",
-        route.pricePerSeat,
-        new Date()
-      );
+      // Uncomment the following line if you want to calculate the final price per seat
+      // const pricePerSeat = await getFinalPrice(
+      //   "bus",
+      //   route.pricePerSeat,
+      //   new Date()
+      // );
       return {
         ...route.toObject(),
-        pricePerSeat,
+        // pricePerSeat,
       };
     })
   ) 

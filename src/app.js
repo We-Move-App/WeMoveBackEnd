@@ -22,6 +22,7 @@ const driverSecurePinRoutes = require("./routes/driver-module/driver-secure-pin/
 const driverDocumentRoutes = require("./routes/driver-module/driver-documents/driver-documents.routes");
 const driverBankRoutes = require("./routes/driver-module/driver-banks/driver-banks.routes");
 const userRecentSearchRoutes = require("./routes/user-module/user-recent-search/user-recent-search.routes");
+
 const googleSearchRoutes = require("./routes/global-module/global-module/google-search.routes");
 const driverVehicleRoutes = require("./routes/driver-module/driver-vehicle/driver-vehicle.route");
 const userRidesBookingRoutes = require("./routes/user-module/user-rides/user-rides.routes");
@@ -82,6 +83,7 @@ const busAnalyticsRoutes = require("./routes/bus-module/bus-analytics/bus-analyt
 const hotelManagerSecurityPinRoutes = require("./routes/hotel-module/hotel-manager-security-pin/hotel-manager-security-pin");
 const hotelmanagerBookingRoutes = require("./routes/hotel-module/hotel-booking/hotel-manager-booking.routes");
 const driverRidesRoutes = require("./routes/driver-module/driver-rides/driver-rides.routes");
+const usersearchroutes = require("./routes/user-module/user-google-search/user-google-search.routes");
 
 if (node_env !== "production") {
   require("dotenv").config();
@@ -151,6 +153,7 @@ app.use("/api/v1/user/banks", userBankRoutes);
 app.use("/api/v1/user/documents", userDocumentRoutes);
 app.use("/api/v1/user/secure-pin", userSecurePinRoutes);
 app.use("/api/v1/user/recent-searches", userRecentSearchRoutes);
+app.use("/api/v1/user/user-Google-searches", usersearchroutes);
 app.use("/api/v1/user/rides", userRidesBookingRoutes);
 app.use("/api/v1/user/bus-bookings", userBusBookingsRoutes);
 app.use("/api/v1/user/hotel-booking", hotelbookingRoutes);
