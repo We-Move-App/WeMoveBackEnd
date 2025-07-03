@@ -36,6 +36,7 @@ const getProfile = catchAsyncError(async (req, res, next) => {
     res,
     reqModel: BusOperatorModel,
     reqDocModel: BusOperatorDocumentModel,
+    bankModel: BusOperatorBankModel,
   });
 
   return res.status(statusCode.OK).json(result);

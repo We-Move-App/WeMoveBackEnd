@@ -31,6 +31,7 @@ const { assignBranchToUserUsingGeolib } = require("./branches.services");
 const { UserBankModel } = require("../../models/user-module/user-banks/user-banks.model");
 const sendEmail = require("../emailService/sendEmail");
 const SecurePinModel = require("../../models/global-module/secure-pins/secure-pins.model");
+const { HotelManagerBankModel } = require("../../models/hotel-module/hotel-manager-banks/hotel-manager-banks.model");
 
 // ==============================================
 const registerUserWithEmailAndPhoneNumber = async ({
@@ -713,13 +714,15 @@ const addEmailOrPhoneNumberFunc = async ({ req, res, reqModel }) => {
 
 const getUserProfileFunc = async ({ req, reqModel, reqDocModel, bankModel, res }) => {
   const { _id } = req.user;
+  console.log(_id);
 
   const [user, documents, bankDetails, pinDetails] = await Promise.all([
     reqModel.findById(_id).select("-password").lean(),
     reqDocModel.findOne({ userId: _id }).populate("documentIds").lean(),
-    bankModel.findOne({ userId: _id }).lean(),
+    HotelManagerBankModel.findOne({ userId: _id }).lean(),
     SecurePinModel.findOne({ userId: _id })
   ]);
+  
   // const pinDetails = await SecurePinModel.findOne({ userId: user._id });
   // console.log(pinDetails);
 
