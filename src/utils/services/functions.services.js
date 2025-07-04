@@ -504,6 +504,7 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
     }
 
     user = await reqModel.findById(req.user._id);
+    console.log("User from token:", user);
     if (!user) {
       throw new ApiError(statusCode.NOT_FOUND, "User not found");
     }
@@ -544,13 +545,7 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
 
   // ✅ Create userData AFTER updating and saving user
   const userData = {
-    _id: user._id,
-    email: user.email,
-    phoneNumber: user.phoneNumber,
-    role: user.role,
-    verificationStatus: user.verificationStatus,
-    isAvatar: !!user.avatar,
-    avatar: user.avatar,
+    ...user.toObject(),
     isEmailVerified: !!user.emailVerified,
     isPhoneVerified: !!user.phoneVerified,
     bankDetails,
@@ -720,10 +715,10 @@ const getUserProfileFunc = async ({ req, reqModel, reqDocModel, bankModel, res }
     reqModel.findById(_id).select("-password").lean(),
     reqDocModel.findOne({ userId: _id }).populate("documentIds").lean(),
     bankModel.findOne({ userId: _id }).lean(),
-  
+
     SecurePinModel.findOne({ userId: _id })
   ]);
-  
+
   // const pinDetails = await SecurePinModel.findOne({ userId: user._id });
   // console.log(pinDetails);
 

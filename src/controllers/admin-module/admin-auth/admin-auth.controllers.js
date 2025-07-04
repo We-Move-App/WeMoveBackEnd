@@ -364,55 +364,71 @@ const resetPassword = catchAsyncError(async (req, res, next) => {
 
   return res.status(statusCode.OK).json(result);
 });
-const createSuperAdmin = async (req, res, next) => {
-  try {
+const addSuperAdmin = catchAsyncError(async (req, res, next) => {
+  const { email, userName, password, phoneNumber } = req.body;
 
-    const { email, userName, password, phoneNumber } = req.body;
-    console.log("Creating SuperAdmin with data:", req.body);
+  const reqField = ["email", "userName", "password", "phoneNumber"];
+  validateRequestBody(reqField, req.body);
 
-    const requiredFields = ["email", "userName", "password", "phoneNumber"];
-    for (const field of requiredFields) {
-      if (!req.body[field]) {
-        return next(new ApiError(statusCode.BAD_REQUEST, `${field} is required`));
-      }
-    }
+  const existingUser = await AdminModel.findOne({
+    $or: [
+      { email },
+      { phoneNumber },
+      { userName },
+    ],
+  });
 
-    const existing = await AdminModel.findOne({
-      $or: [{ email }, { userName }, { phoneNumber }],
-    });
-
-    if (existing) {
-      return next(new ApiError(statusCode.CONFLICT, "SuperAdmin already exists"));
-    }
-
-    const hashedPassword = await bcrypt.hash(password, Number(hash_rounds));
-
-    const superAdmin = new AdminModel({
-      email: email.toLowerCase(),
-      userName,
-      phoneNumber,
-      password: hashedPassword,
-      role: "SuperAdmin", // 🧠 Force role
-      verificationStatus: "approved",
-    });
-
-    await superAdmin.save();
-
-    const result = superAdmin.toObject();
-    delete result.password;
-
-    return res.status(statusCode.CREATED).json(
-      new ApiResponse(
-        statusCode.CREATED,
-        result,
-        "🎉 SuperAdmin created successfully"
-      )
-    );
-  } catch (err) {
-    console.error("❌ SuperAdmin creation error:", err);
-    next(new ApiError(statusCode.INTERNAL_SERVER_ERROR, "Something went wrong"));
+  if (existingUser) {
+    throw new ApiError(statusCode.BAD_REQUEST, "SuperAdmin already exists");
   }
-};
+
+  // Optional: You can check if any SuperAdmin already exists if you want to allow only one
+  // const existingSuperAdmin = await AdminModel.findOne({ role: "SuperAdmin" });
+  // if (existingSuperAdmin) {
+  //   throw new ApiError(statusCode.BAD_REQUEST, "A SuperAdmin already exists");
+  // }
+
+  // Grant all permissions
+  const allPermissions = {
+    userManagement: true,
+    busManagement: true,
+    driverManagement: true,
+    hotelManagement: true,
+    walletManagement: true,
+    reportsAnalytics: true,
+    notifications: true,
+    roleManagement: true,
+  };
+
+  const newUser = new AdminModel({
+    email,
+    userName,
+    password, // Make sure password hashing is handled (middleware or manually)
+    phoneNumber,
+    role: "SuperAdmin",
+    permissions: allPermissions,
+  });
+
+  await newUser.save();
+
+  const userObject = newUser.toObject();
+  delete userObject.password;
+
+  const { accessToken, refreshToken } = await generateTokens(
+    newUser,
+    TypeOfUser.ADMIN
+  );
+  setTokenCookies(res, accessToken, refreshToken);
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(statusCode.OK, {
+      accessToken,
+      refreshToken,
+      user: userObject,
+    }, "SuperAdmin created successfully")
+  );
+});
+
 
 module.exports = {
   addAdmins,
@@ -426,5 +442,5 @@ module.exports = {
   updateAvatar,
   changePassword,
   resetPassword,
-  createSuperAdmin
+  createSuperAdmin: addSuperAdmin,
 };
