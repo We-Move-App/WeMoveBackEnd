@@ -423,15 +423,15 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
 
   const newRoutes = await Promise.all(
     routes?.map(async (route) => {
-      // Uncomment the following line if you want to calculate the final price per seat
-      // const pricePerSeat = await getFinalPrice(
-      //   "bus",
-      //   route.pricePerSeat,
-      //   new Date()
-      // );
+     
+      const pricePerSeat = await getFinalPrice(
+        "bus",
+        route.pricePerSeat,
+        new Date()
+      );
       return {
         ...route.toObject(),
-        // pricePerSeat,
+        pricePerSeat,
       };
     })
   ) 
