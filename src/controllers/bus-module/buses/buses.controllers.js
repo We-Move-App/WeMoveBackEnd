@@ -310,6 +310,7 @@ const changeBusStatus = catchAsyncError(async (req, res, next) => {
 // =================|| SEARCHES BUS BY USERS||==================
 const searchBuses = catchAsyncError(async (req, res, next) => {
   const { from, to, dateOfJourney } = req.query;
+
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const startIndex = (page - 1) * limit;
@@ -395,24 +396,33 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
     );
   }
 
-  // ✅ Use Promise.all() to resolve all async operations before proceeding
+
   const updatedRoutes = await Promise.all(
   findRoutes.map(async (route) => {
-    // Convert dateOfJourney to Date object
-    const startDate = new Date(dateOfJourney);  // <-- important!
 
-    // Extract departure and arrival times
-    const [depHour, depMin] = route.departureTime.split(":").map(Number);
-    const [arrHour, arrMin] = route.arrivalTime.split(":").map(Number);
+   const startDate = new Date(dateOfJourney);
 
-    // Calculate total minutes difference between arrival and departure
-    let diffInMinutes = (arrHour * 60 + arrMin) - (depHour * 60 + depMin);
-   if (diffInMinutes < 0) {
-  diffInMinutes += 24 * 60; // add 24 hours for overnight trips
+
+const [depHour, depMin] = route.departureTime.split(":").map(Number);
+startDate.setHours(depHour, depMin, 0, 0);  
+
+console.log("Start Date with departure time:", startDate);
+
+const [arrHour, arrMin] = route.arrivalTime.split(":").map(Number);
+
+
+let diffInMinutes = (arrHour * 60 + arrMin) - (depHour * 60 + depMin);
+
+
+if (diffInMinutes < 0) {
+  diffInMinutes += 24 * 60; // add 24 hours
 }
-   
-    const endDate = new Date(startDate);
-    endDate.setMinutes(endDate.getMinutes() + diffInMinutes);
+
+
+const endDate = new Date(startDate);
+endDate.setMinutes(endDate.getMinutes() + diffInMinutes);
+
+console.log("End Date after journey:", endDate);
 
     // Get price per seat
     const pricePerSeat = await getFinalPrice("bus", route.pricePerSeat, new Date());
@@ -482,6 +492,7 @@ const deletePermanentBus = catchAsyncError(async (req, res, next) => {
 });
 
 module.exports = {
+
   addBus,
   updateBus,
   getAllBuses,

@@ -12,7 +12,7 @@ const { getFinalPrice } = require("../../../utils/services/prices.services");
 
 // =============|| CREATE BUS ROUTE ||=============================
 
-const createBusRoute = catchAsyncError(async (req, res, next) => {
+const  createBusRoute = catchAsyncError(async (req, res, next) => {
   const {
     busId,
     startLocation,

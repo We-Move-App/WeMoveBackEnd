@@ -15,7 +15,7 @@ const getFinalPrice = async (serviceType, basePrice, time = new Date()) => {
   }
 
   const result = priceRule.calculateFinalPrice(basePrice, time);
-  return result;
+  return result;getall
 };
 
 module.exports = {

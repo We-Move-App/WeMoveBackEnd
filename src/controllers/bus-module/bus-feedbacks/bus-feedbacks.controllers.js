@@ -8,7 +8,7 @@ const BusFeedbackModel = require("../../../models/bus-module/bus-feedbacks/bus-f
 const addFeedbackToBus = catchAsyncError(async (req, res, next) => {
   const { busId, rating, comment, bookingId } = req.body;
 
-  if (!busId || !rating || !bookingId) {
+  if (!busId || rating === undefined || !bookingId) {
     return next(
       new ApiError(
         statusCode.BAD_REQUEST,
@@ -17,19 +17,26 @@ const addFeedbackToBus = catchAsyncError(async (req, res, next) => {
     );
   }
 
-  // Validate that the bus exists
-  const bus = await BusModel.findById(busId).select("_id");
+  if (rating < 0 || rating > 5) {
+    return next(
+      new ApiError(statusCode.BAD_REQUEST, "Rating must be between 0 and 5")
+    );
+  }
+
+  const bus = await BusModel.findById(busId);
   if (!bus) {
     return next(new ApiError(statusCode.NOT_FOUND, "Bus not found"));
   }
 
-  // Check if feedback for the same bus and booking already exists
   let feedback = await BusFeedbackModel.findOne({ busId, bookingId });
+
+  let message;
 
   if (feedback) {
     feedback.rating = rating;
     feedback.comment = comment;
     feedback = await feedback.save();
+    message = "Feedback updated successfully";
   } else {
     feedback = await BusFeedbackModel.create({
       busId,
@@ -38,14 +45,14 @@ const addFeedbackToBus = catchAsyncError(async (req, res, next) => {
       comment,
       bookingId,
     });
+    message = "Feedback added successfully";
   }
 
-  res
-    .status(201)
-    .json(
-      new ApiResponse(statusCode.OK, feedback, "Feedback added successfully")
-    );
+  return res
+    .status(statusCode.OK)
+    .json(new ApiResponse(statusCode.OK, feedback, message));
 });
+
 
 const getBusFeedback = catchAsyncError(async (req, res, next) => {
   const { busId, bookingId } = req.params;

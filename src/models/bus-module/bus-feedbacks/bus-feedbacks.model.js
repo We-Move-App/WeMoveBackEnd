@@ -22,7 +22,7 @@ const busFeedbackSchema = new Schema(
     rating: {
       type: Number,
       required: true,
-      min: 1,
+      min: 0,
       max: 5,
     },
     comment: {
@@ -35,38 +35,57 @@ const busFeedbackSchema = new Schema(
   }
 );
 
+// After saving a feedback, update avg rating and count
 busFeedbackSchema.post("save", async function (doc, next) {
   try {
     const stats = await this.constructor.aggregate([
       { $match: { busId: doc.busId } },
-      { $group: { _id: "$busId", avgRating: { $avg: "$rating" } } },
+      {
+        $group: {
+          _id: "$busId",
+          avgRating: { $avg: "$rating" },
+          totalRatings: { $sum: 1 }
+        }
+      }
     ]);
 
     if (stats.length > 0) {
-      // Update the bus document with the new average rating.
       await BusModel.findByIdAndUpdate(doc.busId, {
-        rating: stats[0].avgRating,
+        rating: Number(stats[0].avgRating.toFixed(1)),
+        ratingCount: stats[0].totalRatings
       });
     }
+
     next();
   } catch (err) {
     next(err);
   }
 });
-// Update bus rating after feedback is deleted
+
+// After deleting a feedback, update avg rating and count
 busFeedbackSchema.post("findOneAndDelete", async function (doc, next) {
   try {
     if (doc) {
       const stats = await this.model.aggregate([
         { $match: { busId: doc.busId } },
-        { $group: { _id: "$busId", avgRating: { $avg: "$rating" } } },
+        {
+          $group: {
+            _id: "$busId",
+            avgRating: { $avg: "$rating" },
+            totalRatings: { $sum: 1 }
+          }
+        }
       ]);
 
-      // If there are feedbacks, update rating to the new average,
-      // otherwise, reset the bus rating (e.g., to 0 or null)
-      const newRating = stats.length > 0 ? stats[0].avgRating : 0;
-      await BusModel.findByIdAndUpdate(doc.busId, { rating: newRating });
+      const newRating = stats.length > 0 ? Number(stats[0].avgRating.toFixed(1)) : 0;
+      const newCount = stats.length > 0 ? stats[0].totalRatings : 0;
+
+      await BusModel.findByIdAndUpdate(doc.busId, {
+        rating: newRating,
+        ratingCount: newCount
+      });
     }
+
     next();
   } catch (err) {
     next(err);
@@ -74,5 +93,4 @@ busFeedbackSchema.post("findOneAndDelete", async function (doc, next) {
 });
 
 const BusFeedbackModel = mongoose.model("BusFeedback", busFeedbackSchema);
-
 module.exports = BusFeedbackModel;

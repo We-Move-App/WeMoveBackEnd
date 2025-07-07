@@ -62,19 +62,42 @@ const getAutoCompleteSuggestions = async (input) => {
   }
 
   const apiKey = google_maps_api_key;
-  const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(input)}&key=${apiKey}`;
-  // console.log( "Suggestions",url)
+  const autoUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=${encodeURIComponent(input)}&key=${apiKey}`;
+
   try {
-    const response = await axios.get(url);
+    const response = await axios.get(autoUrl);
+
     if (response.data.status === "OK") {
-      return response.data.predictions
-        .map((prediction) => prediction.description)
-        .filter((value) => value);
+      const predictions = response.data.predictions;
+
+      const cityNames = await Promise.all(
+        predictions.map(async (prediction) => {
+          const placeId = prediction.place_id;
+          const detailsUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${apiKey}`;
+
+          try {
+            const detailRes = await axios.get(detailsUrl);
+            const components = detailRes.data.result.address_components;
+
+            // Extract city name from address components
+            const cityComponent = components.find(comp =>
+              comp.types.includes("locality") || comp.types.includes("administrative_area_level_2")
+            );
+            return cityComponent?.long_name || null;
+          } catch (err) {
+            return null;
+          }
+        })
+      );
+
+      // Filter out nulls and duplicates
+      const uniqueCities = [...new Set(cityNames.filter(Boolean))];
+      return uniqueCities;
     } else {
       throw new ApiError(statusCode.NOT_FOUND, "Unable to fetch suggestions");
     }
   } catch (error) {
-    throw new ApiError(statusCode.NOT_FOUND, error);
+    throw new ApiError(statusCode.NOT_FOUND, error.message || error);
   }
 };
 

@@ -72,14 +72,20 @@ const BusSchema = new Schema(
     busLicenseFront: {
       type: ImageSchema,
     },
-    rating: {
-      type: Number,
-      min: 1,
-      max: 5,
-      default: 0,
-      get: (val) => Math.round(val),
-      set: (val) => Math.min(Math.max(val, 1), 5),
-    },
+   rating: {
+  type: Number,
+  min: 1,
+  max: 5,
+  default: 0,
+  get: (val) => Math.round(val * 10) / 10,
+  set: (val) => Math.min(Math.max(val, 0), 5),
+},
+ratingCount: {
+  type: Number,
+  default: 0,
+  min: 0,
+},
+
     noOfSeats: {
       type: Number,
       min: 1,
@@ -90,8 +96,15 @@ const BusSchema = new Schema(
       ref: "BusImage",
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { getters: true, virtuals: true },
+    toObject: { getters: true, virtuals: true },
+  }
 );
 
+BusSchema.index({ ownerId: 1 });
+BusSchema.index({ status: 1 });
+BusSchema.index({ rating: -1 })
 const BusModel = mongoose.model("Bus", BusSchema);
 module.exports = BusModel;

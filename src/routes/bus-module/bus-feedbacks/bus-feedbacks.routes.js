@@ -23,6 +23,7 @@ busFeedbackRoutes
     getAllFeedback
   );
 busFeedbackRoutes.route("/").post(isUserAuthenticated, addFeedbackToBus);
+
 busFeedbackRoutes
   .route("/:busId/:bookingId")
   .get(isUserAuthenticated, getBusFeedback);

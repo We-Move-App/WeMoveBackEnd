@@ -51,7 +51,7 @@ busesRoutesRoutes
   .route("/all-routes")
   .get(
     isBusOperatorAuthenticated,
-    authorizeRole(["bus-operator"]),
+    authorizeRole(["bus-operator","bus-operator-member"]),
     getRoutesOfBusOperator
   );
 busesRoutesRoutes

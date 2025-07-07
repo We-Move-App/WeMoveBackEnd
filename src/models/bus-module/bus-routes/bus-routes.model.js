@@ -2,11 +2,13 @@ const mongoose = require("mongoose");
 const { Schema } = mongoose;
 
 // Sub-Schema for Pickup and Drop Stops
-const StopSchema = new Schema({
-  _id: false,
-  name: { type: String, required: true, trim: true },
-  time: { type: String, required: true },
-});
+const StopSchema = new Schema(
+  {
+    name: { type: String, required: true, trim: true },
+    time: { type: String, required: true },
+  },
+  { _id: true } 
+);
 
 // Main Route Schema
 const RouteSchema = new Schema(

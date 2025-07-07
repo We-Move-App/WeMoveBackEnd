@@ -299,12 +299,10 @@ console.log("👥 passengers.length:", passengers.length);
 });
 
 const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
-  const { bookingId } = req.params;
-
+  const { bookingId } = req.params; 
   if (!bookingId) {
     throw new ApiError(statusCode.BAD_REQUEST, "Booking ID is required");
   }
-
   const booking = await BusBookingModel.findById(bookingId)
     .populate(
       "busId",
