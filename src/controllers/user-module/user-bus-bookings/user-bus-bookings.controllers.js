@@ -4,6 +4,7 @@ const ApiError = require("../../../utils/response/ApiError");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const BusBookingModel = require("../../../models/bus-module/bus-bookings/bus-bookings.model");
+const BusImagesModel = require("../../../models/bus-module/bus-images/bus-images.model");
 const {
   validateRequestBody,
   normalizeDate,
@@ -24,18 +25,31 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
     .sort({
       createdAt: -1,
     })
+    .populate("busId", "busName ")
+    .populate("routeId", "startLocation endLocation departureTime arrivalTime")
+
     .select(
       "from to seatNumbers paymentStatus journeyDate createdAt updatedAt"
-    );
+    )
+    .lean();
+
 
   if (!bookings || bookings.length === 0) {
     throw new ApiError(statusCode.NOT_FOUND, "Bookings not found");
   }
+  for (const booking of bookings) {
+    const busId = booking?.busId?._id;
+    if (busId) {
+      const busImagesDoc = await BusImagesModel.findOne({ busId }, { images: 1 }).lean();
+      booking.busId.busImages = busImagesDoc?.images?.map(img => img.url) || [];
+    }
+  }
+
 
   return res
     .status(statusCode.OK)
     .json(
-      new ApiResponse(statusCode.OK, bookings, "Bus seats deleted successfully")
+      new ApiResponse(statusCode.OK, bookings, "User bus bookings retrieved successfully")
     );
 });
 
@@ -79,6 +93,8 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
 
   const [findBus, route] = await Promise.all([
     BusModel.findById(busId, "noOfSeats"),
+
+
     BusRouteModel.findById(routeId, "_id"),
   ]);
 
@@ -181,13 +197,20 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
 
     await session.commitTransaction();
     session.endSession();
-
+    const bookingWithBusDetails = await BusBookingModel.findById(newBooking[0]._id)
+  .populate({
+    path: "busId",
+    select: "busName  "
+  });
     return res
       .status(statusCode.CREATED)
       .json(
         new ApiResponse(
           statusCode.CREATED,
-          newBooking[0],
+          
+          bookingWithBusDetails,
+
+        
           "Bus booked successfully"
         )
       );

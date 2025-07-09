@@ -383,12 +383,37 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
 
   await recentSearch.save();
 
-  const findRoutes = await BusRouteModel.find(query)
-    .sort({ createdAt: -1 })
-    .skip(startIndex)
-    .limit(limit)
-    .populate("seats", "bookedSeats availableSeats noOfSeats")
-    .populate("busId","busRegNumber busName busModelNumber busImages rating")
+ const findRoutes = await BusRouteModel.find(query)
+  .sort({ createdAt: -1 })
+  .skip(startIndex)
+  .limit(limit)
+  .populate("seats", "bookedSeats availableSeats noOfSeats")
+  .populate("busId", "busRegNumber busName busModelNumber rating")
+  .lean(); // Returns plain JS objects
+
+await Promise.all(
+  findRoutes.map(async (route) => {
+    const busId = route?.busId?._id || route?.busId;
+
+    if (!busId) return;
+
+    const busImagesDoc = await BusImagesModel.findOne(
+      { busId },
+      { images: 1 }
+    ).lean();
+
+    const imageUrls = (busImagesDoc?.images || []).map((img) => img.url);
+
+    if (typeof route.busId === "object") {
+      route.busId.busImages = imageUrls;
+    } else {
+      route.busImages = imageUrls;
+    }
+  })
+);
+
+
+// Now `findRoutes` includes `busImages` inside `busId` for each rou
 
   if (!findRoutes.length) {
     return next(
@@ -428,7 +453,7 @@ console.log("End Date after journey:", endDate);
     const pricePerSeat = await getFinalPrice("bus", route.pricePerSeat, new Date());
 
     return {
-      ...route.toObject(),
+      ...route,
       pricePerSeat,
       startDate: startDate.toISOString(),  // Safe because startDate is a Date object
       endDate: endDate.toISOString(),      // Safe because endDate is a Date object

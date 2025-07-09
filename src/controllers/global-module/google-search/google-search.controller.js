@@ -37,7 +37,7 @@ const googleSearch = catchAsyncError(async (req, res, next) => {
       .filter(Boolean);
   }
 
-  return res.json(new ApiResponse(statusCode.OK, data, "Searches found"));
+  return res.json(new ApiResponse(statusCode.OK, data, "Location found"));
 });
 
 module.exports = { googleSearch };

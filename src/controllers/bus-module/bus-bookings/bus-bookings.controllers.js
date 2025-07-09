@@ -424,13 +424,13 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
     $and: [
       {
         $or: [
-          { startLocation: { $regex: from, $options: "i" } },
+          { from: { $regex: from, $options: "i" } },
           { "pickups.name": { $regex: from, $options: "i" } },
         ],
       },
       {
         $or: [
-          { endLocation: { $regex: to, $options: "i" } },
+          { to: { $regex: to, $options: "i" } },
           { "drops.name": { $regex: to, $options: "i" } },
         ],
       },
@@ -487,6 +487,7 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
 });
 
 module.exports = {
+  
   getAllBusBookings,
   createBusBooking,
   getBusBookingDetails,
