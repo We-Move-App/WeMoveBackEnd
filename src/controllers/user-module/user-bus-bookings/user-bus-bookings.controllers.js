@@ -198,19 +198,22 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     await session.commitTransaction();
     session.endSession();
     const bookingWithBusDetails = await BusBookingModel.findById(newBooking[0]._id)
-  .populate({
-    path: "busId",
-    select: "busName  "
-  });
+      .populate({
+        path: "busId",
+        select: "busName busRegNumber busModelNumber",
+      }).lean();
+      delete bookingWithBusDetails.bookedBy;
+delete bookingWithBusDetails.routeId;
+  
     return res
       .status(statusCode.CREATED)
       .json(
         new ApiResponse(
           statusCode.CREATED,
-          
+
           bookingWithBusDetails,
 
-        
+
           "Bus booked successfully"
         )
       );
