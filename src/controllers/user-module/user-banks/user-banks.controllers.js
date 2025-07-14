@@ -54,6 +54,7 @@ const deleteBankDetails = catchAsyncError(async (req, res, next) => {
   return res.status(statusCode.OK).json(result);
 });
 
+
 module.exports = {
   createBankDetails,
   getBankDetails,

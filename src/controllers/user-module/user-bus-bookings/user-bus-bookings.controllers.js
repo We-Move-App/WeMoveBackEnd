@@ -22,35 +22,57 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
 
   const bookings = await BusBookingModel.find({ bookedBy: userId })
-    .sort({
-      createdAt: -1,
-    })
-    .populate("busId", "busName ")
+    .sort({ createdAt: -1 })
+    .populate("busId", "busName")
     .populate("routeId", "startLocation endLocation departureTime arrivalTime")
-
-    .select(
-      "from to seatNumbers paymentStatus journeyDate createdAt updatedAt"
-    )
+    .select("seatNumbers paymentStatus journeyDate createdAt updatedAt routeId busId")
     .lean();
-
 
   if (!bookings || bookings.length === 0) {
     throw new ApiError(statusCode.NOT_FOUND, "Bookings not found");
   }
-  for (const booking of bookings) {
-    const busId = booking?.busId?._id;
-    if (busId) {
-      const busImagesDoc = await BusImagesModel.findOne({ busId }, { images: 1 }).lean();
-      booking.busId.busImages = busImagesDoc?.images?.map(img => img.url) || [];
-    }
-  }
+
+  // Transform bookings: rename routeId fields + attach busImages
+  const transformedBookings = await Promise.all(
+    bookings.map(async (booking) => {
+      // Create a new booking object to ensure we can modify properties
+      const transformedBooking = { ...booking };
+
+      if (transformedBooking.routeId) {
+        transformedBooking.routeId = {
+          _id: transformedBooking.routeId._id,
+          departureTime: transformedBooking.routeId.departureTime,
+          arrivalTime: transformedBooking.routeId.arrivalTime,
+          from: transformedBooking.routeId.startLocation,
+          to: transformedBooking.routeId.endLocation,
+        };
+      }
 
 
-  return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(statusCode.OK, bookings, "User bus bookings retrieved successfully")
-    );
+      // Add bus images if bus exists
+      const busId = transformedBooking?.busId?._id;
+      if (busId) {
+        const busImagesDoc = await BusImagesModel.findOne(
+          { busId },
+          { images: 1 }
+        ).lean();
+        transformedBooking.busId = {
+          ...transformedBooking.busId,
+          busImages: busImagesDoc?.images?.map((img) => img.url) || [],
+        };
+      }
+
+      return transformedBooking;
+    })
+  );
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      transformedBookings,
+      "User bus bookings retrieved successfully"
+    )
+  );
 });
 
 const createBusBooking = catchAsyncError(async (req, res, next) => {
@@ -201,10 +223,44 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       .populate({
         path: "busId",
         select: "busName busRegNumber busModelNumber",
-      }).lean();
-      delete bookingWithBusDetails.bookedBy;
-delete bookingWithBusDetails.routeId;
-  
+      }).lean()
+      .populate({
+    path: "routeId",
+    model: "BusRoute", // 🔥 important: matches your model name
+    select: "routeName startLocation endLocation departureTime arrivalTime estimatedTime totalDistance"
+  })
+  .lean()
+  .populate({
+    path: "bookedBy", // 👈 add this block
+    model: "User",     // 👈 use your actual user model name
+    select: "fullName email phoneNumber" // 👈 include fields you want
+  })
+  .lean();
+  const busImages = await BusImagesModel.findOne(
+  { busId: bookingWithBusDetails.busId._id },
+  { images: 1, _id: 0 }
+).lean();
+
+// Attach to the response if available
+if (busImages) {
+  bookingWithBusDetails.busId.busImages = busImages.images;
+}
+
+if (bookingWithBusDetails.journeyDate) {
+  bookingWithBusDetails.startDate = bookingWithBusDetails.journeyDate;
+  bookingWithBusDetails.endDate = bookingWithBusDetails.journeyDate;
+  delete bookingWithBusDetails.journeyDate;
+}
+if (bookingWithBusDetails.routeId) {
+  bookingWithBusDetails.routeId.from = bookingWithBusDetails.routeId.startLocation;
+  bookingWithBusDetails.routeId.to = bookingWithBusDetails.routeId.endLocation;
+
+  delete bookingWithBusDetails.routeId.startLocation;
+  delete bookingWithBusDetails.routeId.endLocation;
+}
+
+   
+
     return res
       .status(statusCode.CREATED)
       .json(
@@ -234,11 +290,24 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
   const booking = await BusBookingModel.findById(bookingId)
     .populate("busId", "busName busRegNumber busModelNumber")
     .populate("bookedBy", "fullName email phoneNumber")
-    .populate("routeId", "startLocation endLocation departureTime arrivalTime");
-
+    .populate("routeId", "startLocation endLocation departureTime arrivalTime")
+    .lean();
+  if (booking?.routeId) {
+    booking.routeId.from = booking.routeId.startLocation;
+    booking.routeId.to = booking.routeId.endLocation;
+    delete booking.routeId.startLocation;
+    delete booking.routeId.endLocation;
+  }
   if (!booking) {
     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
   }
+  const busId = booking?.busId?._id;
+  if (busId) {
+    const busImagesDoc = await BusImagesModel.findOne({ busId }, { images: 1 }).lean();
+    booking.busId.busImages = busImagesDoc?.images?.map(img => img.url) || [];
+  }
+
+  
 
   return res
     .status(statusCode.OK)

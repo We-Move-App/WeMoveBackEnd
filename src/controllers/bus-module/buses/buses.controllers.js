@@ -320,18 +320,17 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
 
   const getDay = getDayOfDate(dateOfJourney);
 
-
   const query = {
     $and: [
       {
         $or: [
-          { startLocation: { $regex: from, $options: "i" } },
+          { startLocation: { $regex: from, $options: "i" } }, // Keep original field name in query
           { "pickups.name": { $regex: from, $options: "i" } },
         ],
       },
       {
         $or: [
-          { endLocation: { $regex: to, $options: "i" } },
+          { endLocation: { $regex: to, $options: "i" } }, // Keep original field name in query
           { "drops.name": { $regex: to, $options: "i" } },
         ],
       },
@@ -346,7 +345,7 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
     ],
   };
 
-  // Check if the same search already exists
+  // Recent search handling (unchanged)
   let recentSearch = await UserRecentSearchModel.findOne({
     user: req.user?._id,
     category: "bus",
@@ -355,65 +354,50 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
   });
 
   if (recentSearch) {
-    // Update timestamp instead of adding duplicate entry
-    recentSearch.searchDetails.bus.from = {
-      address: from,
-    };
-    recentSearch.searchDetails.bus.to = {
-      address: to,
-    };
+    recentSearch.searchDetails.bus.from = { address: from };
+    recentSearch.searchDetails.bus.to = { address: to };
     recentSearch.searchTime = new Date();
   } else {
-    // Create a new entry if not found
     recentSearch = new UserRecentSearchModel({
       user: req.user._id,
       category: "bus",
       searchDetails: {
         bus: {
-          from: {
-            address: from,
-          },
-          to: {
-            address: to,
-          },
+          from: { address: from },
+          to: { address: to },
         },
       },
     });
   }
-
   await recentSearch.save();
 
- const findRoutes = await BusRouteModel.find(query)
-  .sort({ createdAt: -1 })
-  .skip(startIndex)
-  .limit(limit)
-  .populate("seats", "bookedSeats availableSeats noOfSeats")
-  .populate("busId", "busRegNumber busName busModelNumber rating")
-  .lean(); // Returns plain JS objects
+  const findRoutes = await BusRouteModel.find(query)
+    .sort({ createdAt: -1 })
+    .skip(startIndex)
+    .limit(limit)
+    .populate("seats", "bookedSeats availableSeats noOfSeats")
+    .populate("busId", "busRegNumber busName busModelNumber rating")
+    .lean();
 
-await Promise.all(
-  findRoutes.map(async (route) => {
-    const busId = route?.busId?._id || route?.busId;
+  // Add bus images
+  await Promise.all(
+    findRoutes.map(async (route) => {
+      const busId = route?.busId?._id || route?.busId;
+      if (!busId) return;
 
-    if (!busId) return;
+      const busImagesDoc = await BusImagesModel.findOne(
+        { busId },
+        { images: 1 }
+      ).lean();
+      const imageUrls = (busImagesDoc?.images || []).map((img) => img.url);
 
-    const busImagesDoc = await BusImagesModel.findOne(
-      { busId },
-      { images: 1 }
-    ).lean();
-
-    const imageUrls = (busImagesDoc?.images || []).map((img) => img.url);
-
-    if (typeof route.busId === "object") {
-      route.busId.busImages = imageUrls;
-    } else {
-      route.busImages = imageUrls;
-    }
-  })
-);
-
-
-// Now `findRoutes` includes `busImages` inside `busId` for each rou
+      if (typeof route.busId === "object") {
+        route.busId.busImages = imageUrls;
+      } else {
+        route.busImages = imageUrls;
+      }
+    })
+  );
 
   if (!findRoutes.length) {
     return next(
@@ -421,54 +405,53 @@ await Promise.all(
     );
   }
 
-
   const updatedRoutes = await Promise.all(
-  findRoutes.map(async (route) => {
+    findRoutes.map(async (route) => {
+      // Calculate journey dates
+      const startDate = new Date(dateOfJourney);
+      const [depHour, depMin] = route.departureTime.split(":").map(Number);
+      startDate.setHours(depHour, depMin, 0, 0);
 
-   const startDate = new Date(dateOfJourney);
+      const [arrHour, arrMin] = route.arrivalTime.split(":").map(Number);
+      let diffInMinutes = (arrHour * 60 + arrMin) - (depHour * 60 + depMin);
+      if (diffInMinutes < 0) diffInMinutes += 24 * 60;
+      
+      const endDate = new Date(startDate);
+      endDate.setMinutes(endDate.getMinutes() + diffInMinutes);
 
+      // Get price
+      const pricePerSeat = await getFinalPrice("bus", route.pricePerSeat, new Date());
 
-const [depHour, depMin] = route.departureTime.split(":").map(Number);
-startDate.setHours(depHour, depMin, 0, 0);  
+      // Transform the route object
+      const transformedRoute = {
+        ...route,
+        // Rename location fields
+        from: route.startLocation,
+        to: route.endLocation,
+        // Remove original fields
+        startLocation: undefined,
+        endLocation: undefined,
+        // Add calculated fields
+        pricePerSeat,
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+      };
 
-console.log("Start Date with departure time:", startDate);
+      // Clean up undefined fields
+      delete transformedRoute.startLocation;
+      delete transformedRoute.endLocation;
 
-const [arrHour, arrMin] = route.arrivalTime.split(":").map(Number);
+      return transformedRoute;
+    })
+  );
 
-
-let diffInMinutes = (arrHour * 60 + arrMin) - (depHour * 60 + depMin);
-
-
-if (diffInMinutes < 0) {
-  diffInMinutes += 24 * 60; // add 24 hours
-}
-
-
-const endDate = new Date(startDate);
-endDate.setMinutes(endDate.getMinutes() + diffInMinutes);
-
-console.log("End Date after journey:", endDate);
-
-    // Get price per seat
-    const pricePerSeat = await getFinalPrice("bus", route.pricePerSeat, new Date());
-
-    return {
-      ...route,
-      pricePerSeat,
-      startDate: startDate.toISOString(),  // Safe because startDate is a Date object
-      endDate: endDate.toISOString(),      // Safe because endDate is a Date object
-    };
-  })
-);
-return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(
-        statusCode.OK,
-        updatedRoutes,
-        "Bus routes found successfully"
-      )
-    );
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      updatedRoutes,
+      "Bus routes found successfully"
+    )
+  );
 });
 
 const deletePermanentBus = catchAsyncError(async (req, res, next) => {
