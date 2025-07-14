@@ -66,7 +66,7 @@ const startServer = async () => {
     // } else {
     // Workers can share the same server port
     server = app.listen(PORT, () => {
-      logger.info(`Worker ${process.pid} listening on port ${PORT}`);
+      logger.info(`Worker ${process.pid} listening on port:: ${PORT}`);
     });
     // socketSetup(server);
     handleSocketConnection(server);
