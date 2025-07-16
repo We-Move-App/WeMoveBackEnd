@@ -85,6 +85,7 @@ const hotelmanagerBookingRoutes = require("./routes/hotel-module/hotel-booking/h
 const driverRidesRoutes = require("./routes/driver-module/driver-rides/driver-rides.routes");
 const usersearchroutes = require("./routes/user-module/user-google-search/user-google-search.routes");
 const newDriverauthRoute = require("./routes/new-driver-module/auth/auth.routes");
+const UploadFileRouter = require("./routes/upload-files/upload-files.routes");
 
 if (node_env !== "production") {
   require("dotenv").config();
@@ -160,6 +161,9 @@ app.use("/api/v1/user/bus-bookings", userBusBookingsRoutes);
 app.use("/api/v1/user/hotel-booking", hotelbookingRoutes);
 app.use("/api/v1/user/wallet", userDigitalWalletRoutes);
 app.use("/api/v1/user/notifications", userNotificationRoutes);
+
+//Upload files to S3
+app.use('/api/v1/file',UploadFileRouter)
 
 // New Driver Routes
 app.use('/api/v1/new-driver/auth',newDriverauthRoute)

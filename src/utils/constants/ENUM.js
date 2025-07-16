@@ -1,18 +1,40 @@
 const DriverBasicStatus = {
-    PENDING: 'pending',
-    APPROVED: 'approved'
-}
+  PENDING: "pending",
+  APPROVED: "approved",
+};
 
 const EntityCodeEnum = {
-    DRIVER: 'driver',
-    USER: 'user',
-    HOTEL: 'hotel',
-    ADMIN:'admin'
+  DRIVER: "driver",
+  USER: "user",
+  HOTEL: "hotel",
+  ADMIN: "admin",
 };
 
 const GenderEnum = {
-    MALE: 'male',
-    FEMALE: 'female'
-}
+  MALE: "male",
+  FEMALE: "female",
+};
 
-module.exports={DriverBasicStatus,EntityCodeEnum,GenderEnum}
+const DriverDocEnum = {
+  IDCARD: "id_card",
+  LICENSE: "license",
+  INSURANCE: "insurance",
+  REGISTRATION: "registration",
+  VEHICLEPHOTO: "vehicle_photo",
+  PASSBOOK: "passbook",
+  AVATAR: "avatar",
+};
+
+const DriverDocStatusEnum = {
+  PENDING: "pending",
+  APPROVED: "approved",
+  REJECTED: "rejected",
+};
+
+module.exports = {
+  DriverBasicStatus,
+  EntityCodeEnum,
+  GenderEnum,
+  DriverDocEnum,
+  DriverDocStatusEnum,
+};
