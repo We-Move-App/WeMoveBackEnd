@@ -226,24 +226,25 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       }).lean()
       .populate({
     path: "routeId",
-    model: "BusRoute", // 🔥 important: matches your model name
+    model: "BusRoute",
     select: "routeName startLocation endLocation departureTime arrivalTime estimatedTime totalDistance"
   })
   .lean()
   .populate({
-    path: "bookedBy", // 👈 add this block
-    model: "User",     // 👈 use your actual user model name
-    select: "fullName email phoneNumber" // 👈 include fields you want
+    path: "bookedBy", 
+    model: "User",     
+    select: "fullName email phoneNumber" 
   })
   .lean();
-  const busImages = await BusImagesModel.findOne(
+const busImages = await BusImagesModel.findOne(
   { busId: bookingWithBusDetails.busId._id },
   { images: 1, _id: 0 }
 ).lean();
 
-// Attach to the response if available
-if (busImages) {
-  bookingWithBusDetails.busId.busImages = busImages.images;
+if (busImages && Array.isArray(busImages.images)) {
+  bookingWithBusDetails.busId.busImages = busImages.images.map(img => img.url);
+} else {
+  bookingWithBusDetails.busId.busImages = [];
 }
 
 if (bookingWithBusDetails.journeyDate) {
@@ -400,6 +401,325 @@ const payBusBookingPayment = catchAsyncError(async (req, res, next) => {
     .status(statusCode.OK)
     .json(new ApiResponse(statusCode.OK, {}, "Payment Successfully Done"));
 });
+// const UpcomingBusBookings = catchAsyncError(async (req, res) => {
+//   const { page = 1, limit = 10 } = req.query;
+//   const userId = req.user._id;
+
+//   const today = new Date();
+//   today.setHours(0, 0, 0, 0);
+
+//   const query = {
+//     bookedBy: userId,
+//     journeyDate: { $gte: today }
+//   };
+
+//   const skip = (parseInt(page) - 1) * parseInt(limit);
+
+//   const bookings = await BusBookingModel.find(query)
+//     .sort({ journeyDate: 1 })
+//     .skip(skip)
+//     .limit(parseInt(limit))
+//     .populate({
+//       path: "busId",
+//       model: "Bus",
+//       select: "-__v -routes -createdAt -updatedAt"
+//     })
+//     .populate({
+//       path: "routeId",
+//       model: "BusRoute",
+//       select: "-__v"
+//     })
+//     .populate({
+//       path: "bookedBy",
+//       model: "User",
+//       select: "-__v -password"
+//     })
+//     .lean();
+
+//   const enhancedBookings = await Promise.all(
+//     bookings.map(async (booking) => {
+//       const journeyDate = new Date(booking.journeyDate);
+
+//       // Derive startDate from journeyDate + departureTime
+//       let startDate = new Date(journeyDate);
+//       if (booking.routeId?.departureTime) {
+//         const [dh, dm] = booking.routeId.departureTime.split(":").map(Number);
+//         startDate.setHours(dh || 0, dm || 0, 0, 0);
+//       }
+
+//       // Derive endDate from journeyDate + arrivalTime
+//       let endDate = new Date(journeyDate);
+//       if (booking.routeId?.arrivalTime) {
+//         const [ah, am] = booking.routeId.arrivalTime.split(":").map(Number);
+//         endDate.setHours(ah || 0, am || 0, 0, 0);
+//         // If endDate is before startDate, assume next day arrival
+//         if (endDate <= startDate) {
+//           endDate.setDate(endDate.getDate() + 1);
+//         }
+//       }
+
+//       // Calculate time left in hours
+//       const now = new Date();
+//       const diffMs = startDate - now;
+//       const hoursLeft = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
+
+//       // Cancellation logic: from bus model or default 24 hours
+//       const cancellationWindow = booking.busId?.cancellationWindowInHours ?? 24;
+//       const isCancellable = hoursLeft >= cancellationWindow;
+
+//       // Fetch and embed bus images
+//       let imageUrls = [];
+//       try {
+//         const busImageDoc = await BusImagesModel.findOne({ busId: booking.busId?._id }).select("images");
+//         if (busImageDoc?.images?.length) {
+//           imageUrls = busImageDoc.images.map((img) => img.url);
+//         }
+//       } catch (err) {
+//         console.warn("Failed to fetch bus images for:", booking.busId?._id, err);
+//       }
+
+//       return {
+//         ...booking,
+//         startDate,
+//         endDate,
+//         hoursLeft,
+//         isCancellable,
+//         busId: {
+//           ...booking.busId,
+//           busImages: imageUrls,
+//         },
+//         journeyDate: undefined // Optional: remove original if not needed
+//       };
+//     })
+//   );
+
+//   const totalBookings = await BusBookingModel.countDocuments(query);
+//   const totalPages = Math.ceil(totalBookings / parseInt(limit));
+
+//   return res.status(statusCode.OK).json(
+//     new ApiResponse(
+//       statusCode.OK,
+//       {
+//         totalBookings,
+//         totalPages,
+//         currentPage: parseInt(page),
+//         limit: parseInt(limit),
+//         bookings: enhancedBookings
+//       },
+//       "Upcoming bus bookings fetched successfully"
+//     )
+//   );
+// });
+
+
+const UpcomingBusBookings = catchAsyncError(async (req, res) => {
+  const { page = 1, limit = 10 } = req.query;
+  const userId = req.user._id;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const query = {
+    bookedBy: userId,
+    journeyDate: { $gte: today }
+  };
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  const bookings = await BusBookingModel.find(query)
+    .sort({ journeyDate: 1 })
+    .skip(skip)
+    .limit(parseInt(limit))
+    .populate({
+      path: "busId",
+      model: "Bus",
+      select: "busName busModelNumber busRegNumber cancellationWindowInHours"
+    })
+    .populate({
+      path: "routeId",
+      model: "BusRoute",
+      select: "departureTime arrivalTime"
+    })
+    .populate({
+      path: "bookedBy",
+      model: "User",
+      select: "fullName email phoneNumber"
+    })
+    .lean();
+
+  const enhancedBookings = await Promise.all(
+    bookings.map(async (booking) => {
+      const journeyDate = new Date(booking.journeyDate);
+
+      let startDate = new Date(journeyDate);
+      if (booking.routeId?.departureTime) {
+        const [dh, dm] = booking.routeId.departureTime.split(":").map(Number);
+        startDate.setHours(dh || 0, dm || 0, 0, 0);
+      }
+
+      let endDate = new Date(journeyDate);
+      if (booking.routeId?.arrivalTime) {
+        const [ah, am] = booking.routeId.arrivalTime.split(":").map(Number);
+        endDate.setHours(ah || 0, am || 0, 0, 0);
+        if (endDate <= startDate) {
+          endDate.setDate(endDate.getDate() + 1);
+        }
+      }
+
+      const now = new Date();
+      const diffMs = startDate - now;
+      const hoursLeft = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
+
+      const cancellationWindow = booking.busId?.cancellationWindowInHours ?? 24;
+      const isCancellable = hoursLeft >= cancellationWindow;
+
+      let imageUrls = [];
+      try {
+        const busImageDoc = await BusImagesModel.findOne({ busId: booking.busId?._id }).select("images");
+        if (busImageDoc?.images?.length) {
+          imageUrls = busImageDoc.images.map((img) => img.url);
+        }
+      } catch (err) {
+        console.warn("Failed to fetch bus images for:", booking.busId?._id, err);
+      }
+
+      return {
+        ...booking,
+        startDate,
+        endDate,
+        hoursLeft,
+        isCancellable,
+        busId: {
+          ...booking.busId,
+          busImages: imageUrls
+        },
+        journeyDate: undefined
+      };
+    })
+  );
+
+  const totalBookings = await BusBookingModel.countDocuments(query);
+  const totalPages = Math.ceil(totalBookings / parseInt(limit));
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        totalBookings,
+        totalPages,
+        currentPage: parseInt(page),
+        limit: parseInt(limit),
+        bookings: enhancedBookings
+      },
+      "Upcoming bus bookings fetched successfully"
+    )
+  );
+});
+
+// ----
+const OldBusBookings = catchAsyncError(async (req, res) => {
+  const { page = 1, limit = 10 } = req.query;
+  const userId = req.user._id;
+
+  const now = new Date();
+
+  const query = {
+    bookedBy: userId,
+    journeyDate: { $lt: now } // Past bookings only
+  };
+
+  const skip = (parseInt(page) - 1) * parseInt(limit);
+
+  const bookings = await BusBookingModel.find(query)
+    .sort({ journeyDate: -1 })
+    .skip(skip)
+    .limit(parseInt(limit))
+    .populate({
+      path: "busId",
+      model: "Bus",
+      select: "busName busModelNumber busRegNumber"
+    })
+    .populate({
+      path: "routeId",
+      model: "BusRoute",
+      select: "departureTime arrivalTime"
+    })
+    .populate({
+      path: "bookedBy",
+      model: "User",
+      select: "fullName email phoneNumber"
+    })
+    .lean();
+
+  const enhancedBookings = await Promise.all(
+    bookings.map(async (booking) => {
+      const journeyDate = new Date(booking.journeyDate);
+
+      let startDate = new Date(journeyDate);
+      if (booking.routeId?.departureTime) {
+        const [dh, dm] = booking.routeId.departureTime.split(":").map(Number);
+        startDate.setHours(dh || 0, dm || 0, 0, 0);
+      }
+
+      let endDate = new Date(journeyDate);
+      if (booking.routeId?.arrivalTime) {
+        const [ah, am] = booking.routeId.arrivalTime.split(":").map(Number);
+        endDate.setHours(ah || 0, am || 0, 0, 0);
+        if (endDate <= startDate) {
+          endDate.setDate(endDate.getDate() + 1);
+        }
+      }
+
+      let imageUrls = [];
+      try {
+        const busImageDoc = await BusImagesModel.findOne({ busId: booking.busId?._id }).select("images");
+        if (busImageDoc?.images?.length) {
+          imageUrls = busImageDoc.images.map((img) => img.url);
+        }
+      } catch (err) {
+        console.warn("Bus image fetch failed for:", booking.busId?._id, err);
+      }
+
+      return {
+        ...booking,
+        startDate,
+        endDate,
+        rebookable: true, // ✅ instead of cancellable
+        busId: {
+          ...booking.busId,
+          busImages: imageUrls
+        },
+        journeyDate: undefined
+      };
+    })
+  );
+
+  const totalBookings = await BusBookingModel.countDocuments(query);
+  const totalPages = Math.ceil(totalBookings / parseInt(limit));
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        totalBookings,
+        totalPages,
+        currentPage: parseInt(page),
+        limit: parseInt(limit),
+        bookings: enhancedBookings
+      },
+      "Old bus bookings fetched successfully"
+    )
+  );
+});
+
+
+
+
+
+
+
+
+
 
 module.exports = {
   getUserBusBookings,
@@ -407,4 +727,10 @@ module.exports = {
   getBusBookingDetails,
   cancelBusBooking,
   payBusBookingPayment,
+  UpcomingBusBookings ,
+  OldBusBookings 
+
+
+  
 };
+
