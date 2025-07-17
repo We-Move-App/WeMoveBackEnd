@@ -8,17 +8,27 @@ const {
   createBusBooking,
   getBusBookingDetails,
   payBusBookingPayment,
-  cancelBusBooking
+  cancelBusBooking,
+  UpcomingBusBookings ,
+  OldBusBookings 
 } = require("../../../controllers/user-module/user-bus-bookings/user-bus-bookings.controllers");
 
 const userBusBookingsRoutes = express.Router();
 
-// User Routes
+// ✅ Specific routes should come first
+
+userBusBookingsRoutes
+  .route("/upcomingbooking")
+  .get(isUserAuthenticated, authorizeRole(["user"]), UpcomingBusBookings);
+
+ userBusBookingsRoutes
+ .route("/oldbookingbus")
+ .get(isUserAuthenticated, authorizeRole(["user"]), OldBusBookings )
+
 userBusBookingsRoutes
   .route("/my-bookings")
   .get(isUserAuthenticated, authorizeRole(["user"]), getUserBusBookings);
 
-// Bus Operator Routes
 userBusBookingsRoutes
   .route("/")
   .post(isUserAuthenticated, authorizeRole(["user"]), createBusBooking);
@@ -34,5 +44,7 @@ userBusBookingsRoutes
 userBusBookingsRoutes
   .route("/:bookingId")
   .get(isUserAuthenticated, authorizeRole(["user"]), getBusBookingDetails);
+
+
 
 module.exports = userBusBookingsRoutes;

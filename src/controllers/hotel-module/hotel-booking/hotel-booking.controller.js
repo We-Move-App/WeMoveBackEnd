@@ -38,13 +38,16 @@ const createBooking = catchAsyncError(async (req, res) => {
     noOfRoom,
     user,
   } = req.body;
-  const checkInDateTime = new Date(`${checkInDate}T${checkInTime}:00`);
-  const checkOutDateTime = new Date(`${checkOutDate}T${checkOutTime}:00`);
+  // Format dates and times
+  const currentDate = new Date();
   const formattedCheckIn = new Date(checkInDate);
   const formattedCheckOut = new Date(checkOutDate);
+
+  const checkInDateTime = new Date(`${checkInDate}T${HotelPolicyModel.checkInTime || "12:00"}:00`);
+  const checkOutDateTime = new Date(`${checkOutDate}T${HotelPolicyModel.checkOutTime || "11:00"}:00`);
   if (
     !bookedBy || !hotelId || !checkInDate || !checkOutDate ||
-    !checkInTime || !checkOutTime || !noOfRoom || !roomTypeId
+     !noOfRoom || !roomTypeId
   ) {
     throw new ApiError(statusCode.BAD_REQUEST, "Missing required booking details.");
   }
@@ -566,13 +569,12 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
   // Step 2: Enhance each booking with hotel image and nights
   const bookingsWithExtras = await Promise.all(
     bookings.map(async (booking) => {
-      // Calculate nights
+      
       const checkIn = new Date(booking.checkInDate);
       const checkOut = new Date(booking.checkOutDate);
       const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
       console.log("Nights:", nights);
 
-      // Get hotel image
       const hotelImages = await hotelImagesModel.findOne({ hotelId: booking.hotelId._id }).select("images").lean();
       const hotelImage = hotelImages?.images || [];
 
