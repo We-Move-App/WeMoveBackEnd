@@ -31,10 +31,16 @@ const DriverDocStatusEnum = {
   REJECTED: "rejected",
 };
 
+const VehicleTypeEnum = {
+  TAXI: "taxi",
+  BIKE: "bike",
+};
+
 module.exports = {
   DriverBasicStatus,
   EntityCodeEnum,
   GenderEnum,
   DriverDocEnum,
   DriverDocStatusEnum,
+  VehicleTypeEnum
 };

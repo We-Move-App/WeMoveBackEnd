@@ -1,1 +1,48 @@
-const Joi=require('joi')
+const Joi = require("joi");
+const { DriverDocEnum, GenderEnum } = require("../../../utils/constants/ENUM");
+
+const addBasicDetailsValidation = Joi.object({
+  fullName: Joi.string()
+    .min(3)
+    .max(100)
+    .pattern(/^[A-Za-z\s]+$/)
+    .required()
+    .messages({
+      "string.pattern.base": "Full name must contain only letters and spaces",
+    }),
+  gender: Joi.string().valid(...Object.values(GenderEnum)).required(),
+  dob: Joi.date().iso().required(),
+  age: Joi.number().integer().min(18).max(100).required(),
+  experience: Joi.number().integer().min(0).max(80).required(),
+  address: Joi.string().min(5).max(250).required(),
+  termsAccepted: Joi.boolean().valid(true).required().messages({
+    "any.only": "Terms must be accepted.",
+  }),
+  documents: Joi.array()
+    .length(2)
+    .items(
+      Joi.object({
+        documentType: Joi.string()
+          .valid(DriverDocEnum.IDCARD, DriverDocEnum.LICENSE)
+          .required(),
+        fileUrl: Joi.string().uri().required(),
+        fileName: Joi.string().required(),
+      })
+    )
+    .required()
+    .custom((value, helpers) => {
+      const types = value.map((doc) => doc.documentType);
+      const hasIdCard =
+        types.filter((t) => t === DriverDocEnum.IDCARD).length === 1;
+      const hasLicense =
+        types.filter((t) => t === DriverDocEnum.LICENSE).length === 1;
+      if (!hasIdCard || !hasLicense) {
+        return helpers.error("any.invalid", {
+          message: "Exactly one 'id_card' and one 'license' are required.",
+        });
+      }
+      return value;
+    }, "Documents validation"),
+});
+
+module.exports = { addBasicDetailsValidation };

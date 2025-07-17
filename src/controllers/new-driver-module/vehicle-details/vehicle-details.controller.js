@@ -1,26 +1,63 @@
+const vehicleImages = require("../../../models/new-driver-module/vehicle-details/vehicle-images.model.json");
 const statusCode = require("../../../utils/constants/statusCode");
 const {
   decodeAccessToken,
 } = require("../../../utils/jwtToken/customTokenService");
-const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
+const DriverBasicDetails = require("../../../models/new-driver-module/basic-details/basic-details.model");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const {
-  addBasicDetailsValidation,
-} = require("../validations/basic-details.validation");
-
-const DriverBasicDetails = require("../../../models/new-driver-module/basic-details/basic-details.model");
+  addVehicleDetailsValidation,
+} = require("../validations/vehicle-details.validations");
+const ApiError = require("../../../utils/response/ApiError");
+const VehicleDetail = require("../../../models/new-driver-module/vehicle-details/vehicle-details.model");
 const DriverDocDetails = require("../../../models/new-driver-module/documents/driver-documents.model");
 const {
-  DriverDocStatusEnum,
-  DriverDocEnum,
-} = require("../../../utils/constants/ENUM");
-const {
-  getDriverBasicWithDocs,
-} = require("../aggregations/basic-details.aggregations");
+  getVehicleDetailsWithDocs,
+} = require("../aggregations/vehicle-details.aggregations");
+const { DriverDocEnum } = require("../../../utils/constants/ENUM");
 
-const addDriverBasicDetails = catchAsyncError(async (req, res) => {
-  const { error, value } = addBasicDetailsValidation.validate(req.body, {
+const validateDriver = async (authHeader) => {
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const driverId = decoded?.driverId;
+  if (!driverId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  const driver = await DriverBasicDetails.exists({ driverId });
+  if (!driver) {
+    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+  }
+
+  return driver;
+};
+
+const getVehicleImages = catchAsyncError(async (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  const driver = await validateDriver(authHeader);
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        vehicleImages,
+        "Vehicle static images fetched"
+      )
+    );
+});
+
+const addVehicleDetails = catchAsyncError(async (req, res) => {
+  const { error, value } = addVehicleDetailsValidation.validate(req.body, {
     abortEarly: false,
   });
   if (error) {
@@ -45,35 +82,30 @@ const addDriverBasicDetails = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
 
-  const driverExists = await DriverBasicDetails.exists({ driverId });
-  if (!driverExists) {
-    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
-  }
-
-  const driverUpdate = DriverBasicDetails.updateOne(
+  const vehicleUpdate = VehicleDetail.updateOne(
     { driverId },
     {
       $set: {
         ...value,
         updatedAt: new Date(),
       },
-    }
+    },
+    { upsert: true }
   );
 
   const existingDocEntry = await DriverDocDetails.findOne({ driverId });
-
   let updatedDocuments = [];
 
   if (!existingDocEntry) {
     updatedDocuments = value.documents.map((doc) => ({
       ...doc,
-      status: DriverDocStatusEnum.PENDING,
+      status: "pending",
       createdAt: new Date(),
       updatedAt: new Date(),
     }));
 
     await Promise.all([
-      driverUpdate,
+      vehicleUpdate,
       DriverDocDetails.create({ driverId, documents: updatedDocuments }),
     ]);
   } else {
@@ -95,7 +127,7 @@ const addDriverBasicDetails = catchAsyncError(async (req, res) => {
     updatedDocuments = Array.from(docMap.values());
 
     await Promise.all([
-      driverUpdate,
+      vehicleUpdate,
       DriverDocDetails.updateOne(
         { driverId },
         { $set: { documents: updatedDocuments, updatedAt: new Date() } }
@@ -103,9 +135,10 @@ const addDriverBasicDetails = catchAsyncError(async (req, res) => {
     ]);
   }
 
-  const aggregatedData = await getDriverBasicWithDocs(driverId, [
-    DriverDocEnum.IDCARD,
-    DriverDocEnum.LICENSE,
+  const aggregatedData = await getVehicleDetailsWithDocs(driverId, [
+    DriverDocEnum.INSURANCE,
+    DriverDocEnum.REGISTRATION,
+    DriverDocEnum.VEHICLEPHOTO,
   ]);
 
   return res
@@ -114,12 +147,12 @@ const addDriverBasicDetails = catchAsyncError(async (req, res) => {
       new ApiResponse(
         statusCode.CREATED,
         aggregatedData,
-        "Basic details added successfully"
+        "Vehicle details added successfully"
       )
     );
 });
 
-const getDriverBasicDetails = catchAsyncError(async (req, res) => {
+const getDriverVehicleDetails = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith("Bearer ")) {
@@ -143,9 +176,10 @@ const getDriverBasicDetails = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
   }
 
-  const aggregatedData = await getDriverBasicWithDocs(driverId, [
-    DriverDocEnum.IDCARD,
-    DriverDocEnum.LICENSE,
+  const aggregatedData = await getVehicleDetailsWithDocs(driverId, [
+    DriverDocEnum.INSURANCE,
+    DriverDocEnum.REGISTRATION,
+    DriverDocEnum.VEHICLEPHOTO,
   ]);
 
   return res
@@ -159,4 +193,8 @@ const getDriverBasicDetails = catchAsyncError(async (req, res) => {
     );
 });
 
-module.exports = { addDriverBasicDetails, getDriverBasicDetails };
+module.exports = {
+  getVehicleImages,
+  addVehicleDetails,
+  getDriverVehicleDetails,
+};

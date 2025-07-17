@@ -69,7 +69,9 @@ const hotelNotificationRoutes = require("./routes/hotel-module/hote-notification
 const {
   adminPriceBreakRoutes,
 } = require("./routes/admin-module/price-breakdown/price-breakdown.routes");
-const { adminVehicleFareRoutes } = require("./routes/admin-module/vehicleFares/vehicleFares.routes");
+const {
+  adminVehicleFareRoutes,
+} = require("./routes/admin-module/vehicleFares/vehicleFares.routes");
 const amenititesRoutes = require("./routes/global-module/Amenities/amenities.routes");
 const RooomRouter = require("./routes/hotel-module/hotel-registration/hotel-room.routes");
 const adminNotificationRoutes = require("./routes/admin-module/admin-notifications/admin-notifications.routes");
@@ -86,6 +88,10 @@ const driverRidesRoutes = require("./routes/driver-module/driver-rides/driver-ri
 const usersearchroutes = require("./routes/user-module/user-google-search/user-google-search.routes");
 const newDriverauthRoute = require("./routes/new-driver-module/auth/auth.routes");
 const UploadFileRouter = require("./routes/upload-files/upload-files.routes");
+const driverBasicDetailsRouter = require("./routes/new-driver-module/basic-details/basic-details.routes");
+const vehicleDetailsRoute = require("./routes/new-driver-module/vehicle-details/vehicle-details.routes");
+const driverBankRoute = require("./routes/new-driver-module/bank-details/bank-details.routes");
+const driverDocRouter = require("./routes/new-driver-module/documents/documents.routes");
 
 if (node_env !== "production") {
   require("dotenv").config();
@@ -105,9 +111,12 @@ const allowedOrigins = allowed_origin;
 //     credentials: true,
 //   })
 // );
-app.use(cors(
-  { origin: ['http://localhost:5173', 'http://localhost:5174'], credentials: true }
-));
+app.use(
+  cors({
+    origin: ["http://localhost:5173", "http://localhost:5174"],
+    credentials: true,
+  })
+);
 // app.options("*", (req, res) => {
 //   const origin = req.headers.origin;
 //   if (allowedOrigins.includes(origin)) {
@@ -120,8 +129,8 @@ app.use(cors(
 //   res.status(403).json({ message: "CORS not allowed a" });
 // });
 
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(cookieParser());
 app.use(helmet());
 
@@ -163,10 +172,14 @@ app.use("/api/v1/user/wallet", userDigitalWalletRoutes);
 app.use("/api/v1/user/notifications", userNotificationRoutes);
 
 //Upload files to S3
-app.use('/api/v1/file',UploadFileRouter)
+app.use("/api/v1/file", UploadFileRouter);
 
 // New Driver Routes
-app.use('/api/v1/new-driver/auth',newDriverauthRoute)
+app.use("/api/v1/new-driver/auth", newDriverauthRoute);
+app.use("/api/v1/driver", driverBasicDetailsRouter);
+app.use("/api/v1/driver", vehicleDetailsRoute);
+app.use("/api/v1/driver", driverBankRoute);
+app.use("/api/v1/driver", driverDocRouter);
 
 // Driver Routes
 app.use("/api/v1/driver/auth", driverAuthRoutes);
@@ -200,7 +213,7 @@ app.use("/api/v1/hotel-manager/auth", hotelManagerAuthRoutes);
 app.use("/api/v1/hotel-manager/banks", hotelManagerBankRoutes);
 app.use("/api/v1/hotel-manager/secure-pin", hotelManagerSecurityPinRoutes);
 app.use("/api/v1/hotel", hotelDetailsRouter);
-app.use("/api/v1/hotel-address", addressHotelRouter)
+app.use("/api/v1/hotel-address", addressHotelRouter);
 app.use("/api/v1/hotel-policies", hotelPolicyRouter);
 app.use("/api/v1/hotel-images", hotelImagesRoutes);
 app.use("/api/v1/hotel-room", RooomRouter);
@@ -209,7 +222,6 @@ app.use("/api/v1/room-layout", roomLayoutRoutes);
 app.use("/api/v1/hotel-notifications", hotelNotificationRoutes);
 app.use("/api/v1/hotel-feedback", hotelFeedbackRoutes);
 app.use("/api/v1/hotelmanager-booking", hotelmanagerBookingRoutes);
-
 
 // Admin Routes
 app.use("/api/v1/admin/auth", adminAuthRoutes);

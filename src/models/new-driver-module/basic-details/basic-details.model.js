@@ -21,7 +21,7 @@ const driverBasicDetailSchema = new mongoose.Schema({
   experience: { type: Number },
   address: { type: String },
   termsAccepted: { type: Boolean },
-  ratings: { type: Number, min: 0, max: 5 },
+  ratings: { type: Number, min: 1, max: 5 },
   status: {
     type: String,
     enum: DriverBasicStatus,

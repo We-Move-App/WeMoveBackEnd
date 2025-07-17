@@ -7,6 +7,7 @@ const {
 const documents = new mongoose.Schema({
   documentType: { type: String, enum: DriverDocEnum },
   fileUrl: { type: String },
+  fileName: { type: String },
   status: {
     type: String,
     enum: DriverDocStatusEnum,
