@@ -28,7 +28,6 @@ const driverBasicDetailSchema = new mongoose.Schema({
     default: DriverBasicStatus.PENDING,
   },
   isActive: { type: Boolean, default: true },
-  isOnline: { type: Boolean },
 });
 
 module.exports = mongoose.model("DriverBasicDetails", driverBasicDetailSchema);

@@ -1,3 +1,5 @@
+const { ACCEPTED } = require("./statusCode");
+
 const DriverBasicStatus = {
   PENDING: "pending",
   APPROVED: "approved",
@@ -36,11 +38,51 @@ const VehicleTypeEnum = {
   BIKE: "bike",
 };
 
+const TicketStatusEnum = {
+  OPEN: "open",
+  INPROGRESS: "in_progress",
+  CLOSED: "closed",
+};
+
+const RideBookStatusEnum = {
+  REQUESTED: "requested",
+  RECEIVED: "received",
+  ACCEPTED: "accepted",
+  REJECTED: "rejected",
+  ARRIVED: "arrived",
+  STARTED: "started",
+  COMPLETED: "completed",
+  CANCELLED: "cancelled",
+};
+
+const BookPaymentStatusEnum = {
+  PENDING: "pending",
+  PAID: "paid",
+  FAILED: "failed",
+};
+
+const LocationStatusEnum = {
+  ONLINE: "online",
+  OFFLINE: "offline",
+  ONTRIP: "on_trip",
+};
+
+const BookCancelledByEnum = {
+  DRIVER: "driver",
+  USER: "user",
+  SYSTEM: "system",
+};
+
 module.exports = {
   DriverBasicStatus,
   EntityCodeEnum,
   GenderEnum,
   DriverDocEnum,
   DriverDocStatusEnum,
-  VehicleTypeEnum
+  VehicleTypeEnum,
+  TicketStatusEnum,
+  RideBookStatusEnum,
+  BookPaymentStatusEnum,
+  LocationStatusEnum,
+  BookCancelledByEnum,
 };
