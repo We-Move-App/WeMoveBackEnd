@@ -285,7 +285,6 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       ]);
 
       const selectedImage = hotelImages?.images?.[0] || null;
-
       const filteredRoomTypes = await Promise.all(
         roomTypes.map(async (roomType) => {
           const rooms = await individualRoomModule.find({
@@ -381,11 +380,8 @@ const getHotelById = catchAsyncError(async (req, res) => {
     HotelFeedbackModel.find({ hotelId }).select("rating").lean(),
     Room.find({ hotelId }).select("roomType roomPrice numberOfRoom").lean()
   ]);
-
-  // 🖼️ Return ALL hotel images
   const allHotelImages = hotelImages?.images || [];
 
-  // 🛏️ Get room type images (ALL images)
   const roomTypesWithImages = await Promise.all(
     roomTypes.map(async (room) => {
       const roomImageData = await HotelRoomImagesModel.findOne({
