@@ -3,12 +3,12 @@
     "vehicleType": "taxi",
     "url": "https://wemove-demo.s3.eu-north-1.amazonaws.com/wemove/1752741167894-ad12328884cf57e18ae1c4aebfd1cdb6",
     "text": "Taxi",
-    "colorCode": "#D2E4F980"
+    "colorCode": "0xffD2E4F9"
   },
   {
     "vehicleType": "bike",
     "url": "https://wemove-demo.s3.eu-north-1.amazonaws.com/wemove/1752741203919-619ca4113cb14778588c3f74e707dc90",
     "text": "Bike",
-    "colorCode": "#FFF9EA"
+    "colorCode": "0xffFFF9EA"
   }
 ]

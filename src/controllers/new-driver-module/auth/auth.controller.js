@@ -80,10 +80,12 @@ const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
       {
         accessToken,
         refreshToken,
-        driverId: driver.driverId,
-        phoneNo: driver.phoneNo,
-        email: driver.email,
-        status: driver.status || null,
+        basicDetails: {
+          driverId: driver.driverId,
+          phoneNo: driver.phoneNo,
+          email: driver.email,
+          status: driver.status || null,
+        },
       },
       "Phone verified successfully"
     )
@@ -193,19 +195,17 @@ const verifyEmailOtpHandler = catchAsyncError(async (req, res) => {
 });
 
 const refreshAccessTokenHandler = catchAsyncError(async (req, res) => {
-  const authHeader = req.headers["authorization"];
+  const { refreshToken } = req.body;
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+  if (!refreshToken) {
     throw new ApiError(
       statusCode.UNAUTHORIZED,
-      "Refresh token is missing or malformed"
+      "Refresh token is missing in the request body"
     );
   }
 
-  const token = authHeader.split(" ")[1];
-
   const { accessToken, refreshToken: newRefreshToken } =
-    await refreshAccessToken(token);
+    await refreshAccessToken(refreshToken);
 
   return res
     .status(statusCode.OK)

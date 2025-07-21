@@ -1,28 +1,28 @@
 const mongoose = require("mongoose");
 const { LocationStatusEnum } = require("../../../utils/constants/ENUM");
 
-const driverLocationSchema = new mongoose.Schema({
-  driverId: { type: String, required: true, index: true },
-
-  location: {
-    type: {
+const driverLocationSchema = new mongoose.Schema(
+  {
+    driverId: { type: String, required: true, index: true },
+    location: {
+      type: {
+        type: String,
+        enum: ["Point"],
+        default: "Point",
+      },
+      coordinates: {
+        type: [Number],
+        required: true,
+      },
+    },
+    status: {
       type: String,
-      enum: ['Point'],
-      default: 'Point',
-    },
-    coordinates: {
-      type: [Number], // [lng, lat]
-      required: true,
+      enum: Object.values(LocationStatusEnum),
+      default: LocationStatusEnum.OFFLINE,
     },
   },
-
-  status: {
-    type: String,
-    enum: Object.values(LocationStatusEnum),
-    default: LocationStatusEnum.OFFLINE,
-  },
-
-}, { timestamps: true });
+  { timestamps: true }
+);
 
 driverLocationSchema.index({ location: "2dsphere" });
 

@@ -11,6 +11,8 @@ const {
 
 const DriverBasicDetails = require("../../../models/new-driver-module/basic-details/basic-details.model");
 const DriverDocDetails = require("../../../models/new-driver-module/documents/driver-documents.model");
+const DriverBankDetails = require("../../../models/new-driver-module/bank-details/bank-details.model");
+const VehicleDetails = require("../../../models/new-driver-module/vehicle-details/vehicle-details.model");
 const {
   DriverDocStatusEnum,
   DriverDocEnum,
@@ -23,6 +25,8 @@ const addDriverBasicDetails = catchAsyncError(async (req, res) => {
   const { error, value } = addBasicDetailsValidation.validate(req.body, {
     abortEarly: false,
   });
+  console.log(...Object.entries(value));
+
   if (error) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -159,4 +163,47 @@ const getDriverBasicDetails = catchAsyncError(async (req, res) => {
     );
 });
 
-module.exports = { addDriverBasicDetails, getDriverBasicDetails };
+const getDriverProfileDetails = catchAsyncError(async (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const driverId = decoded?.driverId;
+
+  if (!driverId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  const basicDetails = await DriverBasicDetails.findOne({ driverId }).lean();
+  const bankDetails = await DriverBankDetails.findOne({ driverId }).lean();
+  const vehicleDetails = await VehicleDetails.findOne({ driverId }).lean();
+  const documents = await DriverDocDetails.find({ driverId }).lean();
+
+  if (!basicDetails) {
+    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+  }
+
+  return res.status(statusCode.OK).json({
+    success: true,
+    message: "Driver profile fetched successfully",
+    data: {
+      basicDetails,
+      bankDetails: bankDetails || null,
+      vehicleDetails: vehicleDetails || null,
+      documents: documents.length ? documents : null,
+    },
+  });
+});
+
+module.exports = {
+  addDriverBasicDetails,
+  getDriverBasicDetails,
+  getDriverProfileDetails,
+};
