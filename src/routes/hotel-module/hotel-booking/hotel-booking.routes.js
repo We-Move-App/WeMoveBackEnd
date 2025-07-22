@@ -9,7 +9,9 @@ const {
   getHotelsByLocation,
   getHotelById,
   getUpcomingBookings,
-  getPastBookings
+  getPastBookings,
+   cancelHotelBooking,
+   getCancelReasons
 
 
 
@@ -51,6 +53,12 @@ hotelBookingRoutes
   .get(isUserAuthenticated, getPastBookings);
 
 
+  hotelBookingRoutes
+  .route("/cancel-reasons")
+  .get(isUserAuthenticated, getCancelReasons);  
 
 
+  hotelBookingRoutes
+  .route("/cancel-booking/:bookingId")
+  .delete(isUserAuthenticated, cancelHotelBooking);
 module.exports = hotelBookingRoutes;
