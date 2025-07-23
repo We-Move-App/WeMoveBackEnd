@@ -3,7 +3,7 @@ const { VehicleTypeEnum, DriverDocEnum } = require("../../../utils/constants/ENU
 
 const addVehicleDetailsValidation = Joi.object({
   vehicleType: Joi.string().valid(...Object.values(VehicleTypeEnum)).required(),
-  seats: Joi.number().integer().min(1).max(100).required(),
+  // seats: Joi.number().integer().min(2).max(7).required(),
   model: Joi.string().max(100).required(),
   registrationNo: Joi.string().max(100).required(),
   documents: Joi.array()

@@ -184,22 +184,48 @@ const getDriverProfileDetails = catchAsyncError(async (req, res) => {
   const basicDetails = await DriverBasicDetails.findOne({ driverId }).lean();
   const bankDetails = await DriverBankDetails.findOne({ driverId }).lean();
   const vehicleDetails = await VehicleDetails.findOne({ driverId }).lean();
-  const documents = await DriverDocDetails.find({ driverId }).lean();
+  const docGroup = await DriverDocDetails.findOne({ driverId }).lean();
 
   if (!basicDetails) {
     throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
   }
 
-  return res.status(statusCode.OK).json({
+  // Group documents by type
+  const allDocs = docGroup?.documents || [];
+
+  // Helper to find doc by type
+  const findDoc = (type) =>
+    allDocs.find((doc) => doc.documentType === type) || null;
+
+  // Attach filtered documents to each section
+  const response = {
     success: true,
     message: "Driver profile fetched successfully",
     data: {
-      basicDetails,
-      bankDetails: bankDetails || null,
-      vehicleDetails: vehicleDetails || null,
-      documents: documents.length ? documents : null,
+      basicDetails: {
+        ...basicDetails,
+        id_card: findDoc("id_card"),
+        license: findDoc("license"),
+        avatar: findDoc("avatar"),
+      },
+      bankDetails: bankDetails
+        ? {
+            ...bankDetails,
+            passbook: findDoc("passbook"),
+          }
+        : null,
+      vehicleDetails: vehicleDetails
+        ? {
+            ...vehicleDetails,
+            insurance: findDoc("insurance"),
+            registration: findDoc("registration"),
+            vehicle_photo: findDoc("vehicle_photo"),
+          }
+        : null,
     },
-  });
+  };
+
+  return res.status(statusCode.OK).json(response);
 });
 
 module.exports = {
