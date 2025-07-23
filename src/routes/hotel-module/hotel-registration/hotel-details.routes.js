@@ -31,12 +31,7 @@ hotelDetailsRouter.get(
 
 hotelDetailsRouter.get("/:hotelId", isHotelManagerAuthenticated, getHotelById);
 
-hotelDetailsRouter.put(
-  "/:hotelId",
-  isHotelManagerAuthenticated,
-  uploadHotelImages,
-  updateHotelById
-);
+hotelDetailsRouter.put( "/:hotelId", isHotelManagerAuthenticated, uploadHotelImages, updateHotelById);
 
 hotelDetailsRouter.delete(
   "/:hotelId",

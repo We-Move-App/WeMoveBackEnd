@@ -14,9 +14,6 @@ const {
 } = require("../../../controllers/user-module/user-bus-bookings/user-bus-bookings.controllers");
 
 const userBusBookingsRoutes = express.Router();
-
-// ✅ Specific routes should come first
-
 userBusBookingsRoutes
   .route("/upcomingbooking")
   .get(isUserAuthenticated, authorizeRole(["user"]), UpcomingBusBookings);

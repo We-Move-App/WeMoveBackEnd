@@ -77,6 +77,11 @@ const HotelBookingSchema = new mongoose.Schema(
       enum: ["user", "Hotel-Manager"],
     
     },
+    reasonforChange: {
+      required: true,
+      type: String, 
+      default: "No Reason",
+    },
       cancelReason: {
       type: String,
     },

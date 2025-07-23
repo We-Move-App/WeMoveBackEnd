@@ -10,6 +10,7 @@ const {
 } = require("../../../utils/uploadFiles/images/uploadImages");
 const {
   deleteImageFromAws,
+  uploadImageOnAws,
 } = require("../../../utils/uploadFiles/uploadFilestoAws");
 
 const createHotelDetails = catchAsyncError(async (req, res, next) => {
@@ -127,66 +128,154 @@ const getHotelById = catchAsyncError(async (req, res, next) => {
     );
 });
 
+// const updateHotelById = catchAsyncError(async (req, res) => {
+//   const { hotelId } = req.params;
+//   const { imageId } = req.body;
 
-const updateHotelById = catchAsyncError(async (req, res, next) => {
+//   if (!hotelId) {
+//     throw new ApiError(400, "Hotel ID is required");
+//   }
+
+//   const updatedHotel = await Hotel.findByIdAndUpdate(
+//     hotelId,
+//     {
+//       $set: {
+//         hotelName: req.body.hotelName,
+//         businessLicense: req.body.businessLicense,
+//         totalRoom: req.body.totalRoom,
+//         termsAndConditions: req.body.termsAndConditions,
+//         description: req.body.description,
+//       },
+//     },
+//     { new: true }
+//   );
+
+//   if (!updatedHotel) {
+//     throw new ApiError(404, "Hotel not found");
+//   }
+
+//   let newUploadedImage = null;
+//   let deleteimages = null;
+//   const newImageFile = req.files?.hotelImages?.[0];
+
+//   if (imageId && newImageFile) {
+//     const hotelImageDoc = await HotelImage.findOne({ hotelId });
+
+//     if (!hotelImageDoc) {
+//       throw new ApiError(404, "Hotel image document not found");
+//     }
+
+//     const imageIndex = hotelImageDoc.images.findIndex(
+//       (img) => img._id.toString() === imageId
+//     );
+
+//     if (imageIndex === -1) {
+//       throw new ApiError(404, "Image ID not found in hotel images");
+//     }
+
+//     deleteimages = await deleteImageFromAws(hotelImageDoc.images[imageIndex].public_id);
+//     newUploadedImage = await uploadImageOnAws(newImageFile.path);
+
+//     if (!newUploadedImage) {
+//       throw new ApiError(500, "Failed to upload new image to AWS");
+//     }
+
+//     hotelImageDoc.images[imageIndex] = {
+//       url: newUploadedImage.secure_url,
+//       public_id: newUploadedImage.public_id,
+//       fileName: newImageFile.originalname,
+//       fileType: newImageFile.mimetype,
+//     };
+
+//     await hotelImageDoc.save();
+//   }
+
+//   res.status(200).json({
+//     success: true,
+//     message: "Hotel details and image updated successfully",
+//     hotel: updatedHotel,
+//     updatedImage: newUploadedImage,
+//     deletedImage: deleteimages,
+//   });
+// });
+
+
+const updateHotelById = catchAsyncError(async (req, res) => {
   const { hotelId } = req.params;
-  const updates = req.body;
+  const { imageId } = req.body;
 
-  let hotel = await Hotel.findById(hotelId);
-  if (!hotel) {
-    throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
+  if (!hotelId) {
+    throw new ApiError(400, "Hotel ID is required");
   }
 
-  let newImages = [];
-  let existingImages = [];
-
-  if (req.body.images) {
-    existingImages = JSON.parse(req.body.images);
-  }
-
-  // If new image file uploaded
-  if (req.files && req.files.hotelImages) {
-    const uploadedImages = await uploadMultipleImagesToAws(
-      req.files.hotelImages
-    );
-
-    // Replace placeholder (object without _id) with the new uploaded image
-    for (let i = 0; i < existingImages.length; i++) {
-      const img = existingImages[i];
-      if (!img._id) {
-        existingImages[i] = uploadedImages.shift(); // replace it
-      }
-    }
-
-    // Delete the old image that is being replaced (if needed)
-    const oldImages = await HotelImage.findOne({ hotelId });
-    for (let oldImg of oldImages?.images || []) {
-      const stillExists = existingImages.find(i => i._id === oldImg._id);
-      if (!stillExists) {
-        await deleteImageFromAws(oldImg.public_id);
-      }
-    }
-
-    // Update image list in DB
-    await HotelImage.findOneAndUpdate(
-      { hotelId },
-      { images: existingImages },
-      { new: true, upsert: true }
-    );
-  }
-
-  // Update hotel info
-  hotel = await Hotel.findByIdAndUpdate(hotelId, updates, { new: true });
-
-  const updatedImages = await HotelImage.findOne({ hotelId });
-
-  res.status(statusCode.OK).json(
-    new ApiResponse(statusCode.OK, {
-      hotel,
-      images: updatedImages
-    }, "Hotel updated successfully")
+  const updatedHotel = await Hotel.findByIdAndUpdate(
+    hotelId,
+    {
+      $set: {
+        hotelName: req.body.hotelName,
+        businessLicense: req.body.businessLicense,
+        totalRoom: req.body.totalRoom,
+        termsAndConditions: req.body.termsAndConditions,
+        description: req.body.description,
+      },
+    },
+    { new: true }
   );
+
+  if (!updatedHotel) {
+    throw new ApiError(404, "Hotel not found");
+  }
+
+  let newUploadedImage = null;
+  let deleteimages = null;
+  const newImageFile = req.files?.hotelImages?.[0];
+
+  if (imageId && newImageFile) {
+    const hotelImageDoc = await HotelImage.findOne({ hotelId });
+
+    if (!hotelImageDoc) {
+      throw new ApiError(404, "Hotel image document not found");
+    }
+
+    const imageIndex = hotelImageDoc.images.findIndex(
+      (img) => img._id.toString() === imageId
+    );
+
+    if (imageIndex === -1) {
+      throw new ApiError(404, "Image ID not found in hotel images");
+    }
+
+    deleteimages = await deleteImageFromAws(hotelImageDoc.images[imageIndex].public_id);
+
+    newUploadedImage = await uploadImageOnAws(newImageFile.path);
+
+    if (!newUploadedImage) {
+      throw new ApiError(500, "Failed to upload new image to AWS");
+    }
+
+    hotelImageDoc.images[imageIndex] = {
+      url: newUploadedImage.secure_url,
+      public_id: newUploadedImage.public_id,
+      fileName: newImageFile.originalname,
+      fileType: newImageFile.mimetype,
+    };
+
+    await hotelImageDoc.save();
+  }
+
+  const updatedHotelImages = await HotelImage.findOne({ hotelId });
+
+  res.status(200).json({
+    success: true,
+    message: "Hotel details and image updated successfully",
+    hotel: updatedHotel,
+    updatedImage: newUploadedImage,
+    deletedImage: deleteimages,
+    allImages: updatedHotelImages?.images || [],
+  });
 });
+
+
 
 
 

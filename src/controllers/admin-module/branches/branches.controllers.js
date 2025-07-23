@@ -15,7 +15,12 @@ const catchAsyncError = require("../../../utils/response/catchAsyncError");
 
 // ADD BRANCH
 const addBranch = catchAsyncError(async (req, res, next) => {
-  const { name, location, latitude, longitude } = req.body;
+  const { name, location, latitude, longitude, adminId } = req.body;
+
+  // ✅ Only SuperAdmin (and optionally Admin) can create branches
+  if (req.user.role !== "SuperAdmin" && req.user.role !== "Admin") {
+    throw new ApiError(statusCode.FORBIDDEN, "Not authorized to create branch");
+  }
 
   const reqField = ["name", "location", "latitude", "longitude"];
   validateRequestBody(reqField, req.body);

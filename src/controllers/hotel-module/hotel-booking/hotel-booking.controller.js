@@ -17,7 +17,7 @@ const individualRoomModule = require("../../../models/hotel-module/single-room/i
 const hotelImagesModel = require("../../../models/hotel-module/hotel-images/hotel-images.model");
 const HotelFeedbackModel = require("../../../models/hotel-module/hotel-feedback/hotel-feedback.model");
 const HotelPolicyModel = require("../../../models/hotel-module/hotel-registration/hotel-policy.model");
-const HotelRoomImagesModel= require("../../../models/hotel-module/hotel-room-images/hotel-room-images.model");
+const HotelRoomImagesModel = require("../../../models/hotel-module/hotel-room-images/hotel-room-images.model");
 
 
 
@@ -47,7 +47,7 @@ const createBooking = catchAsyncError(async (req, res) => {
   const checkOutDateTime = new Date(`${checkOutDate}T${HotelPolicyModel.checkOutTime || "11:00"}:00`);
   if (
     !bookedBy || !hotelId || !checkInDate || !checkOutDate ||
-     !noOfRoom || !roomTypeId
+    !noOfRoom || !roomTypeId
   ) {
     throw new ApiError(statusCode.BAD_REQUEST, "Missing required booking details.");
   }
@@ -285,7 +285,6 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       ]);
 
       const selectedImage = hotelImages?.images?.[0] || null;
-
       const filteredRoomTypes = await Promise.all(
         roomTypes.map(async (roomType) => {
           const rooms = await individualRoomModule.find({
@@ -323,10 +322,10 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       if (availableRoomTypes.length > 0) {
         return {
           hotel: {
-           
-             hotelId: hotel._id,
+
+            hotelId: hotel._id,
             hotelName: hotel.hotelName,
-            rating: hotel.rating ,
+            rating: hotel.rating,
             totalRoom: hotel.totalRoom,
 
           },
@@ -381,11 +380,8 @@ const getHotelById = catchAsyncError(async (req, res) => {
     HotelFeedbackModel.find({ hotelId }).select("rating").lean(),
     Room.find({ hotelId }).select("roomType roomPrice numberOfRoom").lean()
   ]);
-
-  // 🖼️ Return ALL hotel images
   const allHotelImages = hotelImages?.images || [];
 
-  // 🛏️ Get room type images (ALL images)
   const roomTypesWithImages = await Promise.all(
     roomTypes.map(async (room) => {
       const roomImageData = await HotelRoomImagesModel.findOne({
@@ -422,109 +418,6 @@ const getHotelById = catchAsyncError(async (req, res) => {
   );
 });
 
-//--------------------- get upcoming bookings for user --------------------
-// const getUpcomingBookings = catchAsyncError(async (req, res) => {
-//   const userId = req.user?._id;
-
-//   if (!userId) {
-//     throw new ApiError(statusCode.UNAUTHORIZED, "User not authenticated");
-//   }
-
-//   const today = new Date();
-//   today.setHours(0, 0, 0, 0); // Normalize to midnight
-
-//   // Fetch user's upcoming bookings
-//   const bookings = await HotelBookingModel.find({
-//     bookedBy: userId,
-//     bookingBy: "user",
-//     checkInDate: { $gte: today },
-//     status: "Booked"
-//   })
-//     .populate({ path: "hotelId", model: Hotel, select: "hotelName hotelId" })
-//     .populate({ path: "roomTypeId", model: Room, select: "roomType" })
-//     .populate({ path: "bookedBy", model: User, select: "_id firstName lastName email" })
-//     .populate({ path: "assignedRooms", model: individualRoom, select: "_id roomNumber" })
-//     .select("hotelId checkInDate checkOutDate checkInTime checkOutTime totalAmount noOfAdults noOfKids noOfRoom status roomTypeId bookedBy")
-//     .lean();
-
-//   if (!bookings.length) {
-//     return res.status(statusCode.OK).json(
-//       new ApiResponse(statusCode.OK, [], "No upcoming bookings found.")
-//     );
-//   }
-
-//   // Safely extract hotel IDs (handle both populated and unpopulated hotelId)
-//   const hotelIds = [
-//     ...new Set(
-//       bookings.map(b => {
-//         const hotel = b.hotelId;
-//         if (hotel && typeof hotel === "object" && "_id" in hotel) {
-//           return hotel._id.toString();
-//         }
-//         return hotel?.toString();
-//       }).filter(Boolean)
-//     )
-//   ];
-
-//   // Fetch hotel data, images, and feedbacks
-//   const [hotels, images, feedbacks] = await Promise.all([
-//     Hotel.find({ _id: { $in: hotelIds } }).select("hotelName").lean(),
-//     hotelImagesModel.find({ hotelId: { $in: hotelIds } }).select("hotelId images").lean(),
-//     HotelFeedbackModel.find({ hotelId: { $in: hotelIds } }).select("hotelId rating").lean()
-//   ]);
-
-//   // Prepare maps for quick lookup
-//   const hotelMap = new Map(hotels.map(h => [h._id.toString(), h.hotelName]));
-//   const imageMap = new Map(images.map(img => [img.hotelId.toString(), img.images?.[0] || null]));
-
-//   const ratingMap = {};
-//   feedbacks.forEach(({ hotelId, rating }) => {
-//     const id = hotelId.toString();
-//     if (!ratingMap[id]) ratingMap[id] = [];
-//     ratingMap[id].push(rating || 0);
-//   });
-
-//   const getAverageRating = (id) => {
-//     const ratings = ratingMap[id] || [];
-//     return ratings.length ? (ratings.reduce((sum, r) => sum + r, 0) / ratings.length).toFixed(1) : null;
-//   };
-
-//   // Format the final response
-//   const result = bookings.map(b => {
-//     const hotelIdStr =
-//       typeof b.hotelId === "object" && "_id" in b.hotelId
-//         ? b.hotelId._id.toString()
-//         : b.hotelId?.toString() || "unknown";
-
-//     return {
-//       hotelName: hotelMap.get(hotelIdStr) || "N/A",
-//       hotelImage: imageMap.get(hotelIdStr) || null,
-//       rating: getAverageRating(hotelIdStr),
-//       bookingDetails: {
-//         user: {
-//           _id: b.bookedBy?._id,
-//           firstName: b.bookedBy?.firstName,
-//           lastName: b.bookedBy?.lastName,
-//           email: b.bookedBy?.email
-//         },
-//         checkInDate: b.checkInDate?.toISOString().split("T")[0] || null,
-//         checkOutDate: b.checkOutDate?.toISOString().split("T")[0] || null,
-//         checkInTime: b.checkInTime || null,
-//         checkOutTime: b.checkOutTime || null,
-//         totalAmount: b.totalAmount,
-//         noOfAdults: b.noOfAdults,
-//         noOfKids: b.noOfKids,
-//         noOfRoom: b.noOfRoom,
-//         status: b.status,
-//         roomType: b.roomTypeId?.roomType || "N/A"
-//       }
-//     };
-//   });
-
-//   return res.status(statusCode.OK).json(
-//     new ApiResponse(statusCode.OK, result, "Upcoming bookings fetched successfully.")
-//   );
-// });
 const getUpcomingBookings = catchAsyncError(async (req, res) => {
   const { page = 1, limit = 10 } = req.query;
   const userId = req.user._id;
@@ -539,7 +432,6 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
-  // Step 1: Fetch bookings with hotel and roomType
   const bookings = await HotelBooking.find(query)
     .sort({ checkInDate: 1 })
     .skip(skip)
@@ -564,33 +456,40 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
       model: individualRoom,
       select: "-__v -roomStatus"
     })
-    .lean(); // Use .lean() to allow modification
+    .lean();
 
-  // Step 2: Enhance each booking with hotel image and nights
   const bookingsWithExtras = await Promise.all(
     bookings.map(async (booking) => {
-      
       const checkIn = new Date(booking.checkInDate);
       const checkOut = new Date(booking.checkOutDate);
       const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
-      console.log("Nights:", nights);
 
-      const hotelImages = await hotelImagesModel.findOne({ hotelId: booking.hotelId._id }).select("images").lean();
+      // ✅ Calculate hours left until check-in
+      const now = new Date();
+      const diffMs = checkIn - now;
+      const hoursLeft = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
+      const isCancellable = hoursLeft >= 24;
+
+      // ✅ Fetch hotel images
+      const hotelImages = await hotelImagesModel
+        .findOne({ hotelId: booking.hotelId._id })
+        .select("images")
+        .lean();
       const hotelImage = hotelImages?.images || [];
 
       return {
         ...booking,
         nights,
-        hotelImage, // returns all hotel images
+        hotelImage,
+        isCancellable, // ✅ Added this field to indicate if user can cancel
+        hoursLeftUntilCheckIn: hoursLeft, // (optional for debugging/frontend)
       };
     })
   );
 
-  // Step 3: Pagination info
   const totalBookings = await HotelBooking.countDocuments(query);
   const totalPages = Math.ceil(totalBookings / parseInt(limit));
 
-  // Step 4: Send response
   return res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
@@ -600,120 +499,11 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
         currentPage: parseInt(page),
         limit: parseInt(limit),
         bookings: bookingsWithExtras,
-        
       },
       "Upcoming bookings fetched successfully"
     )
   );
 });
-
-
-
-//--------------------- get past bookings for user --------------------
-// const getPastBookings = catchAsyncError(async (req, res) => {
-//   const userId = req.user?._id;
-
-//   if (!userId) {
-//     throw new ApiError(statusCode.UNAUTHORIZED, "User not authenticated");
-//   }
-
-//   const today = new Date();
-//   today.setHours(0, 0, 0, 0); // Normalize to midnight
-
-//   // Fetch user's past bookings (checkOutDate < today)
-//   const bookings = await HotelBookingModel.find({
-//     bookedBy: userId,
-//     // bookingBy: "user",
-//     checkOutDate: { $lt: today },
-//     status: "Booked"
-//   })
-//     .populate({ path: "hotelId", model: Hotel, select: "hotelName" })
-//     .populate("roomTypeId")
-//     // .populate({ path: "roomTypeId", model: Room, select: "roomType" })
-//     .populate({ path: "bookedBy", model: User, select: "_id firstName lastName email" })
-//     // .populate({ path: "assignedRooms", model: individualRoom, select: "_id roomNumber" })
-//     // .select("hotelId checkInDate checkOutDate checkInTime checkOutTime totalAmount noOfAdults noOfKids noOfRoom status roomTypeId bookedBy")
-//     .lean();
-
-//   if (!bookings.length) {
-//     return res.status(statusCode.OK).json(
-//       new ApiResponse(statusCode.OK, [], "No past bookings found.")
-//     );
-//   }
-
-//   // Get hotel IDs for further queries
-//   const hotelIds = [
-//     ...new Set(
-//       bookings.map(b => {
-//         const hotel = b.hotelId;
-//         if (hotel && typeof hotel === "object" && "_id" in hotel) {
-//           return hotel._id.toString();
-//         }
-//         return hotel?.toString();
-//       }).filter(Boolean)
-//     )
-//   ];
-
-//   // Fetch hotel data, images, and feedbacks
-//   const [hotels, images, feedbacks] = await Promise.all([
-//     Hotel.find({ _id: { $in: hotelIds } }).select("hotelName").lean(),
-//     hotelImagesModel.find({ hotelId: { $in: hotelIds } }).select("hotelId images").lean(),
-//     HotelFeedbackModel.find({ hotelId: { $in: hotelIds } }).select("hotelId rating").lean()
-//   ]);
-
-//   // Prepare lookup maps
-//   const hotelMap = new Map(hotels.map(h => [h._id.toString(), h.hotelName]));
-//   const imageMap = new Map(images.map(img => [img.hotelId.toString(), img.images?.[0] || null]));
-
-//   const ratingMap = {};
-//   feedbacks.forEach(({ hotelId, rating }) => {
-//     const id = hotelId.toString();
-//     if (!ratingMap[id]) ratingMap[id] = [];
-//     ratingMap[id].push(rating || 0);
-//   });
-
-//   const getAverageRating = (id) => {
-//     const ratings = ratingMap[id] || [];
-//     return ratings.length ? (ratings.reduce((sum, r) => sum + r, 0) / ratings.length).toFixed(1) : null;
-//   };
-
-//   // Final response format
-//   const result = bookings.map(b => {
-//     const hotelIdStr =
-//       typeof b.hotelId === "object" && "_id" in b.hotelId
-//         ? b.hotelId._id.toString()
-//         : b.hotelId?.toString() || "unknown";
-
-//     return {
-//       ...b,
-//       // hotelName: hotelMap.get(hotelIdStr) || "N/A",
-//       // hotelImage: imageMap.get(hotelIdStr) || null,
-//       // rating: getAverageRating(hotelIdStr),
-//       // bookingDetails: {
-//       //   user: {
-//       //     _id: b.bookedBy?._id,
-//       //     firstName: b.bookedBy?.firstName,
-//       //     lastName: b.bookedBy?.lastName,
-//       //     email: b.bookedBy?.email
-//       //   },
-//       //   checkInDate: b.checkInDate?.toISOString().split("T")[0] || null,
-//       //   checkOutDate: b.checkOutDate?.toISOString().split("T")[0] || null,
-//       //   checkInTime: b.checkInTime || null,
-//       //   checkOutTime: b.checkOutTime || null,
-//       //   totalAmount: b.totalAmount,
-//       //   noOfAdults: b.noOfAdults,
-//       //   noOfKids: b.noOfKids,
-//       //   noOfRoom: b.noOfRoom,
-//       //   status: b.status,
-//       //   roomType: b.roomTypeId?.roomType || "N/A"
-//       // }
-//     };
-//   });
-
-//   return res.status(statusCode.OK).json(
-//     new ApiResponse(statusCode.OK, result, "Past bookings fetched successfully.")
-//   );
-// });
 const getPastBookings = catchAsyncError(async (req, res) => {
   const { page = 1, limit = 10 } = req.query;
   const userId = req.user._id;
@@ -774,31 +564,93 @@ const getPastBookings = catchAsyncError(async (req, res) => {
     )
   );
 });
+const cancelHotelBooking = catchAsyncError(async (req, res) => {
+  const { bookingId } = req.params;
+  const userId = req.user._id;
+  const { cancelReason } = req.body;
 
+  const booking = await HotelBookingModel.findById(bookingId).populate("assignedRooms");
 
+  if (!booking) {
+    throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
+  }
 
+  // Check ownership
+  if (booking.bookedBy.toString() !== userId.toString()) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "You can only cancel your own booking");
+  }
 
+  // Check if already cancelled or completed
+  if (["Cancelled", "Completed"].includes(booking.status)) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      `Booking is already ${booking.status}`
+    );
+  }
 
+  // 24-hour cancellation policy
+  const now = Date.now();
+  const checkInTime = new Date(booking.checkInDate).getTime();
+  const hoursBeforeCheckIn = (checkInTime - now) / (1000 * 60 * 60);
 
+  if (hoursBeforeCheckIn < 24) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "You can only cancel your booking at least 24 hours before the journey"
+    );
+  }
 
-//   const userId = req.user._id;
+  // Mark booking as cancelled
+  booking.status = "Cancelled";
+  booking.cancelledBy = "user";
+  if (cancelReason) {
+    booking.cancelReason = cancelReason;
+  }
 
+  // Update assigned room statuses
+  const roomUpdatePromises = booking.assignedRooms.map((room) => {
+    return individualRoom.updateOne(
+      { _id: room._id },
+      {
+        $set: {
+          status: "available",
+          isAvailable: true,
+          bookingReference: null,
+          checkInDate: null,
+          checkOutDate: null,
+          checkInTime: null,
+          checkOutTime: null,
+        },
+      }
+    );
+  });
 
+  await Promise.all([...roomUpdatePromises, booking.save()]);
 
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      booking,
+      "Booking cancelled successfully"
+    )
+  );
+});
+// controller/hotelBooking/getCancelReasons.js
 
-
-
-
-//   return res.status(statusCode.OK).json(
-//     new ApiResponse(
-//       statusCode.OK,
-//       {
-//         booking,
-//       },
-//       "Booking fetched successfully"
-//     )
-//   );
-// })
+const getCancelReasons = (req, res) => {
+  try {
+    return res.status(200).json({
+      success: true,
+      cancelReasons: ["Static Price", "Behaviour", "Services", "Others"],
+    });
+  } catch (error) {
+    console.error("Cancel Reasons Fetch Error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Something went wrong",
+    });
+  }
+};
 
 
 
@@ -810,11 +662,7 @@ module.exports = {
   getHotelsByLocation,
   getHotelById,
   getUpcomingBookings,
-  getPastBookings
-
-
-
-
-
-
+  getPastBookings,
+getCancelReasons,
+  cancelHotelBooking
 };
