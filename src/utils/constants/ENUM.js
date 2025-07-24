@@ -10,6 +10,7 @@ const EntityCodeEnum = {
   USER: "user",
   HOTEL: "hotel",
   ADMIN: "admin",
+  RIDES:'rides'
 };
 
 const GenderEnum = {

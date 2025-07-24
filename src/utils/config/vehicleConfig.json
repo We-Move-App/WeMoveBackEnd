@@ -1,0 +1,18 @@
+{
+  "BIKE": {
+    "id": "001",
+    "text": "Bike Ride",
+    "logo": "https://wemove-demo.s3.eu-north-1.amazonaws.com/wemove/1753331035381-103f5d728699ce5f97182931b183862f",
+    "baseFare": 25,
+    "perKm": 5,
+    "perMin": 1
+  },
+  "TAXI": {
+    "id": "002",
+    "text": "Taxi Ride",
+    "logo": "https://wemove-demo.s3.eu-north-1.amazonaws.com/wemove/1753331062475-794a3011ff5207dfd3aed7bc31536797",
+    "baseFare": 35,
+    "perKm": 7,
+    "perMin": 1.5
+  }
+}

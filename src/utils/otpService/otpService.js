@@ -99,6 +99,7 @@ const verifyEmailOtp = async (email, otp) => {
 };
 
 module.exports = {
+  getOtp,
   sendOtpToPhone,
   sendOtpToEmail,
   verifyPhoneOtp,

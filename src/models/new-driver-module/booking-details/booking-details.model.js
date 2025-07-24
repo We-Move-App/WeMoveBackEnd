@@ -14,7 +14,7 @@ const locationSchema = new mongoose.Schema({
       default: "Point",
     },
     coordinates: {
-      type: [Number], // [lng, lat]
+      type: [Number],
       required: true,
     },
   },
@@ -30,10 +30,9 @@ const polylinePointSchema = new mongoose.Schema({
 const bookingDetailsSchema = new mongoose.Schema(
   {
     bookingId: { type: String, required: true, unique: true },
-    driverId: { type: String, required: true, index: true },
+    driverId: { type: String, index: true },
     userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      type:String,
       required: true,
       index: true,
     },

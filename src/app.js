@@ -92,9 +92,10 @@ const driverBasicDetailsRouter = require("./routes/new-driver-module/basic-detai
 const vehicleDetailsRoute = require("./routes/new-driver-module/vehicle-details/vehicle-details.routes");
 const driverBankRoute = require("./routes/new-driver-module/bank-details/bank-details.routes");
 const driverDocRouter = require("./routes/new-driver-module/documents/documents.routes");
+const rideRoutes = require("./routes/ride-module/ride.routes");
+const locationRouter = require("./routes/new-driver-module/location/location.routes");
 
 if (node_env !== "production") {
-  
   require("dotenv").config();
 }
 
@@ -181,6 +182,12 @@ app.use("/api/v1/driver", driverBasicDetailsRouter);
 app.use("/api/v1/driver", vehicleDetailsRoute);
 app.use("/api/v1/driver", driverBankRoute);
 app.use("/api/v1/driver", driverDocRouter);
+
+// Ride Routes
+app.use("/api/v1/ride", rideRoutes);
+
+//Location Routes
+app.use("/api/v1/location", locationRouter);
 
 // Driver Routes
 app.use("/api/v1/driver/auth", driverAuthRoutes);
