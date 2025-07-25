@@ -1,5 +1,3 @@
-const { ACCEPTED } = require("./statusCode");
-
 const DriverBasicStatus = {
   PENDING: "pending",
   APPROVED: "approved",
@@ -10,7 +8,7 @@ const EntityCodeEnum = {
   USER: "user",
   HOTEL: "hotel",
   ADMIN: "admin",
-  RIDES:'rides'
+  RIDES: "rides",
 };
 
 const GenderEnum = {
@@ -56,10 +54,10 @@ const RideBookStatusEnum = {
   CANCELLED: "cancelled",
 };
 
-const BookPaymentStatusEnum = {
-  PENDING: "pending",
-  PAID: "paid",
-  FAILED: "failed",
+const PaymentStatusEnum = {
+  PENDING: "PENDING",
+  SUCCESS: "SUCCESS",
+  FAILED: "FAILED",
 };
 
 const LocationStatusEnum = {
@@ -74,6 +72,18 @@ const BookCancelledByEnum = {
   SYSTEM: "system",
 };
 
+const TransactionTypeEnum = {
+  CREDIT: "CREDIT",
+  DEBIT: "DEBIT",
+};
+
+const WalletCurrencyEnum = {
+  XAF: "XAF",
+  USD: "USD",
+  EUR: "EUR",
+  INR: "INR",
+};
+
 module.exports = {
   DriverBasicStatus,
   EntityCodeEnum,
@@ -83,7 +93,9 @@ module.exports = {
   VehicleTypeEnum,
   TicketStatusEnum,
   RideBookStatusEnum,
-  BookPaymentStatusEnum,
+  PaymentStatusEnum,
   LocationStatusEnum,
   BookCancelledByEnum,
+  TransactionTypeEnum,
+  WalletCurrencyEnum,
 };

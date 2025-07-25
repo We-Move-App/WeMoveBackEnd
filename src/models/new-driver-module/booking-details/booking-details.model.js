@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 const {
   RideBookStatusEnum,
-  BookPaymentStatusEnum,
+  PaymentStatusEnum,
   BookCancelledByEnum,
 } = require("../../../utils/constants/ENUM");
 
@@ -79,8 +79,8 @@ const bookingDetailsSchema = new mongoose.Schema(
     otpVerified: { type: Boolean, default: false },
     paymentStatus: {
       type: String,
-      enum: BookPaymentStatusEnum,
-      default: BookPaymentStatusEnum.PENDING,
+      enum: PaymentStatusEnum,
+      default: PaymentStatusEnum.PENDING,
     },
 
     feedbackFromUser: { type: String },

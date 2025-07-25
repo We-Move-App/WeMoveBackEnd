@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const DigitalWalletModel = require("../../models/user-module/digitalWallet/digitalWallet.model");
+const DigitalWalletModel = require("../../models/user-module/user-wallets/user-wallets.model");
 const TransactionModel = require("../../models/user-module/transactions/transactions.model");
 const UserModel = require("../../models/user-module/user/user.model");
 const statusCode = require("../constants/statusCode");

@@ -2,7 +2,7 @@ const RideBookingDetail = require("../../models/new-driver-module/booking-detail
 const {
   RideBookStatusEnum,
   EntityCodeEnum,
-  BookPaymentStatusEnum,
+  PaymentStatusEnum,
 } = require("../../utils/constants/ENUM");
 const generateCustomId = require("../../utils/customId/generateCustomId");
 const findNearbyDrivers = require("../../utils/map/findNearbyDrivers");
@@ -289,7 +289,7 @@ const rideHandler = (socket, io, role) => {
           { bookingId: data.bookingId },
           { 
             rideStatus: RideBookStatusEnum.COMPLETED,
-            paymentStatus: BookPaymentStatusEnum.PAID,
+            paymentStatus: PaymentStatusEnum.SUCCESS,
             "timestamps.completedAt": new Date() 
           }
         );

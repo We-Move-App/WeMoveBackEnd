@@ -37,7 +37,7 @@ const busImagesRoutes = require("./routes/bus-module/bus-images/bus-images.route
 const busMemberRoutes = require("./routes/bus-module/bus-members/bus-members.routes");
 const busFeedbackRoutes = require("./routes/bus-module/bus-feedbacks/bus-feedbacks.routes");
 const busSeatLayoutRoutes = require("./routes/bus-module/bus-seats-layout/bus-seats.routes");
-const userDigitalWalletRoutes = require("./routes/user-module/user-digital-wallet/user-digital-wallet.routes");
+// const userDigitalWalletRoutes = require("./routes/user-module/user-digital-wallet/user-digital-wallet.routes");
 const userBusBookingsRoutes = require("./routes/user-module/user-bus-bookings/user-bus-bookings.routes");
 const busOperatorBusBookings = require("./routes/bus-module/bus-bookings/bus-bookings.routes");
 const hotelManagerAuthRoutes = require("./routes/hotel-module/hotel-manager-auth/hotelManagerAuth.routes");
@@ -94,6 +94,8 @@ const driverBankRoute = require("./routes/new-driver-module/bank-details/bank-de
 const driverDocRouter = require("./routes/new-driver-module/documents/documents.routes");
 const rideRoutes = require("./routes/ride-module/ride.routes");
 const locationRouter = require("./routes/new-driver-module/location/location.routes");
+const momoRouter = require("./routes/momo-mtn/momo-mtn.routes");
+const webhookRouter=require("./routes/web-hook/webhook.routes")
 
 if (node_env !== "production") {
   require("dotenv").config();
@@ -170,11 +172,17 @@ app.use("/api/v1/user/user-Google-searches", usersearchroutes);
 app.use("/api/v1/user/rides", userRidesBookingRoutes);
 app.use("/api/v1/user/bus-bookings", userBusBookingsRoutes);
 app.use("/api/v1/user/hotel-booking", hotelbookingRoutes);
-app.use("/api/v1/user/wallet", userDigitalWalletRoutes);
+// app.use("/api/v1/user/wallet", userDigitalWalletRoutes);
 app.use("/api/v1/user/notifications", userNotificationRoutes);
 
 //Upload files to S3
 app.use("/api/v1/file", UploadFileRouter);
+
+//WebHook
+app.use("/api/v1/webhook", webhookRouter);
+
+// app.use("/api/v1/momo", momoRouter);
+app.use("/api/v1/momo",momoRouter)
 
 // New Driver Routes
 app.use("/api/v1/new-driver/auth", newDriverauthRoute);
