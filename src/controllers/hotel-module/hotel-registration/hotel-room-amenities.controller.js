@@ -682,11 +682,15 @@ const updateRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
   }
 
  const roomImageFiles = req.files?.roomImages || [];
-const imageIdsToDelete = req.body.imageId
-  ? Array.isArray(req.body.imageId)
-    ? req.body.imageId
-    : [req.body.imageId]
-  : [];   
+let imageIdsToDelete = [];
+if (req.body.imageId) {
+  try {
+    imageIdsToDelete = JSON.parse(req.body.imageId);
+  } catch (err) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid imageId format. Must be JSON array.");
+  }
+}
+   
 
 
 let updatedRoomImages = [];
