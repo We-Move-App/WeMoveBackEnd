@@ -68,13 +68,7 @@ const registerUserWithOtp = catchAsyncError(async (req, res, next) => {
     typeOfUser: TypeOfUser.USER,
   });
 
-  // const { accessToken, refreshToken, reqData } = result;
   const isSuccess = result;
-  // const data = {
-  //   accessToken,
-  //   refreshToken,
-  //   user: reqData,
-  // };
 
   return res
     .status(statusCode.OK)
@@ -86,6 +80,7 @@ const registerUserWithOtp = catchAsyncError(async (req, res, next) => {
       )
     );
 });
+
 const registerUser = catchAsyncError(async (req, res, next) => {
   const result = await registerUserWithEmailAndPhoneNumber({
     req,

@@ -2,7 +2,7 @@ const DriverModel = require("../../../models/driver-module/drivers/drivers.model
 const RidesReview = require("../../../models/global-module/ride-reviews/ride-reviews.model");
 const UserRecentSearchModel = require("../../../models/user-module/user-recent-search/user-recent-search.model");
 const RideModel = require("../../../models/user-module/user-rides/user-ride.model");
-const { getIo } = require("../../../socket/socketHandler");
+// const { getIo } = require("../../../socket/socketHandler");
 const statusCode = require("../../../utils/constants/statusCode");
 const {
   formatDistanceTime,
