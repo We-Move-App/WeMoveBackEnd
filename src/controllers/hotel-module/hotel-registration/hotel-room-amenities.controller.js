@@ -639,12 +639,14 @@ const getAllRooms = catchAsyncError(async (req, res, next) => {
 
 const updateRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
   const { _id } = req.user;
+
+
   const {
     standardRoomCount,
     luxuryRoomCount,
     amenities,
     roomPrice,
-    imageId // <-- NEW: passed in body
+    imageId 
   } = req.body;
   const { hotelId, roomType } = req.query;
 
@@ -679,9 +681,17 @@ const updateRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid room type.");
   }
 
-  const roomImageFile = req.files?.roomImages?.[0];
-  let updatedRoomImage = null;
-  let deletedRoomImage = null;
+ const roomImageFiles = req.files?.roomImages || [];
+const imageIdsToDelete = req.body.imageId
+  ? Array.isArray(req.body.imageId)
+    ? req.body.imageId
+    : [req.body.imageId]
+  : [];   
+
+
+let updatedRoomImages = [];
+let deletedRoomImages = [];
+
 
   const existingRoom = await Room.findOne({ hotelId, roomType });
   if (!existingRoom) {
@@ -697,39 +707,40 @@ const updateRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
     ? amenities
     : JSON.parse(amenities);
 
-  if (imageId && roomImageFile) {
-    const roomImageDoc = await HotelRoomImagesModel.findOne({ roomId: existingRoom._id });
+ const roomImageDoc = await HotelRoomImagesModel.findOne({ roomId: existingRoom._id });
+if (!roomImageDoc) {
+  throw new ApiError(statusCode.NOT_FOUND, "Room image document not found.");
+}
 
-    if (!roomImageDoc) {
-      throw new ApiError(statusCode.NOT_FOUND, "Room image document not found.");
-    }
-
+// Delete specified images
+if (imageIdsToDelete.length > 0) {
+  for (const imageId of imageIdsToDelete) {
     const imageIndex = roomImageDoc.images.findIndex(img => img._id.toString() === imageId);
-
-    if (imageIndex === -1) {
-      throw new ApiError(statusCode.NOT_FOUND, "Image ID not found in room images.");
+    if (imageIndex !== -1) {
+      const imgToDelete = roomImageDoc.images[imageIndex];
+      await deleteImageFromAws(imgToDelete.public_id);
+      roomImageDoc.images.splice(imageIndex, 1);
+      deletedRoomImages.push(imgToDelete);
     }
-
-    deletedRoomImage = await deleteImageFromAws(roomImageDoc.images[imageIndex].public_id);
-
-    const newUploadedImage = await uploadImageOnAws(roomImageFile.path);
-
-    if (!newUploadedImage) {
-      throw new ApiError(statusCode.INTERNAL_SERVER_ERROR, "Failed to upload new image.");
-    }
-
-    roomImageDoc.images[imageIndex] = {
-      url: newUploadedImage.secure_url,
-      public_id: newUploadedImage.public_id,
-      fileName: roomImageFile.originalname,
-      fileType: roomImageFile.mimetype,
-    };
-
-    updatedRoomImage = roomImageDoc.images[imageIndex];
-    await roomImageDoc.save();
-
-    existingRoom.roomImages = roomImageDoc.images;
   }
+}
+
+// Upload and add new images
+for (const file of roomImageFiles) {
+  const uploaded = await uploadImageOnAws(file.path);
+  const newImg = {
+    url: uploaded.secure_url,
+    public_id: uploaded.public_id,
+    fileName: file.originalname,
+    fileType: file.mimetype,
+  };
+  roomImageDoc.images.push(newImg);
+  updatedRoomImages.push(newImg);
+}
+
+await roomImageDoc.save();
+existingRoom.roomImages = roomImageDoc.images;
+
 
   existingRoom.numberOfRoom = numberOfRoom;
   existingRoom.roomPrice = parsedRoomPrice;
@@ -752,14 +763,17 @@ const updateRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
   res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
+      "Room updated successfully.",
+
       {
         ...existingRoom.toObject(),
         rooms: newIndividualRooms,
         images: roomImagesData?.images || [],
-        updatedImage: updatedRoomImage,
-        deletedImage: deletedRoomImage,
+        updatedImage: updatedRoomImages,
+        deletedImage: deletedRoomImages,
       },
-      "Room updated successfully."
+     
+
     )
   );
 });

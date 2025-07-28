@@ -220,10 +220,16 @@ const getBookings = catchAsyncError(async (req, res) => {
 const getHotelsByLocation = catchAsyncError(async (req, res) => {
   const { townCity, requiredRooms, checkInDate, checkOutDate, page = 1, limit = 10 } = req.query;
 
-  const requiredRoomCount = parseInt(requiredRooms) || 1;
+  const requiredRoomCount = parseInt(requiredRooms);
   const pageNum = parseInt(page);
   const limitNum = parseInt(limit);
-
+  if( isNaN(requiredRoomCount) || requiredRoomCount <= 0 ){
+    throw new ApiError(statusCode.BAD_REQUEST, "requiredRooms must be a positive integer.");
+  }
+ 
+if( !requiredRoomCount ){
+    throw new ApiError(statusCode.BAD_REQUEST, "requiredRooms is required.");
+  }
   if (!townCity || typeof townCity !== "string") {
     throw new ApiError(statusCode.BAD_REQUEST, "townCity is required.");
   }
@@ -246,7 +252,7 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
 
   if (matchingAddresses.length === 0) {
     return res.status(statusCode.OK).json(
-      new ApiResponse(statusCode.OK, { total: 0, page: pageNum, limit: limitNum, hotels: [] }, "No address found for this location.")
+      new ApiResponse(statusCode.OK, { total: 0, page: pageNum, limit: limitNum, hotelRoomTypeLayout: [] }, "No address found for this location.")
     );
   }
 
@@ -261,7 +267,7 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
 
   if (hotelIds.length === 0) {
     return res.status(statusCode.OK).json(
-      new ApiResponse(statusCode.OK, { total: 0, page: pageNum, limit: limitNum, hotels: [] }, "No hotels found for this location.")
+      new ApiResponse(statusCode.OK, { total: 0, page: pageNum, limit: limitNum, hotelRoomTypeLayout: [] }, "No hotels found for this location.")
     );
   }
 
@@ -342,6 +348,9 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
   );
 
   const filteredHotels = hotelRoomTypeLayout.filter(Boolean);
+  
+
+const responseMessage = filteredHotels.length === 0 ? "No room found" : "Hotels retrieved successfully.";
 
   return res.status(statusCode.OK).json(
     new ApiResponse(statusCode.OK, {
@@ -349,7 +358,7 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       page: pageNum,
       limit: limitNum,
       hotelRoomTypeLayout: filteredHotels
-    }, "Hotels retrieved successfully.")
+    }, responseMessage)
   );
 });
 //-------------------- get hotel by id --------------------
@@ -428,6 +437,7 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
   const query = {
     bookedBy: userId,
     checkInDate: { $gte: today },
+    status: "Booked",
   };
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -464,7 +474,6 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
       const checkOut = new Date(booking.checkOutDate);
       const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
 
-      // ✅ Calculate hours left until check-in
       const now = new Date();
       const diffMs = checkIn - now;
       const hoursLeft = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
@@ -481,8 +490,8 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
         ...booking,
         nights,
         hotelImage,
-        isCancellable, // ✅ Added this field to indicate if user can cancel
-        hoursLeftUntilCheckIn: hoursLeft, // (optional for debugging/frontend)
+        isCancellable, 
+        hoursLeftUntilCheckIn: hoursLeft,
       };
     })
   );
@@ -588,7 +597,7 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
     );
   }
 
-  // 24-hour cancellation policy
+
   const now = Date.now();
   const checkInTime = new Date(booking.checkInDate).getTime();
   const hoursBeforeCheckIn = (checkInTime - now) / (1000 * 60 * 60);
@@ -600,14 +609,12 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
     );
   }
 
-  // Mark booking as cancelled
+  
   booking.status = "Cancelled";
   booking.cancelledBy = "user";
   if (cancelReason) {
     booking.cancelReason = cancelReason;
   }
-
-  // Update assigned room statuses
   const roomUpdatePromises = booking.assignedRooms.map((room) => {
     return individualRoom.updateOne(
       { _id: room._id },
@@ -635,25 +642,26 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
     )
   );
 });
-// controller/hotelBooking/getCancelReasons.js
-
 const getCancelReasons = (req, res) => {
   try {
     return res.status(200).json({
+      statusCode: 200,
+      data: {
+        cancelReasons: ["Static Price", "Behaviour", "Services", "Others"],
+      },
+      message: "Cancel reasons fetched successfully",
       success: true,
-      cancelReasons: ["Static Price", "Behaviour", "Services", "Others"],
     });
   } catch (error) {
     console.error("Cancel Reasons Fetch Error:", error);
     return res.status(500).json({
-      success: false,
+      statusCode: 500,
+      data: null,
       message: "Something went wrong",
+      success: false,
     });
   }
 };
-
-
-
 
 module.exports = {
   createBooking,

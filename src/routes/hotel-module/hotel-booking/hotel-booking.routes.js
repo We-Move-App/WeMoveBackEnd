@@ -60,5 +60,5 @@ hotelBookingRoutes
 
   hotelBookingRoutes
   .route("/cancel-booking/:bookingId")
-  .delete(isUserAuthenticated, cancelHotelBooking);
+  .put(isUserAuthenticated, cancelHotelBooking);
 module.exports = hotelBookingRoutes;

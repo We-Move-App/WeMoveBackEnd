@@ -91,7 +91,7 @@ const registerBusDriver = catchAsyncError(async (req, res, next) => {
   const uploadImageFront = await uploadSingleImageToAws(imgUpload);
   const avatar = await uploadSingleImageToAws(avatarUpload);
 
-  // 1️⃣ First save the driver
+
   const newDriver = new BusDriverModel({
     fullName,
     phoneNumber,
@@ -100,7 +100,7 @@ const registerBusDriver = catchAsyncError(async (req, res, next) => {
     driverLicenseFront: uploadImageFront,
     avatar,
   });
-  console.log("🆕 Driver ID before save:", newDriver._id);
+  console.log(" Driver ID before save:", newDriver._id);
 
   const savedDriver = await newDriver.save();
 
