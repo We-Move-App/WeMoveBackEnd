@@ -10,6 +10,7 @@ const {
   isValidFutureDate,
   getDayOfDate,
 } = require("../../../utils/reqFunctions/reqFunction");
+const Wallet = require("../../../models/wallet-module/wallets.model");
 const BusModel = require("../../../models/bus-module/buses/buses.model");
 const BusRouteModel = require("../../../models/bus-module/bus-routes/bus-routes.model");
 const mongoose = require("mongoose");
@@ -19,7 +20,12 @@ const {
   busOperatorAuthoritiesFields,
   PaymentStatus,
 } = require("../../../utils/constants/constants");
+const Transaction = require("../../../models/transaction-module/transaction.model");
 const { getFinalPrice } = require("../../../utils/services/prices.services");
+const {
+  PaymentStatusEnum,
+  TransactionTypeEnum,
+} = require("../../../utils/constants/ENUM");
 
 const getAllBusBookings = catchAsyncError(async (req, res, next) => {
   const {
@@ -157,8 +163,8 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     "termAndConditions",
   ];
   validateRequestBody(reqField, req.body);
-   console.log("noOfPassengers:", noOfPassengers);
-console.log(" passengers.length:", passengers.length);
+  console.log("noOfPassengers:", noOfPassengers);
+  console.log(" passengers.length:", passengers.length);
 
   // Validate passenger and seat count match
   if (noOfPassengers !== passengers.length) {
@@ -166,7 +172,6 @@ console.log(" passengers.length:", passengers.length);
       statusCode.BAD_REQUEST,
       "Passenger count does not match the number of selected seats"
     );
-
   }
 
   isValidFutureDate(journeyDate);
@@ -299,7 +304,7 @@ console.log(" passengers.length:", passengers.length);
 });
 
 const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
-  const { bookingId } = req.params; 
+  const { bookingId } = req.params;
   if (!bookingId) {
     throw new ApiError(statusCode.BAD_REQUEST, "Booking ID is required");
   }
@@ -332,33 +337,82 @@ const cancelBooking = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
 
   const booking = await BusBookingModel.findById(bookingId).select(
-    "paymentStatus status routeId busId journeyDate"
+    "paymentStatus status routeId busId journeyDate bookedBy busOperatorId price"
   );
 
   if (!booking) {
     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
   }
+
   if (["Cancelled", "Completed"].includes(booking.status)) {
     throw new ApiError(
-      statusCode.NOT_FOUND,
+      statusCode.BAD_REQUEST,
       `Your booking is already ${booking.status}`
     );
   }
 
-  if (["PAID"].includes(booking.paymentStatus)) {
-    booking.paymentStatus = "REFUND_REQUESTED";
+  if (booking.paymentStatus === "PAID" && booking.bookedBy) {
+    const refundAmount = booking.price * 0.5;
+
+    // Refund 50% to user
+    const userWallet = await Wallet.findOne({ userId: booking.bookedBy });
+    if (!userWallet) {
+      throw new ApiError(statusCode.NOT_FOUND, "Wallet not found for this user");
+    }
+
+    userWallet.balance += refundAmount;
+    await userWallet.save();
+
+    await Transaction.create({
+      userId: booking.bookedBy,
+      transactionId: uuidv4(),
+      type: TransactionTypeEnum.CREDIT,
+      amount: refundAmount,
+      currency: userWallet.currency,
+      description: `50% refund for cancelled booking ${bookingId}`,
+      status: PaymentStatusEnum.SUCCESS,
+    });
+
+    // Deduct 50% from bus operator
+    const operatorWallet = await Wallet.findOne({ busOperatorId: booking.busOperatorId });
+    if (!operatorWallet) {
+      throw new ApiError(statusCode.NOT_FOUND, "Wallet not found for bus operator");
+    }
+
+    if (operatorWallet.balance < refundAmount) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "Insufficient balance in bus operator wallet to process refund"
+      );
+    }
+
+    operatorWallet.balance -= refundAmount;
+    await operatorWallet.save();
+
+    await Transaction.create({
+      busOperatorId: booking.busOperatorId,
+      transactionId: uuidv4(),
+      type: TransactionTypeEnum.DEBIT,
+      amount: refundAmount,
+      currency: operatorWallet.currency,
+      description: `Deduction for 50% refund of cancelled booking ${bookingId}`,
+      status: PaymentStatusEnum.SUCCESS,
+    });
+
+    booking.paymentStatus = "PARTIAL_REFUNDED";
   }
 
+  // Free booked seats
   const bookedSeat = await BusSeatsLayoutModel.findOne({
     busId: booking.busId,
     journeyDate: booking.journeyDate,
     routeId: booking.routeId,
   });
+
   if (!bookedSeat) {
     throw new ApiError(statusCode.NOT_FOUND, "Booked seat layout not found");
   }
 
-  // Clear the seat(s) that belong to this booking
   bookedSeat.seats = bookedSeat.seats.map((seat) => {
     if (seat.bookingReference?.toString() === bookingId.toString()) {
       return {
@@ -372,7 +426,8 @@ const cancelBooking = catchAsyncError(async (req, res, next) => {
   });
 
   booking.status = "Cancelled";
-  booking.cancelledBy = "busOperator";
+  booking.cancelledBy = "user";
+
   const totalSeats = bookedSeat.seats.length;
   const bookedSeatsCount = bookedSeat.seats.filter(
     (seat) => !seat.isAvailable
@@ -383,12 +438,16 @@ const cancelBooking = catchAsyncError(async (req, res, next) => {
 
   await Promise.all([booking.save(), bookedSeat.save()]);
 
-  return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(statusCode.OK, booking, "Booking cancelled successfully")
-    );
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      booking,
+      "Booking cancelled successfully. 50% refunded to user and deducted from bus operator."
+    )
+  );
 });
+
+
 const updateBooking = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
   const reqField = [
@@ -487,7 +546,6 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
 });
 
 module.exports = {
-  
   getAllBusBookings,
   createBusBooking,
   getBusBookingDetails,

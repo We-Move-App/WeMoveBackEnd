@@ -1,13 +1,12 @@
-const {
-  PaymentStatusEnum,
-  TransactionTypeEnum,
-} = require("../../utils/constants/ENUM");
 const Transaction = require("../../models/transaction-module/transaction.model");
 const statusCode = require("../../utils/constants/statusCode");
 const ApiError = require("../../utils/response/ApiError");
 const ApiResponse = require("../../utils/response/ApiResponse");
 const catchAsyncError=require('../../utils/response/catchAsyncError')
-const Wallet=require('../../models/wallet-module/wallets.model')
+const Wallet=require('../../models/wallet-module/wallets.model');const {
+  PaymentStatusEnum,
+  TransactionTypeEnum,
+} = require("../../utils/constants/ENUM");
 
 const momoStatus = catchAsyncError(async (req, res) => {
   const { referenceId, status } = req.body;

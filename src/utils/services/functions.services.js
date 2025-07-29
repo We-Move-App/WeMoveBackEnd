@@ -6,6 +6,8 @@ const statusCode = require("../constants/statusCode");
 // const {
 //   UserBankModel,
 // } = require("../../../models/user-module/user-banks/user-banks.model");
+const Wallet = require("../../models/wallet-module/wallets.model");
+const generateUniqueCardNumber = require("../../utils/customId/generateUniqueCardNumber");
 const {
   generateTokens,
   setTokenCookies,
@@ -28,10 +30,15 @@ const {
   uploadSingleImageToAws,
 } = require("../uploadFiles/images/uploadImages");
 const { assignBranchToUserUsingGeolib } = require("./branches.services");
-const { UserBankModel } = require("../../models/user-module/user-banks/user-banks.model");
+const {
+  UserBankModel,
+} = require("../../models/user-module/user-banks/user-banks.model");
 const sendEmail = require("../emailService/sendEmail");
 const SecurePinModel = require("../../models/global-module/secure-pins/secure-pins.model");
-const { HotelManagerBankModel } = require("../../models/hotel-module/hotel-manager-banks/hotel-manager-banks.model");
+const {
+  HotelManagerBankModel,
+} = require("../../models/hotel-module/hotel-manager-banks/hotel-manager-banks.model");
+const { WalletCurrencyEnum } = require("../constants/ENUM");
 
 // ==============================================
 const registerUserWithEmailAndPhoneNumber = async ({
@@ -106,6 +113,16 @@ const registerUserWithEmailAndPhoneNumber = async ({
   });
 
   await newUser.save();
+
+  let wallet = await Wallet.findOne({ userId: newUser._id });
+  if (!wallet) {
+    wallet = await Wallet.create({
+      userId: newUser._id,
+      balance: 0,
+      currency: "XAF",
+      cardNumber: await generateUniqueCardNumber(),
+    });
+  }
 
   const userObject = newUser.toObject();
   delete userObject.password;
@@ -413,11 +430,9 @@ const resendOtpWithoutTokenFunc = async ({ req, res, reqModel }) => {
 
 //     query = isEmail ? { email: emailOrPhone } : { phoneNumber: emailOrPhone };
 
-
 //     user = await reqModel.findOne(
 //       isEmail ? { email: emailOrPhone } : { phoneNumber: emailOrPhone }
 //     );
-
 
 //     if (!user) {
 //       throw new ApiError(
@@ -432,9 +447,7 @@ const resendOtpWithoutTokenFunc = async ({ req, res, reqModel }) => {
 
 //     query = { ownerId: req.user._id };
 
-
 //     user = await reqModel.findById(req.user._id);
-
 
 //     if (!user) {
 //       throw new ApiError(statusCode.NOT_FOUND, "User not found");
@@ -443,7 +456,6 @@ const resendOtpWithoutTokenFunc = async ({ req, res, reqModel }) => {
 
 //   const otpInDb = await OtpModel.findOne({ ...query, isUsed: false });
 //   console.log("otpInDb", otpInDb);
-
 
 //   if (!otpInDb || otpInDb.otp !== otp || otpInDb.expiresAt < Date.now()) {
 //     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid or expired OTP");
@@ -471,8 +483,6 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
   const { email, phoneNumber, emailOrPhone, otp } = req.body;
 
   const identifier = emailOrPhone || email || phoneNumber;
-  console.log("Incoming body:", req.body);
-  console.log("Resolved identifier:", identifier);
 
   if (!otp) {
     throw new ApiError(statusCode.BAD_REQUEST, "Please enter OTP");
@@ -486,7 +496,10 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
     const isPhone = validatePhoneNumber(identifier);
 
     if (!isEmail && !isPhone) {
-      throw new ApiError(statusCode.BAD_REQUEST, "Invalid email or phone number");
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "Invalid email or phone number"
+      );
     }
 
     user = await reqModel.findOne(
@@ -504,7 +517,6 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
     }
 
     user = await reqModel.findById(req.user._id);
-    console.log("User from token:", user);
     if (!user) {
       throw new ApiError(statusCode.NOT_FOUND, "User not found");
     }
@@ -534,6 +546,17 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
   }
   await user.save(); // ✅ Save updated verification flags
 
+  // ✅ Create wallet if not exists
+  let wallet = await Wallet.findOne({ userId: user._id });
+  if (!wallet) {
+    wallet = await Wallet.create({
+      userId: user._id,
+      balance: 0,
+      currency: WalletCurrencyEnum.XAF,
+      cardNumber: await generateUniqueCardNumber(),
+    });
+  }
+
   const { accessToken, refreshToken } = await generateTokens(user, typeOfUser);
   setTokenCookies(res, accessToken, refreshToken);
 
@@ -541,7 +564,6 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
   const isBankdetails = !!bankDetails;
 
   const pinDetails = await SecurePinModel.findOne({ userId: user._id });
-  console.log(pinDetails);
 
   // ✅ Create userData AFTER updating and saving user
   const userData = {
@@ -553,8 +575,6 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
     isPinExist: pinDetails ? true : false,
   };
 
-
-
   otpInDb.isUsed = true;
   await otpInDb.save();
 
@@ -564,8 +584,6 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
     "OTP verified successfully"
   );
 };
-
-
 
 const verifyOtpWithoutTokenFunc = async ({ req, reqModel, res }) => {
   const { emailOrPhone, otp } = req.body;
@@ -707,7 +725,13 @@ const addEmailOrPhoneNumberFunc = async ({ req, res, reqModel }) => {
   );
 };
 
-const getUserProfileFunc = async ({ req, reqModel, reqDocModel, bankModel, res }) => {
+const getUserProfileFunc = async ({
+  req,
+  reqModel,
+  reqDocModel,
+  bankModel,
+  res,
+}) => {
   const { _id } = req.user;
   console.log(_id);
 
@@ -716,7 +740,7 @@ const getUserProfileFunc = async ({ req, reqModel, reqDocModel, bankModel, res }
     reqDocModel.findOne({ userId: _id }).populate("documentIds").lean(),
     bankModel.findOne({ userId: _id }).lean(),
 
-    SecurePinModel.findOne({ userId: _id })
+    SecurePinModel.findOne({ userId: _id }),
   ]);
 
   // const pinDetails = await SecurePinModel.findOne({ userId: user._id });
@@ -732,14 +756,8 @@ const getUserProfileFunc = async ({ req, reqModel, reqDocModel, bankModel, res }
     isPinExist: pinDetails ? true : false,
   };
 
-  return new ApiResponse(
-    statusCode.OK,
-    { user: userData },
-    "Profile found"
-  );
+  return new ApiResponse(statusCode.OK, { user: userData }, "Profile found");
 };
-
-
 
 const getAvatarFunc = async ({ req, res, reqModel }) => {
   const { _id } = req.user;
@@ -1102,7 +1120,6 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
     const createdUser = await findOrCreateUser(userField, emailOrPhone);
     console.log(createdUser);
 
-
     const otp = getOtp();
     const emailData = { otp, name: createdUser?.fullName || "User" };
     // const emailData = { otp, name: createdUser?.name || "User" };
@@ -1143,7 +1160,6 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
     );
     console.log(otpdd);
 
-
     // const { accessToken, refreshToken } = await generateTokens(
     //   createdUser,
     //   typeOfUser
@@ -1165,7 +1181,6 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
     return false;
   }
 };
-
 
 const assignBranchToUserFunc = async ({ req, res, reqModel }) => {
   const { latitude, longitude } = req.body;
@@ -1227,7 +1242,6 @@ const verifyEmailExistFunc = async ({ req, res, reqModel }) => {
     ? { email: emailOrPhone }
     : { phoneNumber: emailOrPhone };
   console.log(query);
-
 
   const foundUser = await reqModel.findOne(query).select("email phoneNumber");
 
@@ -1298,5 +1312,5 @@ module.exports = {
   resendOtpWithoutTokenFunc,
   verifyEmailExistFunc,
   updateUserLocationFunc,
-  verifyOtpFunc
+  verifyOtpFunc,
 };

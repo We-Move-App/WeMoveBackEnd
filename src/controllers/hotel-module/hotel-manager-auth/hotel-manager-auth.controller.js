@@ -31,6 +31,7 @@ const emailVerifyModel = require("../../../models/global-module/verifications/em
 const phoneNumberVerifyModel = require("../../../models/global-module/verifications/phoneNumberVerification");
 const HotelManagerDeviceTokenModel = require("../../../models/hotel-module/hotel-device-tokens/hotel-device-tokens.model");
 const { TypeOfUser } = require("../../../utils/constants/constants");
+const Wallet=require('../../../models/wallet-module/wallets.model')
 const {
   registerUserWithEmailAndPhoneNumber,
   loginUserWithEmailAndPhoneNumber,
@@ -44,6 +45,7 @@ const {
   resendOtpWithoutTokenFunc,
   verifyEmailExistFunc,
 } = require("../../../utils/services/functions.services");
+const generateUniqueCardNumber = require("../../../utils/customId/generateUniqueCardNumber");
 
 const generateOtp = () => {
   return Math.floor(1000 + Math.random() * 9000).toString();
@@ -103,17 +105,26 @@ const registerHotelManager = catchAsyncError(async (req, res, next) => {
       .json(new ApiResponse(statusCode.OK, data, `Data found`));
   }
 
+  // Create new hotel manager
   const newUser = new HotelManagerModel({
     email,
     fullName,
     password,
     address,
-    //temporarily setting verificationStatus to approved
-    // verificationStatus: "approved",
     phoneNumber,
   });
 
   await newUser.save();
+
+  let wallet = await Wallet.findOne({ userId: newUser._id });
+  if (!wallet) {
+    wallet = await Wallet.create({
+      userId: newUser._id,
+      balance: 0,
+      currency: "XAF",
+      cardNumber: await generateUniqueCardNumber(),
+    });
+  }
 
   const userObject = newUser.toObject();
   delete userObject.password;

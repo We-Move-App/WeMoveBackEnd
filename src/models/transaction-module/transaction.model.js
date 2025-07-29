@@ -1,4 +1,3 @@
-// models/transaction.model.js
 const mongoose = require("mongoose");
 const {
   WalletCurrencyEnum,
@@ -8,9 +7,13 @@ const {
 
 const transactionSchema = new mongoose.Schema(
   {
-    userId: { type: String, required: true, index: true },
-    transactionId: { type: String, required: true, unique: true }, // UUID you generate
-    momoRefId: { type: String, required: true }, // X-Reference-Id used in MoMo API
+    transactionId: { type: String, required: true, unique: true }, // UUID
+    momoRefId: { type: String, default: null },
+    userId: { type: String, index: true, default: null },
+    busOperatorId: { type: String, index: true, default: null },
+    adminId: { type: String, index: true, default: null },
+    bookingId: { type: String, index: true, required: false },
+
     type: { type: String, enum: TransactionTypeEnum, required: true }, // CREDIT or DEBIT
     status: {
       type: String,
@@ -21,9 +24,16 @@ const transactionSchema = new mongoose.Schema(
     currency: {
       type: String,
       enum: WalletCurrencyEnum,
-      default: WalletCurrencyEnum.XAF, // or USD/EUR
+      default: WalletCurrencyEnum.XAF,
     },
     description: String,
+
+    // Commission / Splits
+    platformFee: { type: Number, default: 0 },
+    operatorShare: { type: Number, default: 0 },
+
+    paidAt: { type: Date, default: null },
+    refundedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

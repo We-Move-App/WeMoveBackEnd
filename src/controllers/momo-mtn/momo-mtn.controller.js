@@ -1,36 +1,63 @@
-// routes/requestToPay.js
 const express = require("express");
 const momoRouter = express.Router();
 const { v4: uuidv4 } = require("uuid");
-
+const {
+  decodeAccessToken,
+} = require("../../utils/jwtToken/customTokenService");
 const Wallet = require("../../models/wallet-module/wallets.model");
 const Transaction = require("../../models/transaction-module/transaction.model");
 const getMomoToken = require("../../utils/momo-mtn/getToken");
 const axios = require("axios");
-const { WalletCurrencyEnum, TransactionTypeEnum, PaymentStatusEnum } = require("../../utils/constants/ENUM");
+const {
+  WalletCurrencyEnum,
+  TransactionTypeEnum,
+  PaymentStatusEnum,
+} = require("../../utils/constants/ENUM");
 const { requestToPayValidation } = require("./reqtopay.validator");
 const catchAsyncError = require("../../utils/response/catchAsyncError");
 const statusCode = require("../../utils/constants/statusCode");
 const ApiError = require("../../utils/response/ApiError");
 const generateUniqueCardNumber = require("../../utils/customId/generateUniqueCardNumber");
 const ApiResponse = require("../../utils/response/ApiResponse");
+const UserModel = require("../../models/user-module/users/user.model");
 
 const requestTopay = catchAsyncError(async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const jwtToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(jwtToken);
+
+  const userId = decoded?._id;
+  const phoneNumber = decoded?.phoneNumber;
+
+  if (!userId || !phoneNumber) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  const userExists = await UserModel.findById(userId);
+  if (!userExists) {
+    throw new ApiError(statusCode.NOT_FOUND, "User not found");
+  }
+
   const { error, value } = requestToPayValidation.validate(req.body);
   if (error) {
     throw new ApiError(statusCode.BAD_REQUEST, error.details[0].message);
   }
 
-  const { userId, phone, amount, currency, description } = value;
+  const { amount, currency, description } = value;
 
-  let wallet = await Wallet.findOne({ userId });
+  const wallet = await Wallet.findOne({ userId });
   if (!wallet) {
-    wallet = await Wallet.create({
-      userId,
-      balance: 0,
-      currency: WalletCurrencyEnum[currency] || WalletCurrencyEnum.XAF,
-      cardNumber: await generateUniqueCardNumber(),
-    });
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      "Wallet not found. Please complete OTP verification first."
+    );
   }
 
   const referenceId = uuidv4();
@@ -47,7 +74,7 @@ const requestTopay = catchAsyncError(async (req, res) => {
       amount: amount.toString(),
       currency,
       externalId: `wallet_topup_${userId}`,
-      payer: { partyIdType: "MSISDN", partyId: phone },
+      payer: { partyIdType: "MSISDN", partyId: phoneNumber },
       payerMessage: description || "Wallet Top-up",
       payeeNote: description || "Wallet Top-up",
     },
@@ -74,18 +101,16 @@ const requestTopay = catchAsyncError(async (req, res) => {
     status: PaymentStatusEnum.PENDING,
   });
 
-  return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(
-        statusCode.OK,
-        {
-          referenceId,
-          transactionId: transaction.transactionId,
-        },
-        "Request to pay initiated"
-      )
-    );
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        referenceId,
+        transactionId: transaction.transactionId,
+      },
+      "Request to pay initiated"
+    )
+  );
 });
 
-module.exports = {requestTopay};
+module.exports = { requestTopay };
