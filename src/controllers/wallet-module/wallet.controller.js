@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const statusCode = require("../../utils/constants/statusCode");
 const {
   decodeAccessToken,
@@ -141,6 +142,113 @@ const refundToUserWallet = catchAsyncError(async (req, res) => {
   );
 });
 
+const userInternalTransaction = catchAsyncError(async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const jwtToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(jwtToken);
+  const senderId = decoded?._id;
+
+  if (!senderId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  const sender = await UserModel.findById(senderId);
+  if (!sender) {
+    throw new ApiError(statusCode.NOT_FOUND, "Sender not found");
+  }
+
+  const { userId: receiverId, amount } = req.body;
+  if (!receiverId || !amount || amount <= 0) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid receiver or amount");
+  }
+
+  if (String(senderId) === String(receiverId)) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Cannot send to yourself");
+  }
+
+  const receiver = await UserModel.findById(receiverId);
+  if (!receiver) {
+    throw new ApiError(statusCode.NOT_FOUND, "Receiver not found");
+  }
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    const senderWallet = await Wallet.findOne({ userId: senderId }).session(
+      session
+    );
+    if (!senderWallet) {
+      throw new ApiError(statusCode.NOT_FOUND, "Sender wallet not found");
+    }
+
+    if (senderWallet.balance < amount) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Insufficient balance");
+    }
+
+    const receiverWallet = await Wallet.findOne({ userId: receiverId }).session(
+      session
+    );
+    if (!receiverWallet) {
+      throw new ApiError(statusCode.NOT_FOUND, "Receiver wallet not found");
+    }
+
+    senderWallet.balance -= amount;
+    await senderWallet.save({ session });
+
+    receiverWallet.balance += amount;
+    await receiverWallet.save({ session });
+
+    await Transaction.create(
+      [
+        {
+          userId: senderId,
+          transactionId: uuidv4(),
+          type: TransactionTypeEnum.DEBIT,
+          amount,
+          currency: senderWallet.currency,
+          description: `Sent to ${receiver.email}`,
+          status: PaymentStatusEnum.SUCCESS,
+        },
+      ],
+      { session }
+    );
+
+    await Transaction.create(
+      [
+        {
+          userId: receiverId,
+          transactionId: uuidv4(),
+          type: TransactionTypeEnum.CREDIT,
+          amount,
+          currency: receiverWallet.currency,
+          description: `Received from ${sender.email}`,
+          status: PaymentStatusEnum.SUCCESS,
+        },
+      ],
+      { session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res
+      .status(statusCode.OK)
+      .json(new ApiResponse(statusCode.OK, {}, "Transfer successful"));
+  } catch (err) {
+    await session.abortTransaction();
+    session.endSession();
+    throw err;
+  }
+});
+
 const getTransactions = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
@@ -159,8 +267,8 @@ const getTransactions = catchAsyncError(async (req, res) => {
   }
 
   const { entity } = req.query;
-  const page = Math.max(parseInt(req.query.page) || 1, 1); 
-  const limit = 10; 
+  const page = Math.max(parseInt(req.query.page) || 1, 1);
+  const limit = 10;
 
   let Model;
   let txFilter = {};
@@ -266,48 +374,92 @@ const getAnalytics = catchAsyncError(async (req, res) => {
   const now = new Date();
   let analytics = [];
 
-  // Helper for grouping
   const groupStage = (idObj) => ({
     _id: idObj,
     incoming: {
-      $sum: { $cond: [{ $eq: ["$type", "CREDIT"] }, "$amount", 0] }
+      $sum: { $cond: [{ $eq: ["$type", "CREDIT"] }, "$amount", 0] },
     },
     refunded: {
-      $sum: { $cond: [{ $and: [{ $eq: ["$type", "DEBIT"] }, { $eq: ["$refund", true] }] }, "$amount", 0] }
+      $sum: {
+        $cond: [
+          { $and: [{ $eq: ["$type", "DEBIT"] }, { $eq: ["$refund", true] }] },
+          "$amount",
+          0,
+        ],
+      },
     },
     withdraw: {
-      $sum: { $cond: [{ $and: [{ $eq: ["$type", "DEBIT"] }, { $eq: ["$withdraw", true] }] }, "$amount", 0] }
-    }
+      $sum: {
+        $cond: [
+          { $and: [{ $eq: ["$type", "DEBIT"] }, { $eq: ["$withdraw", true] }] },
+          "$amount",
+          0,
+        ],
+      },
+    },
   });
 
   if (filter === "daily") {
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    const startOfDay = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+        0,
+        0,
+        0
+      )
+    );
+    const endOfDay = new Date(
+      Date.UTC(
+        now.getUTCFullYear(),
+        now.getUTCMonth(),
+        now.getUTCDate(),
+        23,
+        59,
+        59
+      )
+    );
+
     txFilter.createdAt = { $gte: startOfDay, $lte: endOfDay };
 
     const result = await Transaction.aggregate([
       { $match: txFilter },
-      { $group: groupStage(null) }
+      { $group: groupStage(null) },
     ]);
 
     const data = result[0] || { incoming: 0, refunded: 0, withdraw: 0 };
-    analytics = [{
-      date: startOfDay.toISOString().split("T")[0],
-      incoming: data.incoming,
-      refunded: data.refunded,
-      withdraw: data.withdraw,
-      profit: data.incoming - data.refunded // withdraw not subtracted
-    }];
-
+    analytics = [
+      {
+        date: now.toISOString().split("T")[0], // show UTC date correctly
+        incoming: data.incoming,
+        refunded: data.refunded,
+        withdraw: data.withdraw,
+        profit: data.incoming - data.refunded,
+      },
+    ];
   } else if (filter === "weekly") {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    const endOfMonth = new Date(
+      now.getFullYear(),
+      now.getMonth() + 1,
+      0,
+      23,
+      59,
+      59
+    );
     txFilter.createdAt = { $gte: startOfMonth, $lte: endOfMonth };
 
     const results = await Transaction.aggregate([
       { $match: txFilter },
-      { $group: { ...groupStage({ week: { $ceil: { $divide: [{ $dayOfMonth: "$createdAt" }, 7] } } }) } },
-      { $sort: { "_id.week": 1 } }
+      {
+        $group: {
+          ...groupStage({
+            week: { $ceil: { $divide: [{ $dayOfMonth: "$createdAt" }, 7] } },
+          }),
+        },
+      },
+      { $sort: { "_id.week": 1 } },
     ]);
 
     const totalWeeks = Math.ceil(endOfMonth.getDate() / 7);
@@ -319,10 +471,9 @@ const getAnalytics = catchAsyncError(async (req, res) => {
         incoming: weekData ? weekData.incoming : 0,
         refunded: weekData ? weekData.refunded : 0,
         withdraw: weekData ? weekData.withdraw : 0,
-        profit: weekData ? (weekData.incoming - weekData.refunded) : 0
+        profit: weekData ? weekData.incoming - weekData.refunded : 0,
       };
     });
-
   } else if (filter === "monthly") {
     const yearStart = new Date(now.getFullYear(), 0, 1);
     const yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
@@ -330,13 +481,30 @@ const getAnalytics = catchAsyncError(async (req, res) => {
 
     const results = await Transaction.aggregate([
       { $match: txFilter },
-      { $group: { ...groupStage({ month: { $month: "$createdAt" }, year: { $year: "$createdAt" } }) } },
-      { $sort: { "_id.month": 1 } }
+      {
+        $group: {
+          ...groupStage({
+            month: { $month: "$createdAt" },
+            year: { $year: "$createdAt" },
+          }),
+        },
+      },
+      { $sort: { "_id.month": 1 } },
     ]);
 
     const months = [
-      "January","February","March","April","May","June",
-      "July","August","September","October","November","December"
+      "January",
+      "February",
+      "March",
+      "April",
+      "May",
+      "June",
+      "July",
+      "August",
+      "September",
+      "October",
+      "November",
+      "December",
     ];
 
     analytics = months.map((m, i) => {
@@ -348,10 +516,9 @@ const getAnalytics = catchAsyncError(async (req, res) => {
         incoming: monthData ? monthData.incoming : 0,
         refunded: monthData ? monthData.refunded : 0,
         withdraw: monthData ? monthData.withdraw : 0,
-        profit: monthData ? (monthData.incoming - monthData.refunded) : 0
+        profit: monthData ? monthData.incoming - monthData.refunded : 0,
       };
     });
-
   } else if (filter === "yearly") {
     const startYear = now.getFullYear() - 9;
     const startDate = new Date(startYear, 0, 1);
@@ -360,7 +527,7 @@ const getAnalytics = catchAsyncError(async (req, res) => {
     const results = await Transaction.aggregate([
       { $match: txFilter },
       { $group: { ...groupStage({ year: { $year: "$createdAt" } }) } },
-      { $sort: { "_id.year": 1 } }
+      { $sort: { "_id.year": 1 } },
     ]);
 
     analytics = Array.from({ length: 10 }, (_, i) => {
@@ -371,18 +538,20 @@ const getAnalytics = catchAsyncError(async (req, res) => {
         incoming: yearData ? yearData.incoming : 0,
         refunded: yearData ? yearData.refunded : 0,
         withdraw: yearData ? yearData.withdraw : 0,
-        profit: yearData ? (yearData.incoming - yearData.refunded) : 0
+        profit: yearData ? yearData.incoming - yearData.refunded : 0,
       };
     });
   }
 
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      { entity, filter, analytics },
-      `${filter.charAt(0).toUpperCase() + filter.slice(1)} analytics fetched successfully`
-    )
-  );
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { entity, filter, analytics },
+        `${filter.charAt(0).toUpperCase() + filter.slice(1)} analytics fetched successfully`
+      )
+    );
 });
 
 const getWallet = catchAsyncError(async (req, res) => {
@@ -456,7 +625,7 @@ const validatePin = catchAsyncError(async (req, res) => {
 
   const isValid = await securePinRecord.verifyPin(pin);
   if (!isValid) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid PIN");
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid PIN");
   }
 
   return res
@@ -476,5 +645,6 @@ module.exports = {
   getTransactions,
   getWallet,
   validatePin,
-  getAnalytics
+  getAnalytics,
+  userInternalTransaction,
 };
