@@ -11,6 +11,7 @@ const transactionSchema = new mongoose.Schema(
     momoRefId: { type: String, default: null },
     userId: { type: String, index: true, default: null },
     busOperatorId: { type: String, index: true, default: null },
+    hotelManagerId: { type: String, index: true, default: null },
     adminId: { type: String, index: true, default: null },
     bookingId: { type: String, index: true, required: false },
 
@@ -32,8 +33,8 @@ const transactionSchema = new mongoose.Schema(
     platformFee: { type: Number, default: 0 },
     operatorShare: { type: Number, default: 0 },
 
-    paidAt: { type: Date, default: null },
-    refundedAt: { type: Date, default: null },
+    refund: { type: Boolean, default: false },
+    withdraw: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

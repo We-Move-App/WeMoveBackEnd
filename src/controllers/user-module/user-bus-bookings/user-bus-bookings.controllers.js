@@ -277,7 +277,6 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           amount: price,
           currency: "XAF",
           description: `Bus booking ${from} → ${to}`,
-          paidAt: new Date(),
         },
         {
           transactionId: uuidv4(),
@@ -288,7 +287,6 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           amount: operatorShare,
           currency: "XAF",
           description: "Earnings from booking",
-          paidAt: new Date(),
         },
         {
           transactionId: uuidv4(),
@@ -299,7 +297,6 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           amount: platformFee,
           currency: "XAF",
           description: "Commission from booking",
-          paidAt: new Date(),
         },
       ],
       { session }
@@ -492,6 +489,7 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
       currency: userWallet.currency,
       description: `50% refund for cancelled booking ${bookingId}`,
       status: PaymentStatusEnum.SUCCESS,
+      refund:true
     });
 
     const operatorWallet = await WalletModel.findOne({ userId: busOperatorId });
@@ -520,6 +518,7 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
       currency: operatorWallet.currency,
       description: `Deduction for 50% refund of cancelled booking ${bookingId}`,
       status: PaymentStatusEnum.SUCCESS,
+      refund:true
     });
 
     booking.paymentStatus = "REFUNDED";

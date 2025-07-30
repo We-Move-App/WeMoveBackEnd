@@ -235,7 +235,7 @@ const getAnalytics = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
 
-  const { entity, filter = "yearly" } = req.query;
+  const { entity, filter = "monthly" } = req.query;
   let Model;
   let txFilter = {};
 
@@ -246,9 +246,6 @@ const getAnalytics = catchAsyncError(async (req, res) => {
     case "hotelManager":
       Model = HotelManagerModel;
       break;
-    // case "driver":
-    //   Model = DriverDetails;
-    //   break;
     default:
       Model = UserModel;
   }
@@ -259,32 +256,82 @@ const getAnalytics = catchAsyncError(async (req, res) => {
   }
 
   if (entity === "busoperator") {
-    txFilter.busOperatorId = entityExists._id;
-  }else if (entity === "hotelManager") {
-    txFilter.hotelManagerId = entityExists._id;
+    txFilter.busOperatorId = String(entityExists._id);
+  } else if (entity === "hotelManager") {
+    txFilter.hotelManagerId = String(entityExists._id);
   } else {
-    txFilter.userId = userId;
+    txFilter.userId = String(userId);
   }
 
   const now = new Date();
   let analytics = [];
 
-  if (filter === "monthly") {
-    // restrict to current year
+  // Helper for grouping
+  const groupStage = (idObj) => ({
+    _id: idObj,
+    incoming: {
+      $sum: { $cond: [{ $eq: ["$type", "CREDIT"] }, "$amount", 0] }
+    },
+    refunded: {
+      $sum: { $cond: [{ $and: [{ $eq: ["$type", "DEBIT"] }, { $eq: ["$refund", true] }] }, "$amount", 0] }
+    },
+    withdraw: {
+      $sum: { $cond: [{ $and: [{ $eq: ["$type", "DEBIT"] }, { $eq: ["$withdraw", true] }] }, "$amount", 0] }
+    }
+  });
+
+  if (filter === "daily") {
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+    txFilter.createdAt = { $gte: startOfDay, $lte: endOfDay };
+
+    const result = await Transaction.aggregate([
+      { $match: txFilter },
+      { $group: groupStage(null) }
+    ]);
+
+    const data = result[0] || { incoming: 0, refunded: 0, withdraw: 0 };
+    analytics = [{
+      date: startOfDay.toISOString().split("T")[0],
+      incoming: data.incoming,
+      refunded: data.refunded,
+      withdraw: data.withdraw,
+      profit: data.incoming - data.refunded // withdraw not subtracted
+    }];
+
+  } else if (filter === "weekly") {
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+    txFilter.createdAt = { $gte: startOfMonth, $lte: endOfMonth };
+
+    const results = await Transaction.aggregate([
+      { $match: txFilter },
+      { $group: { ...groupStage({ week: { $ceil: { $divide: [{ $dayOfMonth: "$createdAt" }, 7] } } }) } },
+      { $sort: { "_id.week": 1 } }
+    ]);
+
+    const totalWeeks = Math.ceil(endOfMonth.getDate() / 7);
+    analytics = Array.from({ length: totalWeeks }, (_, i) => {
+      const week = i + 1;
+      const weekData = results.find((a) => a._id.week === week);
+      return {
+        week: `Week ${week}`,
+        incoming: weekData ? weekData.incoming : 0,
+        refunded: weekData ? weekData.refunded : 0,
+        withdraw: weekData ? weekData.withdraw : 0,
+        profit: weekData ? (weekData.incoming - weekData.refunded) : 0
+      };
+    });
+
+  } else if (filter === "monthly") {
     const yearStart = new Date(now.getFullYear(), 0, 1);
     const yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
-
     txFilter.createdAt = { $gte: yearStart, $lte: yearEnd };
 
-    analytics = await Transaction.aggregate([
+    const results = await Transaction.aggregate([
       { $match: txFilter },
-      {
-        $group: {
-          _id: { month: { $month: "$createdAt" } },
-          totalAmount: { $sum: "$amount" },
-        },
-      },
-      { $sort: { "_id.month": 1 } },
+      { $group: { ...groupStage({ month: { $month: "$createdAt" }, year: { $year: "$createdAt" } }) } },
+      { $sort: { "_id.month": 1 } }
     ]);
 
     const months = [
@@ -293,40 +340,46 @@ const getAnalytics = catchAsyncError(async (req, res) => {
     ];
 
     analytics = months.map((m, i) => {
-      const monthData = analytics.find((a) => a._id.month === i + 1);
+      const monthData = results.find(
+        (a) => a._id.month === i + 1 && a._id.year === now.getFullYear()
+      );
       return {
         month: m,
-        totalAmount: monthData ? monthData.totalAmount : 0,
+        incoming: monthData ? monthData.incoming : 0,
+        refunded: monthData ? monthData.refunded : 0,
+        withdraw: monthData ? monthData.withdraw : 0,
+        profit: monthData ? (monthData.incoming - monthData.refunded) : 0
       };
     });
 
-  } else {
-    // yearly analytics (all years)
-    analytics = await Transaction.aggregate([
+  } else if (filter === "yearly") {
+    const startYear = now.getFullYear() - 9;
+    const startDate = new Date(startYear, 0, 1);
+    txFilter.createdAt = { $gte: startDate, $lte: now };
+
+    const results = await Transaction.aggregate([
       { $match: txFilter },
-      {
-        $group: {
-          _id: { year: { $year: "$createdAt" } },
-          totalAmount: { $sum: "$amount" },
-        },
-      },
-      { $sort: { "_id.year": 1 } },
+      { $group: { ...groupStage({ year: { $year: "$createdAt" } }) } },
+      { $sort: { "_id.year": 1 } }
     ]);
 
-    analytics = analytics.map((a) => ({
-      year: a._id.year,
-      totalAmount: a.totalAmount,
-    }));
+    analytics = Array.from({ length: 10 }, (_, i) => {
+      const year = startYear + i;
+      const yearData = results.find((a) => a._id.year === year);
+      return {
+        year,
+        incoming: yearData ? yearData.incoming : 0,
+        refunded: yearData ? yearData.refunded : 0,
+        withdraw: yearData ? yearData.withdraw : 0,
+        profit: yearData ? (yearData.incoming - yearData.refunded) : 0
+      };
+    });
   }
 
   return res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
-      {
-        entity,
-        filter,
-        analytics,
-      },
+      { entity, filter, analytics },
       `${filter.charAt(0).toUpperCase() + filter.slice(1)} analytics fetched successfully`
     )
   );

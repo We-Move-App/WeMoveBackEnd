@@ -2,8 +2,9 @@ const Transaction = require("../../models/transaction-module/transaction.model")
 const statusCode = require("../../utils/constants/statusCode");
 const ApiError = require("../../utils/response/ApiError");
 const ApiResponse = require("../../utils/response/ApiResponse");
-const catchAsyncError=require('../../utils/response/catchAsyncError')
-const Wallet=require('../../models/wallet-module/wallets.model');const {
+const catchAsyncError = require("../../utils/response/catchAsyncError");
+const Wallet = require("../../models/wallet-module/wallets.model");
+const {
   PaymentStatusEnum,
   TransactionTypeEnum,
 } = require("../../utils/constants/ENUM");
@@ -33,7 +34,10 @@ const momoStatus = catchAsyncError(async (req, res) => {
       wallet.balance += transaction.amount;
     } else if (transaction.type === TransactionTypeEnum.DEBIT) {
       if (wallet.balance < transaction.amount) {
-        throw new ApiError(statusCode.BAD_REQUEST, "Insufficient wallet balance");
+        throw new ApiError(
+          statusCode.BAD_REQUEST,
+          "Insufficient wallet balance"
+        );
       }
       wallet.balance -= transaction.amount;
     }
@@ -46,4 +50,55 @@ const momoStatus = catchAsyncError(async (req, res) => {
     .json(new ApiResponse(statusCode.OK, [], "Status updated successfully"));
 });
 
-module.exports = {momoStatus};
+const momoWithdrawStatus = catchAsyncError(async (req, res) => {
+  const { referenceId, status } = req.body;
+
+  if (!referenceId || !status) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Missing referenceId or status");
+  }
+
+  // find the withdraw transaction by momoRefId
+  const transaction = await Transaction.findOne({ momoRefId: referenceId });
+  if (!transaction) {
+    throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
+  }
+
+  transaction.status = status;
+  await transaction.save();
+
+  if (status === PaymentStatusEnum.SUCCESS) {
+    // figure out which entity the withdraw belongs to
+    const walletQuery = {};
+    if (transaction.busOperatorId) {
+      walletQuery.userId = transaction.busOperatorId;
+    } else if (transaction.hotelManagerId) {
+      walletQuery.userId = transaction.hotelManagerId;
+    } else {
+      throw new ApiError(statusCode.BAD_REQUEST, "Unknown withdraw entity");
+    }
+
+    const wallet = await Wallet.findOne(walletQuery);
+    if (!wallet) {
+      throw new ApiError(statusCode.NOT_FOUND, "Wallet not found");
+    }
+
+    // extra check to avoid balance going below minimum
+    if (wallet.balance - transaction.amount < 1000) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "Minimum balance requirement not met"
+      );
+    }
+
+    wallet.balance -= transaction.amount;
+    await wallet.save();
+  }
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(statusCode.OK, [], "Withdraw status updated successfully")
+    );
+});
+
+module.exports = { momoStatus, momoWithdrawStatus };

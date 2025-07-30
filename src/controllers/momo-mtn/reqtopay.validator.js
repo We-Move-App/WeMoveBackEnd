@@ -3,7 +3,6 @@ const { WalletCurrencyEnum } = require("../../utils/constants/ENUM");
 
 const requestToPayValidation = Joi.object({
   amount: Joi.number().positive().required(),
-  currency: Joi.string().valid(...Object.values(WalletCurrencyEnum)).required(),
   description: Joi.string().optional(),
 });
 
