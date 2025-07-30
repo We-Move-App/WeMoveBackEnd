@@ -20,7 +20,10 @@ const moment = require("moment");
 const BusSeatsLayoutModel = require("../../../models/bus-module/bus-seats-management/buses-seats.model");
 const { PaymentStatus } = require("../../../utils/constants/constants");
 const ValidateSecurePin = require("../../../utils/services/securePin.services");
-const { PaymentStatusEnum } = require("../../../utils/constants/ENUM");
+const {
+  PaymentStatusEnum,
+  TransactionTypeEnum,
+} = require("../../../utils/constants/ENUM");
 
 const getUserBusBookings = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
@@ -124,7 +127,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     BusModel.findById(busId).lean(),
     BusRouteModel.findById(routeId, "_id"),
   ]);
-  const ownerId=findBus.ownerId.toString();
+  const ownerId = findBus.ownerId.toString();
 
   if (!findBus) throw new ApiError(statusCode.NOT_FOUND, "Bus data not found");
   if (!route) throw new ApiError(statusCode.NOT_FOUND, "Route not found");
@@ -402,78 +405,12 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
     );
 });
 
-// const cancelBusBooking = catchAsyncError(async (req, res, next) => {
-//   const { bookingId } = req.params;
-//   const { cancelReason } = req.body;
-
-//   const booking = await BusBookingModel.findById(bookingId).select(
-//     "paymentStatus status routeId busId journeyDate"
-//   );
-
-//   if (!booking) {
-//     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
-//   }
-//   if (["Cancelled", "Completed"].includes(booking.status)) {
-//     throw new ApiError(
-//       statusCode.NOT_FOUND,
-//       `Your booking is already ${booking.status}`
-//     );
-//   }
-
-//   if (["PAID"].includes(booking.paymentStatus)) {
-//     booking.paymentStatus = "REFUND_REQUESTED";
-//   }
-
-//   const bookedSeat = await BusSeatsLayoutModel.findOne({
-//     busId: booking.busId,
-//     journeyDate: booking.journeyDate,
-//     routeId: booking.routeId,
-//   });
-//   if (!bookedSeat) {
-//     throw new ApiError(statusCode.NOT_FOUND, "Booked seat layout not found");
-//   }
-
-//   // Clear the seat(s) that belong to this booking
-//   bookedSeat.seats = bookedSeat.seats.map((seat) => {
-//     if (seat.bookingReference?.toString() === bookingId.toString()) {
-//       return {
-//         ...seat,
-//         isAvailable: true,
-//         bookingReference: null,
-//         status: "available",
-//       };
-//     }
-//     return seat;
-//   });
-
-//   booking.status = "Cancelled";
-//   if (cancelReason) {
-//     booking.cancelReason = cancelReason;
-//   }
-//   booking.cancelledBy = "user";
-//   const totalSeats = bookedSeat.seats.length;
-//   const bookedSeatsCount = bookedSeat.seats.filter(
-//     (seat) => !seat.isAvailable
-//   ).length;
-
-//   bookedSeat.bookedSeats = bookedSeatsCount;
-//   bookedSeat.availableSeats = totalSeats - bookedSeatsCount;
-
-//   await Promise.all([booking.save(), bookedSeat.save()]);
-
-//   return res
-//     .status(statusCode.OK)
-//     .json(
-//       new ApiResponse(statusCode.OK, booking, "Booking cancelled successfully")
-//     );
-// });
-
 const cancelBusBooking = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
   const { cancelReason } = req.body;
 
   const booking = await BusBookingModel.findById(bookingId).select(
-    "paymentStatus status routeId busId journeyDate"
+    "paymentStatus status routeId busId journeyDate bookedBy price"
   );
 
   if (!booking) {
@@ -486,6 +423,7 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
       `Your booking is already ${booking.status}`
     );
   }
+
   const bus = await BusModel.findById(booking.busId).select(
     "cancellationWindowInHours"
   );
@@ -505,20 +443,88 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
     startDate.setHours(dh || 0, dm || 0, 0, 0);
   }
 
-  const now = new Date();
-  const diffMs = startDate - now;
-  const hoursLeft = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
-  const cancellationWindow = bus.cancellationWindowInHours ?? 24;
+  // const now = new Date();
+  // const diffMs = startDate - now;
+  // const hoursLeft = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
+  // const cancellationWindow = bus.cancellationWindowInHours ?? 24;
 
-  if (hoursLeft < cancellationWindow) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `You can only cancel your booking at least ${cancellationWindow} hours before the journey`
-    );
-  }
+  // if (hoursLeft < cancellationWindow) {
+  //   throw new ApiError(
+  //     statusCode.BAD_REQUEST,
+  //     `You can only cancel your booking at least ${cancellationWindow} hours before the journey`
+  //   );
+  // }
+
   if (booking.paymentStatus === "PAID") {
-    booking.paymentStatus = "REFUND_REQUESTED";
+    const refundAmount = booking.price * 0.5;
+
+    const operatorTxn = await TransactionModel.findOne({
+      bookingId,
+      busOperatorId: { $ne: null },
+      type: TransactionTypeEnum.CREDIT,
+    }).select("busOperatorId currency amount");
+
+    if (!operatorTxn) {
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        "Transaction not found for this booking"
+      );
+    }
+    const busOperatorId = operatorTxn.busOperatorId;
+
+    const userWallet = await WalletModel.findOne({ userId: booking.bookedBy });
+    if (!userWallet) {
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        "Wallet not found for this user"
+      );
+    }
+
+    userWallet.balance += refundAmount;
+    await userWallet.save();
+
+    await TransactionModel.create({
+      userId: booking.bookedBy,
+      bookingId,
+      transactionId: uuidv4(),
+      type: TransactionTypeEnum.CREDIT,
+      amount: refundAmount,
+      currency: userWallet.currency,
+      description: `50% refund for cancelled booking ${bookingId}`,
+      status: PaymentStatusEnum.SUCCESS,
+    });
+
+    const operatorWallet = await WalletModel.findOne({ userId: busOperatorId });
+    if (!operatorWallet) {
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        "Wallet not found for bus operator"
+      );
+    }
+    if (operatorWallet.balance < refundAmount) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "Insufficient balance in bus operator wallet to process refund"
+      );
+    }
+
+    operatorWallet.balance -= refundAmount;
+    await operatorWallet.save();
+
+    await TransactionModel.create({
+      busOperatorId,
+      bookingId,
+      transactionId: uuidv4(),
+      type: TransactionTypeEnum.DEBIT,
+      amount: refundAmount,
+      currency: operatorWallet.currency,
+      description: `Deduction for 50% refund of cancelled booking ${bookingId}`,
+      status: PaymentStatusEnum.SUCCESS,
+    });
+
+    booking.paymentStatus = "REFUNDED";
   }
+
   const bookedSeat = await BusSeatsLayoutModel.findOne({
     busId: booking.busId,
     journeyDate: booking.journeyDate,
@@ -540,6 +546,7 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
     }
     return seat;
   });
+
   booking.status = "Cancelled";
   if (cancelReason) {
     booking.cancelReason = cancelReason;
@@ -559,7 +566,11 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
   return res
     .status(statusCode.OK)
     .json(
-      new ApiResponse(statusCode.OK, booking, "Booking cancelled successfully")
+      new ApiResponse(
+        statusCode.OK,
+        booking,
+        "Booking cancelled successfully. 50% refunded to user and deducted from bus operator."
+      )
     );
 });
 
