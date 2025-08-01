@@ -53,7 +53,7 @@ const startServer = async () => {
   try {
     await connectDatabase();
 
-    server.listen(PORT, () => {
+    server.listen(PORT,'0.0.0.0' ,() => {
       logger.info(`✅ Server listening on port ${PORT}`);
     });
 
