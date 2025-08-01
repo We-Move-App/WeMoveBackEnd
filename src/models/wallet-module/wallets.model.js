@@ -9,8 +9,9 @@ const walletSchema = new mongoose.Schema(
     currency: {
       type: String,
       enum: WalletCurrencyEnum,
-      default: WalletCurrencyEnum.XAF, // or USD/EUR
+      default: WalletCurrencyEnum.EUR,
     },
+    cardNumber: { type: String, index: true },
   },
   { timestamps: true }
 );

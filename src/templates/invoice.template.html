@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Bus Booking Invoice</title>
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 14px; }
+    .header { text-align: center; margin-bottom: 20px; }
+    .title { font-size: 20px; font-weight: bold; }
+    .details, .passenger { margin-bottom: 15px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background-color: #f4f4f4; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="title">Bus Booking Invoice</div>
+    <div>Invoice Date: {{createdAt}}</div>
+  </div>
+
+  <div class="details">
+    <p><strong>Booking ID:</strong> {{bookingId}}</p>
+    <p><strong>From:</strong> {{from}} &nbsp;&nbsp; <strong>To:</strong> {{to}}</p>
+    <p><strong>Journey Date:</strong> {{journeyDate}}</p>
+    <p><strong>Booked By:</strong> {{bookingBy}}</p>
+    <p><strong>Status:</strong> {{status}}</p>
+  </div>
+
+  <div class="passenger">
+    <h3>Passenger Details</h3>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Seat Number</th>
+          <th>Contact</th>
+          <th>Email</th>
+        </tr>
+      </thead>
+      <tbody>
+        {{#each passengers}}
+        <tr>
+          <td>{{this.name}}</td>
+          <td>{{this.seatNumber}}</td>
+          <td>{{this.contactNumber}}</td>
+          <td>{{this.email}}</td>
+        </tr>
+        {{/each}}
+      </tbody>
+    </table>
+  </div>
+
+  <div>
+    <h3>Payment Summary</h3>
+    <table>
+      <tr>
+        <th>No. of Passengers</th>
+        <td>{{noOfPassengers}}</td>
+      </tr>
+      <tr>
+        <th>Price</th>
+        <td>{{price}} XAF</td>
+      </tr>
+      <tr>
+        <th>Payment Status</th>
+        <td>{{paymentStatus}}</td>
+      </tr>
+    </table>
+  </div>
+</body>
+</html>

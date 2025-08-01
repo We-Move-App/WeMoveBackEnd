@@ -95,7 +95,9 @@ const driverDocRouter = require("./routes/new-driver-module/documents/documents.
 const rideRoutes = require("./routes/ride-module/ride.routes");
 const locationRouter = require("./routes/new-driver-module/location/location.routes");
 const momoRouter = require("./routes/momo-mtn/momo-mtn.routes");
-const webhookRouter=require("./routes/web-hook/webhook.routes")
+const webhookRouter=require("./routes/web-hook/webhook.routes");
+const walletRouter = require("./routes/wallet-module/wallet.routes");
+const invoiceRouter = require("./routes/invoice-module/invoice-routes");
 
 if (node_env !== "production") {
   require("dotenv").config();
@@ -196,6 +198,12 @@ app.use("/api/v1/ride", rideRoutes);
 
 //Location Routes
 app.use("/api/v1/location", locationRouter);
+
+//Wallet Routes
+app.use("/api/v1/wallet",walletRouter)
+
+//Invoice Routes
+app.use('/api/v1/invoice',invoiceRouter)
 
 // Driver Routes
 app.use("/api/v1/driver/auth", driverAuthRoutes);
