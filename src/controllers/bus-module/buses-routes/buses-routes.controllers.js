@@ -114,11 +114,12 @@ const updateBusRoute = catchAsyncError(async (req, res, next) => {
     endLocation,
     departureTime,
     arrivalTime,
-    pricePerSeat,
+    // pricePerSeat,
     pickups,
     drops,
     routeName,
   } = req.body;
+  console.log("id:", req.body);
 
   const { _id } = req.user;
 
@@ -128,7 +129,7 @@ const updateBusRoute = catchAsyncError(async (req, res, next) => {
     "endLocation",
     "departureTime",
     "arrivalTime",
-    "pricePerSeat",
+    // "pricePerSeat",
   ];
 
   validateRequestBody(reqFields, req.body);
@@ -190,7 +191,7 @@ const updateBusRoute = catchAsyncError(async (req, res, next) => {
     endLocation,
     departureTime,
     arrivalTime,
-    pricePerSeat,
+    // pricePerSeat,
     updatedBy: _id,
     pickups,
     routeName,
