@@ -24,7 +24,7 @@ const getInvoice = catchAsyncError(async (req, res, next) => {
     .json(
       new ApiResponse(
         statusCode.OK,
-        { pdf: base64Pdf },
+        base64Pdf ,
         "Invoice generated successfully"
       )
     );
