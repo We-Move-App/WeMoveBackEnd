@@ -1,6 +1,7 @@
 const express = require("express");
 
 const {
+  getBeneficiary,
   getProfile,
   getAvatar,
   updateYourProfile,
@@ -35,6 +36,7 @@ userRoutes.route("/assign-branch").put(isUserAuthenticated, assignBranch);
 
 userRoutes.route("/reset-password").put(isUserAuthenticated, resetPassword);
 userRoutes.route("/reset-password-without-auth").put(resetPassword2);
+userRoutes.route("/beneficiary/:userId").get(getBeneficiary);
 
 userRoutes
   .route("/update-avatar")
