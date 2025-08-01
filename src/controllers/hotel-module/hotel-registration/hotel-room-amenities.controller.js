@@ -682,17 +682,19 @@ const updateRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
   }
 
  const roomImageFiles = req.files?.roomImages || [];
-const imageIdsToDelete = req.body.imageId
-  ? Array.isArray(req.body.imageId)
-    ? req.body.imageId
-    : [req.body.imageId]
-  : [];   
+let imageIdsToDelete = [];
+if (req.body.imageId) {
+  try {
+    imageIdsToDelete = JSON.parse(req.body.imageId);
+  } catch (err) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid imageId format. Must be JSON array.");
+  }
+}
+   
 
 
 let updatedRoomImages = [];
 let deletedRoomImages = [];
-
-
   const existingRoom = await Room.findOne({ hotelId, roomType });
   if (!existingRoom) {
     throw new ApiError(statusCode.NOT_FOUND, "Room type not found to update.");
@@ -725,7 +727,7 @@ if (imageIdsToDelete.length > 0) {
   }
 }
 
-// Upload and add new images
+//Upload the oimages 
 for (const file of roomImageFiles) {
   const uploaded = await uploadImageOnAws(file.path);
   const newImg = {

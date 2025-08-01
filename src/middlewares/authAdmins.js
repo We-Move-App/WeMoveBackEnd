@@ -44,7 +44,7 @@ const isAdminAuthenticated = catchAsyncError(async (req, res, next) => {
   const user = await AdminModel.findOne({
     _id: decodedToken?._id,
   }).select("_id email role verificationStatus authorities parentUserId") ||
-  (await SuperAdminModel.findOne({ _id: decodedToken?._id }));
+  (await AdminModel.findOne({ _id: decodedToken?._id }));
 
   if (!user) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Admin not found");

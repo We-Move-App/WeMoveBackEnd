@@ -5,7 +5,7 @@ const catchAsyncError = require("../utils/response/catchAsyncError");
 const { verifyTokenResult } = require("../utils/services/jwt.services");
 
 const isDriverAuthenticated = catchAsyncError(async (req, res, next) => {
-  await verifyTokenResult(req, DriverModel, next);
+  await verifyTokenResult(req, next);
 });
-
+  
 module.exports = { isDriverAuthenticated };

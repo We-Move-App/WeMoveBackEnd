@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const RefreshToken = require("../../models/refresh-token/refresh-token.model");
 const DriverBasicDetails = require("../../models/new-driver-module/basic-details/basic-details.model");
+const BusDriverModel = require("../../models/bus-module/bus-drivers/bus-drivers.model");
 
 const generateTokens = (data) => {
   const entity = data.toObject ? data.toObject() : { ...data };
@@ -8,7 +9,7 @@ const generateTokens = (data) => {
   const { password, createdAt, updatedAt, __v, ...accessPayload } = entity;
 
   const refreshPayload = {
-    id: entity.driverId || entity.userId || entity.adminId,
+    id: entity.driverId || entity.userId || entity.adminId || entity.busdriverId,
     role: entity.role,
   };
 
@@ -57,6 +58,9 @@ const refreshAccessToken = async (refreshToken) => {
     switch (role) {
       case "Driver":
         user = await DriverBasicDetails.findOne({ driverId: id });
+        break;
+        case "BusDriver":
+        user = await BusDriverModel.findOne({ busdriverId: id });
         break;
       //   case "User":
       //     user = await User.findOne({ userId:id });

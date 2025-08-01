@@ -9,14 +9,18 @@ async function getMomoToken({ subscriptionKey, apiUser, apiKey, env = "collectio
 
   const auth = base64.encode(`${apiUser}:${apiKey}`);
 
-  const response = await axios.post(baseURL, null, {
-    headers: {
-      Authorization: `Basic ${auth}`,
-      "Ocp-Apim-Subscription-Key": subscriptionKey,
-    },
-  });
-
-  return response.data.access_token;
+  try {
+    const response = await axios.post(baseURL, null, {
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Ocp-Apim-Subscription-Key": subscriptionKey,
+      },
+    });
+    return response.data.access_token;
+  } catch (err) {
+    console.error("MoMo Token Error:", err.response?.data || err.message);
+    throw new Error("Failed to get MoMo token");
+  }
 }
 
 module.exports = getMomoToken;

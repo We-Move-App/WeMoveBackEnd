@@ -5,6 +5,9 @@ const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const BusBookingModel = require("../../../models/bus-module/bus-bookings/bus-bookings.model");
 const BusImagesModel = require("../../../models/bus-module/bus-images/bus-images.model");
+const WalletModel = require("../../../models/wallet-module/wallets.model");
+const TransactionModel = require("../../../models/transaction-module/transaction.model");
+const { v4: uuidv4 } = require("uuid");
 const {
   validateRequestBody,
   normalizeDate,
@@ -17,6 +20,10 @@ const moment = require("moment");
 const BusSeatsLayoutModel = require("../../../models/bus-module/bus-seats-management/buses-seats.model");
 const { PaymentStatus } = require("../../../utils/constants/constants");
 const ValidateSecurePin = require("../../../utils/services/securePin.services");
+const {
+  PaymentStatusEnum,
+  TransactionTypeEnum,
+} = require("../../../utils/constants/ENUM");
 
 const getUserBusBookings = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
@@ -25,14 +32,16 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
     .sort({ createdAt: -1 })
     .populate("busId", "busName")
     .populate("routeId", "startLocation endLocation departureTime arrivalTime")
-    .select("seatNumbers paymentStatus journeyDate createdAt updatedAt routeId busId")
+    .select(
+      "seatNumbers paymentStatus journeyDate createdAt updatedAt routeId busId"
+    )
     .lean();
 
   if (!bookings || bookings.length === 0) {
     throw new ApiError(statusCode.NOT_FOUND, "Bookings not found");
   }
 
-  // Transform bookings: rename routeId fields + attach busImages
+
   const transformedBookings = await Promise.all(
     bookings.map(async (booking) => {
       // Create a new booking object to ensure we can modify properties
@@ -47,7 +56,6 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
           to: transformedBooking.routeId.endLocation,
         };
       }
-
 
       // Add bus images if bus exists
       const busId = transformedBooking?.busId?._id;
@@ -66,13 +74,15 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
     })
   );
 
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      transformedBookings,
-      "User bus bookings retrieved successfully"
-    )
-  );
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        transformedBookings,
+        "User bus bookings retrieved successfully"
+      )
+    );
 });
 
 const createBusBooking = catchAsyncError(async (req, res, next) => {
@@ -84,26 +94,26 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     busId,
     routeId,
     passengers,
-    // seatNumbers,
     noOfPassengers,
     price,
     journeyDate,
     termAndConditions,
   } = req.body;
 
-  const reqField = [
-    "from",
-    "to",
-    "busId",
-    "routeId",
-    "passengers",
-    "price",
-    "journeyDate",
-    "termAndConditions",
-  ];
-  validateRequestBody(reqField, req.body);
+  validateRequestBody(
+    [
+      "from",
+      "to",
+      "busId",
+      "routeId",
+      "passengers",
+      "price",
+      "journeyDate",
+      "termAndConditions",
+    ],
+    req.body
+  );
 
-  // Validate passenger and seat count match
   if (noOfPassengers !== passengers.length) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -114,11 +124,10 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
   isValidFutureDate(journeyDate);
 
   const [findBus, route] = await Promise.all([
-    BusModel.findById(busId, "noOfSeats"),
-
-
+    BusModel.findById(busId).lean(),
     BusRouteModel.findById(routeId, "_id"),
   ]);
+  const ownerId = findBus.ownerId.toString();
 
   if (!findBus) throw new ApiError(statusCode.NOT_FOUND, "Bus data not found");
   if (!route) throw new ApiError(statusCode.NOT_FOUND, "Route not found");
@@ -127,7 +136,32 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
 
   const session = await mongoose.startSession();
   session.startTransaction();
+
   try {
+    // Step 1: Check user wallet balance
+    const userWallet = await WalletModel.findOne({ userId }).session(session);
+
+    if (!userWallet || userWallet.balance < price) {
+      await TransactionModel.create(
+        [
+          {
+            transactionId: uuidv4(),
+            userId,
+            bookingId: null,
+            type: "DEBIT",
+            status: PaymentStatusEnum.FAILED,
+            amount: price,
+            currency: "XAF",
+            description: "Bus booking failed - insufficient balance",
+          },
+        ],
+        { session }
+      );
+
+      throw new ApiError(statusCode.BAD_REQUEST, "Insufficient wallet balance");
+    }
+
+    // Step 2: Seat availability
     let seatAvailability = await BusSeatsLayoutModel.findOne({
       busId,
       journeyDate: journeyDateNormalized,
@@ -135,7 +169,6 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     }).session(session);
 
     if (!seatAvailability) {
-      console.log("checking if bus not bus", seatAvailability);
       let busSeats = [];
       for (let i = 0; i < findBus.noOfSeats; i++) {
         busSeats.push({
@@ -162,28 +195,24 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       seatAvailability = seatAvailability[0];
     }
 
-    // Get available seats
     const availableSeats = seatAvailability.seats.filter(
       (seat) => seat.isAvailable
     );
-
     if (availableSeats.length < noOfPassengers) {
       throw new ApiError(statusCode.CONFLICT, "Not enough available seats");
     }
 
-    // Assign next available seats
     const assignedSeats = availableSeats
       .slice(0, noOfPassengers)
-      .map((seat) => seat.seatNumber);
+      .map((s) => s.seatNumber);
 
-    // Assign seats to passengers
-    const assignSeatToPassenger = passengers.map((passenger, index) => ({
-      ...passenger,
-      seatNumber: assignedSeats[index],
+    const assignSeatToPassenger = passengers.map((p, i) => ({
+      ...p,
+      seatNumber: assignedSeats[i],
     }));
 
-    // Create a new booking entry
-    const newBooking = await BusBookingModel.create(
+    // Step 3: Create booking
+    const [newBooking] = await BusBookingModel.create(
       [
         {
           busId,
@@ -194,7 +223,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           price,
           journeyDate: journeyDateNormalized,
           termAndConditions,
-          paymentStatus: PaymentStatus["PENDING"],
+          paymentStatus: "PAID",
           from,
           to,
           seatNumbers: assignedSeats,
@@ -203,74 +232,125 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       { session }
     );
 
-    // Update seat statuses
+    // Step 4: Update seats
     seatAvailability.seats = seatAvailability.seats.map((seat) => {
       if (assignedSeats.includes(seat.seatNumber)) {
         seat.status = "booked";
-        seat.bookingReference = newBooking[0]._id;
+        seat.bookingReference = newBooking._id;
         seat.isAvailable = false;
       }
       return seat;
     });
-
     seatAvailability.availableSeats -= noOfPassengers;
     seatAvailability.bookedSeats += noOfPassengers;
     await seatAvailability.save({ session });
 
+    // Step 5: Deduct from user wallet
+    userWallet.balance -= price;
+    await userWallet.save({ session });
+
+    // Step 6: Commission split
+    const platformFee = Math.floor(price * 0.1); // 10% commission
+    const operatorShare = price - platformFee;
+
+    await WalletModel.findOneAndUpdate(
+      { userId: ownerId },
+      { $inc: { balance: operatorShare } },
+      { session, new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    await WalletModel.findOneAndUpdate(
+      { userId: "ADM001" },
+      { $inc: { balance: platformFee } },
+      { session, new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    // Step 7: Create transactions
+    await TransactionModel.insertMany(
+      [
+        {
+          transactionId: uuidv4(),
+          userId,
+          bookingId: newBooking._id,
+          type: "DEBIT",
+          status: PaymentStatusEnum.SUCCESS,
+          amount: price,
+          currency: "XAF",
+          description: `Bus booking ${from} → ${to}`,
+        },
+        {
+          transactionId: uuidv4(),
+          busOperatorId: ownerId,
+          bookingId: newBooking._id,
+          type: "CREDIT",
+          status: PaymentStatusEnum.SUCCESS,
+          amount: operatorShare,
+          currency: "XAF",
+          description: "Earnings from booking",
+        },
+        {
+          transactionId: uuidv4(),
+          adminId: "ADM001",
+          bookingId: newBooking._id,
+          type: "CREDIT",
+          status: PaymentStatusEnum.SUCCESS,
+          amount: platformFee,
+          currency: "XAF",
+          description: "Commission from booking",
+        },
+      ],
+      { session }
+    );
+
     await session.commitTransaction();
     session.endSession();
-    const bookingWithBusDetails = await BusBookingModel.findById(newBooking[0]._id)
+
+    // Step 8: Populate response
+    const bookingWithBusDetails = await BusBookingModel.findById(newBooking._id)
       .populate({
         path: "busId",
         select: "busName busRegNumber busModelNumber",
-      }).lean()
+      })
       .populate({
-    path: "routeId",
-    model: "BusRoute",
-    select: "routeName startLocation endLocation departureTime arrivalTime estimatedTime totalDistance"
-  })
-  .lean()
-  .populate({
-    path: "bookedBy", 
-    model: "User",     
-    select: "fullName email phoneNumber" 
-  })
-  .lean();
-const busImages = await BusImagesModel.findOne(
-  { busId: bookingWithBusDetails.busId._id },
-  { images: 1, _id: 0 }
-).lean();
+        path: "routeId",
+        select:
+          "routeName startLocation endLocation departureTime arrivalTime estimatedTime totalDistance",
+      })
+      .populate({
+        path: "bookedBy",
+        model: "User",
+        select: "fullName email phoneNumber",
+      })
+      .lean();
 
-if (busImages && Array.isArray(busImages.images)) {
-  bookingWithBusDetails.busId.busImages = busImages.images.map(img => img.url);
-} else {
-  bookingWithBusDetails.busId.busImages = [];
-}
+    const busImages = await BusImagesModel.findOne(
+      { busId: bookingWithBusDetails.busId._id },
+      { images: 1, _id: 0 }
+    ).lean();
 
-if (bookingWithBusDetails.journeyDate) {
-  bookingWithBusDetails.startDate = bookingWithBusDetails.journeyDate;
-  bookingWithBusDetails.endDate = bookingWithBusDetails.journeyDate;
-  delete bookingWithBusDetails.journeyDate;
-}
-if (bookingWithBusDetails.routeId) {
-  bookingWithBusDetails.routeId.from = bookingWithBusDetails.routeId.startLocation;
-  bookingWithBusDetails.routeId.to = bookingWithBusDetails.routeId.endLocation;
+    bookingWithBusDetails.busId.busImages =
+      busImages?.images?.map((img) => img.url) || [];
 
-  delete bookingWithBusDetails.routeId.startLocation;
-  delete bookingWithBusDetails.routeId.endLocation;
-}
-
-   
+    if (bookingWithBusDetails.journeyDate) {
+      bookingWithBusDetails.startDate = bookingWithBusDetails.journeyDate;
+      bookingWithBusDetails.endDate = bookingWithBusDetails.journeyDate;
+      delete bookingWithBusDetails.journeyDate;
+    }
+    if (bookingWithBusDetails.routeId) {
+      bookingWithBusDetails.routeId.from =
+        bookingWithBusDetails.routeId.startLocation;
+      bookingWithBusDetails.routeId.to =
+        bookingWithBusDetails.routeId.endLocation;
+      delete bookingWithBusDetails.routeId.startLocation;
+      delete bookingWithBusDetails.routeId.endLocation;
+    }
 
     return res
       .status(statusCode.CREATED)
       .json(
         new ApiResponse(
           statusCode.CREATED,
-
           bookingWithBusDetails,
-
-
           "Bus booked successfully"
         )
       );
@@ -304,11 +384,12 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
   }
   const busId = booking?.busId?._id;
   if (busId) {
-    const busImagesDoc = await BusImagesModel.findOne({ busId }, { images: 1 }).lean();
-    booking.busId.busImages = busImagesDoc?.images?.map(img => img.url) || [];
+    const busImagesDoc = await BusImagesModel.findOne(
+      { busId },
+      { images: 1 }
+    ).lean();
+    booking.busId.busImages = busImagesDoc?.images?.map((img) => img.url) || [];
   }
-
-  
 
   return res
     .status(statusCode.OK)
@@ -321,78 +402,12 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
     );
 });
 
-// const cancelBusBooking = catchAsyncError(async (req, res, next) => {
-//   const { bookingId } = req.params;
-//   const { cancelReason } = req.body;
-
-//   const booking = await BusBookingModel.findById(bookingId).select(
-//     "paymentStatus status routeId busId journeyDate"
-//   );
-
-//   if (!booking) {
-//     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
-//   }
-//   if (["Cancelled", "Completed"].includes(booking.status)) {
-//     throw new ApiError(
-//       statusCode.NOT_FOUND,
-//       `Your booking is already ${booking.status}`
-//     );
-//   }
-
-//   if (["PAID"].includes(booking.paymentStatus)) {
-//     booking.paymentStatus = "REFUND_REQUESTED";
-//   }
-
-//   const bookedSeat = await BusSeatsLayoutModel.findOne({
-//     busId: booking.busId,
-//     journeyDate: booking.journeyDate,
-//     routeId: booking.routeId,
-//   });
-//   if (!bookedSeat) {
-//     throw new ApiError(statusCode.NOT_FOUND, "Booked seat layout not found");
-//   }
-
-//   // Clear the seat(s) that belong to this booking
-//   bookedSeat.seats = bookedSeat.seats.map((seat) => {
-//     if (seat.bookingReference?.toString() === bookingId.toString()) {
-//       return {
-//         ...seat,
-//         isAvailable: true,
-//         bookingReference: null,
-//         status: "available",
-//       };
-//     }
-//     return seat;
-//   });
-
-//   booking.status = "Cancelled";
-//   if (cancelReason) {
-//     booking.cancelReason = cancelReason;
-//   }
-//   booking.cancelledBy = "user";
-//   const totalSeats = bookedSeat.seats.length;
-//   const bookedSeatsCount = bookedSeat.seats.filter(
-//     (seat) => !seat.isAvailable
-//   ).length;
-
-//   bookedSeat.bookedSeats = bookedSeatsCount;
-//   bookedSeat.availableSeats = totalSeats - bookedSeatsCount;
-
-//   await Promise.all([booking.save(), bookedSeat.save()]);
-
-//   return res
-//     .status(statusCode.OK)
-//     .json(
-//       new ApiResponse(statusCode.OK, booking, "Booking cancelled successfully")
-//     );
-// });
-
-  const cancelBusBooking = catchAsyncError(async (req, res, next) => {
+const cancelBusBooking = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
   const { cancelReason } = req.body;
 
   const booking = await BusBookingModel.findById(bookingId).select(
-    "paymentStatus status routeId busId journeyDate"
+    "paymentStatus status routeId busId journeyDate bookedBy price"
   );
 
   if (!booking) {
@@ -405,8 +420,13 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
       `Your booking is already ${booking.status}`
     );
   }
-  const bus = await BusModel.findById(booking.busId).select("cancellationWindowInHours");
-  const route = await BusRouteModel.findById(booking.routeId).select("departureTime");
+
+  const bus = await BusModel.findById(booking.busId).select(
+    "cancellationWindowInHours"
+  );
+  const route = await BusRouteModel.findById(booking.routeId).select(
+    "departureTime"
+  );
 
   if (!bus || !route) {
     throw new ApiError(statusCode.NOT_FOUND, "Bus or Route details not found");
@@ -420,20 +440,90 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
     startDate.setHours(dh || 0, dm || 0, 0, 0);
   }
 
-  const now = new Date();
-  const diffMs = startDate - now;
-  const hoursLeft = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
-  const cancellationWindow = bus.cancellationWindowInHours ?? 24;
+  // const now = new Date();
+  // const diffMs = startDate - now;
+  // const hoursLeft = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
+  // const cancellationWindow = bus.cancellationWindowInHours ?? 24;
 
-  if (hoursLeft < cancellationWindow) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `You can only cancel your booking at least ${cancellationWindow} hours before the journey`
-    );
-  }
+  // if (hoursLeft < cancellationWindow) {
+  //   throw new ApiError(
+  //     statusCode.BAD_REQUEST,
+  //     `You can only cancel your booking at least ${cancellationWindow} hours before the journey`
+  //   );
+  // }
+
   if (booking.paymentStatus === "PAID") {
-    booking.paymentStatus = "REFUND_REQUESTED";
+    const refundAmount = booking.price * 0.5;
+
+    const operatorTxn = await TransactionModel.findOne({
+      bookingId,
+      busOperatorId: { $ne: null },
+      type: TransactionTypeEnum.CREDIT,
+    }).select("busOperatorId currency amount");
+
+    if (!operatorTxn) {
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        "Transaction not found for this booking"
+      );
+    }
+    const busOperatorId = operatorTxn.busOperatorId;
+
+    const userWallet = await WalletModel.findOne({ userId: booking.bookedBy });
+    if (!userWallet) {
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        "Wallet not found for this user"
+      );
+    }
+
+    userWallet.balance += refundAmount;
+    await userWallet.save();
+
+    await TransactionModel.create({
+      userId: booking.bookedBy,
+      bookingId,
+      transactionId: uuidv4(),
+      type: TransactionTypeEnum.CREDIT,
+      amount: refundAmount,
+      currency: userWallet.currency,
+      description: `50% refund for cancelled booking ${bookingId}`,
+      status: PaymentStatusEnum.SUCCESS,
+      refund:true
+    });
+
+    const operatorWallet = await WalletModel.findOne({ userId: busOperatorId });
+    if (!operatorWallet) {
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        "Wallet not found for bus operator"
+      );
+    }
+    if (operatorWallet.balance < refundAmount) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "Insufficient balance in bus operator wallet to process refund"
+      );
+    }
+
+    operatorWallet.balance -= refundAmount;
+    await operatorWallet.save();
+
+    await TransactionModel.create({
+      busOperatorId,
+      bookingId,
+      transactionId: uuidv4(),
+      type: TransactionTypeEnum.DEBIT,
+      amount: refundAmount,
+      currency: operatorWallet.currency,
+      description: `Deduction for 50% refund of cancelled booking ${bookingId}`,
+      status: PaymentStatusEnum.SUCCESS,
+      refund:true
+    });
+
+    booking.paymentStatus = "REFUNDED";
   }
+
   const bookedSeat = await BusSeatsLayoutModel.findOne({
     busId: booking.busId,
     journeyDate: booking.journeyDate,
@@ -455,27 +545,33 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
     }
     return seat;
   });
+
   booking.status = "Cancelled";
   if (cancelReason) {
     booking.cancelReason = cancelReason;
   }
   booking.cancelledBy = "user";
 
-  
   const totalSeats = bookedSeat.seats.length;
-  const bookedSeatsCount = bookedSeat.seats.filter((seat) => !seat.isAvailable).length;
+  const bookedSeatsCount = bookedSeat.seats.filter(
+    (seat) => !seat.isAvailable
+  ).length;
 
   bookedSeat.bookedSeats = bookedSeatsCount;
   bookedSeat.availableSeats = totalSeats - bookedSeatsCount;
 
-  
   await Promise.all([booking.save(), bookedSeat.save()]);
 
-  return res.status(statusCode.OK).json(
-    new ApiResponse(statusCode.OK, booking, "Booking cancelled successfully")
-  );
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        booking,
+        "Booking cancelled successfully. 50% refunded to user and deducted from bus operator."
+      )
+    );
 });
-
 
 const payBusBookingPayment = catchAsyncError(async (req, res, next) => {
   const { securePin } = req.body;
@@ -601,7 +697,6 @@ const payBusBookingPayment = catchAsyncError(async (req, res, next) => {
 //   );
 // });
 
-
 const UpcomingBusBookings = catchAsyncError(async (req, res) => {
   const { page = 1, limit = 10 } = req.query;
   const userId = req.user._id;
@@ -611,7 +706,8 @@ const UpcomingBusBookings = catchAsyncError(async (req, res) => {
 
   const query = {
     bookedBy: userId,
-    journeyDate: { $gte: today }
+    journeyDate: { $gte: today },
+     status: "Booked"
   };
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -623,17 +719,17 @@ const UpcomingBusBookings = catchAsyncError(async (req, res) => {
     .populate({
       path: "busId",
       model: "Bus",
-      select: "busName busModelNumber busRegNumber cancellationWindowInHours"
+      select: "busName busModelNumber busRegNumber cancellationWindowInHours",
     })
     .populate({
       path: "routeId",
       model: "BusRoute",
-      select: "departureTime arrivalTime"
+      select: "departureTime arrivalTime",
     })
     .populate({
       path: "bookedBy",
       model: "User",
-      select: "fullName email phoneNumber"
+      select: "fullName email phoneNumber",
     })
     .lean();
 
@@ -665,12 +761,18 @@ const UpcomingBusBookings = catchAsyncError(async (req, res) => {
 
       let imageUrls = [];
       try {
-        const busImageDoc = await BusImagesModel.findOne({ busId: booking.busId?._id }).select("images");
+        const busImageDoc = await BusImagesModel.findOne({
+          busId: booking.busId?._id,
+        }).select("images");
         if (busImageDoc?.images?.length) {
           imageUrls = busImageDoc.images.map((img) => img.url);
         }
       } catch (err) {
-        console.warn("Failed to fetch bus images for:", booking.busId?._id, err);
+        console.warn(
+          "Failed to fetch bus images for:",
+          booking.busId?._id,
+          err
+        );
       }
 
       return {
@@ -681,9 +783,9 @@ const UpcomingBusBookings = catchAsyncError(async (req, res) => {
         isCancellable,
         busId: {
           ...booking.busId,
-          busImages: imageUrls
+          busImages: imageUrls,
         },
-        journeyDate: undefined
+        journeyDate: undefined,
       };
     })
   );
@@ -699,7 +801,7 @@ const UpcomingBusBookings = catchAsyncError(async (req, res) => {
         totalPages,
         currentPage: parseInt(page),
         limit: parseInt(limit),
-        bookings: enhancedBookings
+        bookings: enhancedBookings,
       },
       "Upcoming bus bookings fetched successfully"
     )
@@ -715,7 +817,8 @@ const OldBusBookings = catchAsyncError(async (req, res) => {
 
   const query = {
     bookedBy: userId,
-    journeyDate: { $lt: now } // Past bookings only
+    journeyDate: { $lt: now },
+     status: "Completed"
   };
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -727,17 +830,17 @@ const OldBusBookings = catchAsyncError(async (req, res) => {
     .populate({
       path: "busId",
       model: "Bus",
-      select: "busName busModelNumber busRegNumber"
+      select: "busName busModelNumber busRegNumber",
     })
     .populate({
       path: "routeId",
       model: "BusRoute",
-      select: "departureTime arrivalTime"
+      select: "departureTime arrivalTime",
     })
     .populate({
       path: "bookedBy",
       model: "User",
-      select: "fullName email phoneNumber"
+      select: "fullName email phoneNumber",
     })
     .lean();
 
@@ -762,7 +865,9 @@ const OldBusBookings = catchAsyncError(async (req, res) => {
 
       let imageUrls = [];
       try {
-        const busImageDoc = await BusImagesModel.findOne({ busId: booking.busId?._id }).select("images");
+        const busImageDoc = await BusImagesModel.findOne({
+          busId: booking.busId?._id,
+        }).select("images");
         if (busImageDoc?.images?.length) {
           imageUrls = busImageDoc.images.map((img) => img.url);
         }
@@ -777,9 +882,9 @@ const OldBusBookings = catchAsyncError(async (req, res) => {
         rebookable: true, // ✅ instead of cancellable
         busId: {
           ...booking.busId,
-          busImages: imageUrls
+          busImages: imageUrls,
         },
-        journeyDate: undefined
+        journeyDate: undefined,
       };
     })
   );
@@ -795,21 +900,12 @@ const OldBusBookings = catchAsyncError(async (req, res) => {
         totalPages,
         currentPage: parseInt(page),
         limit: parseInt(limit),
-        bookings: enhancedBookings
+        bookings: enhancedBookings,
       },
       "Old bus bookings fetched successfully"
     )
   );
 });
-
-
-
-
-
-
-
-
-
 
 module.exports = {
   getUserBusBookings,
@@ -817,10 +913,6 @@ module.exports = {
   getBusBookingDetails,
   cancelBusBooking,
   payBusBookingPayment,
-  UpcomingBusBookings ,
-  OldBusBookings 
-
-
-  
+  UpcomingBusBookings,
+  OldBusBookings,
 };
-
