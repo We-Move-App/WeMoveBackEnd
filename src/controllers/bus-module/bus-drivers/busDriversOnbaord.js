@@ -131,12 +131,16 @@ const BusSeatsLayoutModel = require("../../../models/bus-module/bus-seats-manage
 //   });
 // });
 const onboardUserByQR = catchAsyncError(async (req, res, next) => {
+   const driverId = req.user_id;
   const { bookingId } = req.params;
-  const driverId = req.user_id;
+ 
 
  
   const booking = await BusBookingModel.findById(bookingId);
   const driver = await BusDriverModel.findById(driverId).populate("assignedBus");
+console.log("Booking:", booking);
+console.log("Driver:", driver);
+console.log("Driver.assignedBus:", driver?.assignedBus);
 
   if (!booking || !driver || !driver.assignedBus) {
     throw new ApiError(statusCode.NOT_FOUND, "Driver or booking not found, or bus not assigned to driver");
