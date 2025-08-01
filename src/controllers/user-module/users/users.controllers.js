@@ -196,9 +196,17 @@ const assignBranch = catchAsyncError(async (req, res, next) => {
   return res.status(statusCode.OK).json(result);
 });
 
+const mongoose = require("mongoose");
+
 const getBeneficiary = catchAsyncError(async (req, res, next) => {
   const userId = req.params.userId;
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid QR");
+  }
+
   const user = await UserModel.findById(userId);
+
   if (!user) {
     throw new ApiError(statusCode.NOT_FOUND, `User Not found`);
   }
