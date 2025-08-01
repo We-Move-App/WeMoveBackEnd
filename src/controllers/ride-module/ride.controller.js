@@ -1,5 +1,5 @@
 const statusCode = require("../../utils/constants/statusCode");
-const {getDistanceAndDuration} = require("../../utils/map/getDistanceAndDuration");
+const {getDistanceAndDuration} = require("../../utils/map/get-distance-and-duration");
 const ApiError = require("../../utils/response/ApiError");
 const ApiResponse = require("../../utils/response/ApiResponse");
 const catchAsyncError = require("../../utils/response/catchAsyncError");

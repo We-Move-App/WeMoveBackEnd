@@ -440,18 +440,6 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
     startDate.setHours(dh || 0, dm || 0, 0, 0);
   }
 
-  // const now = new Date();
-  // const diffMs = startDate - now;
-  // const hoursLeft = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
-  // const cancellationWindow = bus.cancellationWindowInHours ?? 24;
-
-  // if (hoursLeft < cancellationWindow) {
-  //   throw new ApiError(
-  //     statusCode.BAD_REQUEST,
-  //     `You can only cancel your booking at least ${cancellationWindow} hours before the journey`
-  //   );
-  // }
-
   if (booking.paymentStatus === "PAID") {
     const refundAmount = booking.price * 0.5;
 
@@ -489,7 +477,7 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
       currency: userWallet.currency,
       description: `50% refund for cancelled booking ${bookingId}`,
       status: PaymentStatusEnum.SUCCESS,
-      refund:true
+      refund: true,
     });
 
     const operatorWallet = await WalletModel.findOne({ userId: busOperatorId });
@@ -518,7 +506,7 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
       currency: operatorWallet.currency,
       description: `Deduction for 50% refund of cancelled booking ${bookingId}`,
       status: PaymentStatusEnum.SUCCESS,
-      refund:true
+      refund: true,
     });
 
     booking.paymentStatus = "REFUNDED";
@@ -562,13 +550,24 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
 
   await Promise.all([booking.save(), bookedSeat.save()]);
 
+  // sanitize response
+  const bookingResponse = {
+    journeyDate: booking.journeyDate,
+    paymentStatus: booking.paymentStatus,
+    price: booking.price,
+    status: booking.status,
+    cancelReason: booking.cancelReason,
+    cancelledBy: booking.cancelledBy,
+    updatedAt: booking.updatedAt,
+  };
+
   return res
     .status(statusCode.OK)
     .json(
       new ApiResponse(
         statusCode.OK,
-        booking,
-        "Booking cancelled successfully. 50% refunded to user and deducted from bus operator."
+        bookingResponse,
+        "Booking cancelled successfully"
       )
     );
 });

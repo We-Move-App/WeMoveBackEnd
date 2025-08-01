@@ -1,6 +1,6 @@
 const DriverLocation = require("../../models/new-driver-module/location/driver-location.model");
 const VehicleDetail = require("../../models/new-driver-module/vehicle-details/vehicle-details.model");
-const { LocationStatusEnum } = require("../../utils/constants/ENUM");
+const { LocationStatusEnum } = require("../constants/ENUM");
 
 async function findNearbyDrivers(pickupCoords, vehicleType) {
   // Try within 1km, then 3km
