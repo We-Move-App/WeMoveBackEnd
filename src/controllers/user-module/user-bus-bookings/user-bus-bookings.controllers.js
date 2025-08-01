@@ -32,7 +32,7 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.NOT_FOUND, "Bookings not found");
   }
 
-  // Transform bookings: rename routeId fields + attach busImages
+
   const transformedBookings = await Promise.all(
     bookings.map(async (booking) => {
       // Create a new booking object to ensure we can modify properties
@@ -611,7 +611,8 @@ const UpcomingBusBookings = catchAsyncError(async (req, res) => {
 
   const query = {
     bookedBy: userId,
-    journeyDate: { $gte: today }
+    journeyDate: { $gte: today },
+     status: "Booked"
   };
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -715,7 +716,8 @@ const OldBusBookings = catchAsyncError(async (req, res) => {
 
   const query = {
     bookedBy: userId,
-    journeyDate: { $lt: now } // Past bookings only
+    journeyDate: { $lt: now },
+     status: "Completed"
   };
 
   const skip = (parseInt(page) - 1) * parseInt(limit);

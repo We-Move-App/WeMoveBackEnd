@@ -84,21 +84,19 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     query.to = { $regex: drop, $options: "i" };
   }
 
-  // Filter by routeId if provided
+  
   if (routeId) {
     query.routeId = routeId;
   }
 
-  // Set default pagination values
   const pageNumber = parseInt(page) || 1;
   const pageSize = parseInt(limit) || 10;
   const skip = (pageNumber - 1) * pageSize;
 
-  // Sorting logic
+ 
   const sortField = sortBy || "createdAt";
   const sortOrder = order === "desc" ? 1 : -1;
 
-  // Fetch bookings with pagination and sorting
   const bookings = await BusBookingModel.find(query)
     .sort({ [sortField]: sortOrder })
     .skip(skip)
@@ -113,8 +111,6 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
   if (!bookings || bookings.length === 0) {
     throw new ApiError(statusCode.NOT_FOUND, "No bookings found");
   }
-
-  // Get total count for pagination
   const totalBookings = await BusBookingModel.countDocuments(query);
 
   return res.status(statusCode.OK).json(
@@ -130,6 +126,8 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     )
   );
 });
+
+
 
 const createBusBooking = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
@@ -330,6 +328,7 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
 
 const cancelBooking = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
+    const  cancelReason  = req.body;
 
   const booking = await BusBookingModel.findById(bookingId).select(
     "paymentStatus status routeId busId journeyDate"

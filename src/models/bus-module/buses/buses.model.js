@@ -29,11 +29,11 @@ const BusSchema = new Schema(
       type: Schema.Types.ObjectId,
       ref: "BusRoute",
     },
-    assignedDriver: {
+    assignedDriver:[ {
       type: Schema.Types.ObjectId,
       ref: "BusDriver",
       default: null,
-    },
+    }],
     status: {
       type: String,
       enum: ["active", "inactive"],

@@ -82,8 +82,13 @@ const bookingSchema = new Schema(
     cancelReason: {
       type: String,
     },
+    isUseronboarded:{
+      type: Boolean,    
+      default: false,
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
+
 );
 
 const BusBookingModel = mongoose.model("BusBooking", bookingSchema);

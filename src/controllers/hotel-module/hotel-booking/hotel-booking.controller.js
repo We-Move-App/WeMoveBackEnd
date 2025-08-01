@@ -479,7 +479,7 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
       const hoursLeft = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
       const isCancellable = hoursLeft >= 24;
 
-      // ✅ Fetch hotel images
+      
       const hotelImages = await hotelImagesModel
         .findOne({ hotelId: booking.hotelId._id })
         .select("images")
