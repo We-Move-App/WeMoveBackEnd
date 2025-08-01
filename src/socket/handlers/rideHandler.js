@@ -5,7 +5,7 @@ const {
   PaymentStatusEnum,
 } = require("../../utils/constants/ENUM");
 const generateCustomId = require("../../utils/customId/generateCustomId");
-const findNearbyDrivers = require("../../utils/map/findNearbyDrivers");
+const findNearbyDrivers = require("../../utils/map/find-near-by-drivers");
 const { getOtp } = require('../../utils/otpService/otpService');
 
 const rideHandler = (socket, io, role) => {

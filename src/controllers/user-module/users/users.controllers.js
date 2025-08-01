@@ -1,7 +1,9 @@
 const {
   DocumentsModel,
 } = require("../../../models/global-module/documents/document.model");
-const { UserBankModel } = require("../../../models/user-module/user-banks/user-banks.model");
+const {
+  UserBankModel,
+} = require("../../../models/user-module/user-banks/user-banks.model");
 
 const {
   UserDocumentModel,
@@ -34,12 +36,11 @@ const getProfile = catchAsyncError(async (req, res, next) => {
     res,
     reqModel: UserModel,
     reqDocModel: UserDocumentModel,
-    bankModel: UserBankModel 
+    bankModel: UserBankModel,
   });
 
   return res.status(statusCode.OK).json(result);
 });
-
 
 const getAvatar = catchAsyncError(async (req, res, next) => {
   const result = await getAvatarFunc({
@@ -53,7 +54,7 @@ const getAvatar = catchAsyncError(async (req, res, next) => {
 
 const updateYourProfile = catchAsyncError(async (req, res, next) => {
   const userId = req.user?._id;
-  const { fullName, dob, nationality, nationIdExpiry, termAndConditions} =
+  const { fullName, dob, nationality, nationIdExpiry, termAndConditions } =
     req.body;
   const docsToUpload = req.files;
 
@@ -195,6 +196,32 @@ const assignBranch = catchAsyncError(async (req, res, next) => {
   return res.status(statusCode.OK).json(result);
 });
 
+const mongoose = require("mongoose");
+
+const getBeneficiary = catchAsyncError(async (req, res, next) => {
+  const {userId} = req.body;
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid QR");
+  }
+
+  const user = await UserModel.findById(userId);
+
+  if (!user) {
+    throw new ApiError(statusCode.NOT_FOUND, `User Not found`);
+  }
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { beneficiary: user.fullName },
+        "Beneficiary found successfully"
+      )
+    );
+});
+
 module.exports = {
   getProfile,
   getAvatar,
@@ -205,4 +232,5 @@ module.exports = {
   updateAvatar,
   assignBranch,
   resetPassword2,
+  getBeneficiary,
 };
