@@ -14,7 +14,7 @@ const BusRouteModel = require("../../../models/bus-module/bus-routes/bus-routes.
 const mongoose = require("mongoose");
 const moment = require("moment");
 const BusSeatsLayoutModel = require("../../../models/bus-module/bus-seats-management/buses-seats.model");
-
+const BusActivityLogModel = require("../../../models/bus-module/busActivityonBoardModel/busActivityModel");
 
 
 // const onboardUserByQR = catchAsyncError(async (req, res, next) => {
@@ -132,7 +132,7 @@ const BusSeatsLayoutModel = require("../../../models/bus-module/bus-seats-manage
 // });
 const onboardUserByQR = catchAsyncError(async (req, res, next) => {
    const driverId = req.user_id;
-  const { bookingId } = req.params;
+  const { bookingId } = req.body;
  
 
  
@@ -145,11 +145,12 @@ console.log("Driver.assignedBus:", driver?.assignedBus);
   if (!booking || !driver || !driver.assignedBus) {
     throw new ApiError(statusCode.NOT_FOUND, "Driver or booking not found, or bus not assigned to driver");
   }
-
+// ✅ FIXED HERE:
+if (String(driver.assignedBus._id) !== String(booking.busId._id)) {
+  throw new ApiError(statusCode.FORBIDDEN, "Driver is not assigned to this bus");
+}
  
-  if (String(driver.assignedBus._id) !== String(booking.busId)) {
-    throw new ApiError(statusCode.FORBIDDEN, "Driver is not assigned to this bus");
-  }
+ 
 if (booking.isUseronboarded) {
     throw new ApiError(statusCode.BAD_REQUEST, "User is already onboarded");
   }
@@ -169,75 +170,67 @@ if (booking.isUseronboarded) {
   res.status(statusCode.OK).json({
     success: true,
     message: "User onboarded successfully",
-    data: booking,
+    passenger: booking.passengers,
   });
 });
 
-const getOnboardedUsersSummary = catchAsyncError(async (req, res) => {
-  const { bookingId } = req.query;
+const getOnboardedUsersSummary = catchAsyncError(async (req, res, next) => {
+  console.log("Fetching onboarded users summary for driver...");
+  const driverId = req.user_id;
+  console.log("Driver ID:", driverId);
 
-  if (!bookingId) {
-    return res.status(400).json({
-      success: false,
-      statusCode: 400,
-      message: "Booking ID is required",
-    });
+  const driver = await BusDriverModel.findById(driverId).populate("assignedBus");
+
+  if (!driver || !driver.assignedBus) {
+    throw new ApiError(statusCode.NOT_FOUND, "Driver or assigned bus not found");
   }
 
-  const booking = await BusBookingModel.findOne({
-    _id: bookingId,
+  const assignedBusId = driver.assignedBus._id;
+
+  // Pagination
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
+
+  // Query onboarded bookings only for this bus
+  const onboardedBookings = await BusBookingModel.find({
+    busId: assignedBusId,
+    isUseronboarded: true,
+  })
+    .select("passengers journeyDate busId from to seatNumbers")
+    .populate("busId", "busRegNumber")
+    .skip(skip)
+    .limit(limit)
+    .sort({ journeyDate: -1 });
+
+  const total = await BusBookingModel.countDocuments({
+    busId: assignedBusId,
     isUseronboarded: true,
   });
 
-  if (!booking) {
-    return res.status(404).json({
-      success: false,
-      statusCode: 404,
-      message: "Onboarded booking not found",
-    });
-  }
-
-  const bus = await BusModel.findById(booking.busId);
-  if (!bus) {
-    return res.status(400).json({
-      success: false,
-      statusCode: 400,
-      message: "Bus not found for this booking",
-    });
-  }
-
-  const driver = await BusDriverModel.findOne({
-    assignedBus: bus._id,
-  });
-
-  if (!driver) {
-    return res.status(400).json({
-      success: false,
-      statusCode: 400,
-      message: "Assigned driver not found for this bus",
-    });
-  }
-
-  return res.status(200).json({
-    success: true,
-    statusCode: 200,
-    message: "Onboarded user details fetched successfully",
-    data: {
-      bookingId: booking._id,
+  const allPassengers = onboardedBookings.flatMap((booking) =>
+    booking.passengers.map((passenger) => ({
+      name: passenger.name,
+      age: passenger.age,
+      gender: passenger.gender,
+      contactNumber: passenger.contactNumber,
+      seatNumber: passenger.seatNumber,
+      journeyDate: booking.journeyDate,
       from: booking.from,
       to: booking.to,
-      journeyDate: booking.journeyDate,
-      busName: bus.busName || "N/A",
-      busRegNumber: bus.busRegNumber || "N/A",
-      driver: {
-        fullName: driver.fullName,
-        phoneNumber: driver.phoneNumber,
-      },
-      seatNumbers: booking.seatNumbers,
-      passengers: booking.passengers,
-    },
+      busRegNumber: booking.busId?.busRegNumber || null,
+    }))
+  );
+
+  return res.status(statusCode.OK).json({
+    success: true,
+    totalPassengers: total,
+    currentPage: page,
+    totalPages: Math.ceil(total / limit),
+    passengers: allPassengers,
   });
 });
+
 
 module.exports =
 {

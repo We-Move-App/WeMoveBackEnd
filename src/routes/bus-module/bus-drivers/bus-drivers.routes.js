@@ -34,7 +34,7 @@ busDriverRoutes.route("/sendbusdriverotp").post(sendOtpToBusDriver);
 busDriverRoutes.route("/verifybusdriverotp").post(verifyOtpBusDriverLogin);
 busDriverRoutes.route("/busdriverprofile").get( isBusDriverAuthenticated,getBusDriverProfile);
 busDriverRoutes.route("/onboard-User").post( isBusDriverAuthenticated,onboardUserByQR);
-busDriverRoutes.route("/onboarded-user").get(getOnboardedUsersSummary);
+busDriverRoutes.route("/getonboardedUser").get( isBusDriverAuthenticated,getOnboardedUsersSummary);
 
 
 busDriverRoutes

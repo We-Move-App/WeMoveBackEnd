@@ -366,7 +366,7 @@ const deleteDrivers = catchAsyncError(async (req, res, next) => {
 
 const getDriverById = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
-  console.log("id:",id)
+
   // Validate that id is a valid MongoDB ObjectId
   if (!mongoose.Types.ObjectId.isValid(id)) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid driver ID format");
