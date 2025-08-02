@@ -121,7 +121,7 @@ const registerHotelManager = catchAsyncError(async (req, res, next) => {
     wallet = await Wallet.create({
       userId: newUser._id,
       balance: 0,
-      currency: "XAF",
+      currency: "EUR",
       cardNumber: await generateUniqueCardNumber(),
     });
   }

@@ -67,7 +67,7 @@ const generateBookingInvoiceBase64 = async (booking) => {
   y -= 20;
   page.drawText(`No of Passengers: ${booking.noOfPassengers}`, { x: 50, y, size: 12, font });
   y -= 20;
-  page.drawText(`Price: ${booking.price} XAF`, { x: 50, y, size: 12, font });
+  page.drawText(`Price: ${booking.price} EUR`, { x: 50, y, size: 12, font });
   y -= 20;
   page.drawText(`Payment Status: ${booking.paymentStatus}`, { x: 50, y, size: 12, font });
   y -= 40;
