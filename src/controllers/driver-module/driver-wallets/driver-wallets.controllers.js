@@ -16,7 +16,7 @@ function generateRandom16DigitNumber(len) {
 
 const addWallet = catchAsyncError(async (req, res, next) => {
   const { _id } = req.user;
-  const { currency = "USD" } = req.body;
+  const { currency = process.env.MOMO_CURRENCY } = req.body;
 
   const user = await DriverModel.findById(_id);
   if (!user) {
@@ -36,7 +36,7 @@ const addWallet = catchAsyncError(async (req, res, next) => {
   const createWallet = new DriverDigitalWalletModel({
     cardNumber,
     userId: _id,
-    currency: currency || "USD",
+    currency: currency || process.env.MOMO_CURRENCY,
     balance: 0,
     walletId: user?.phoneNumber ? `${user?.phoneNumber}@wemove` : "",
   });

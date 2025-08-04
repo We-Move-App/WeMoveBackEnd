@@ -1,15 +1,21 @@
+const mongoose = require("mongoose");
+const { v4: uuidv4 } = require("uuid");
 const HotelBooking = require("../../../models/hotel-module/hotel-bookings/hotel-bookings.model");
 const Room = require("../../../models/hotel-module/hotel-registration/hotel-room-amenities.model");
 const Hotel = require("../../../models/hotel-module/hotel-registration/hotel-details.model");
 const individualRoom = require("../../../models/hotel-module/single-room/individual-room.module");
 const User = require("../../../models/user-module/users/user.model");
 const HotelAddressModel = require("../../../models/hotel-module/hotel-registration/hotel-location.model");
-const { AddressModel } = require("../../../models/global-module/address/address.model");
+const {
+  AddressModel,
+} = require("../../../models/global-module/address/address.model");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const statusCode = require("../../../utils/constants/statusCode");
 const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const HotelBookingModel = require("../../../models/hotel-module/hotel-bookings/hotel-bookings.model");
+const WalletModel = require("../../../models/wallet-module/wallets.model");
+const TransactionModel = require("../../../models/transaction-module/transaction.model");
 const UserModel = require("../../../models/user-module/users/user.model");
 const { PaymentStatus } = require("../../../utils/constants/constants");
 const ValidateSecurePin = require("../../../utils/services/securePin.services");
@@ -18,8 +24,7 @@ const hotelImagesModel = require("../../../models/hotel-module/hotel-images/hote
 const HotelFeedbackModel = require("../../../models/hotel-module/hotel-feedback/hotel-feedback.model");
 const HotelPolicyModel = require("../../../models/hotel-module/hotel-registration/hotel-policy.model");
 const HotelRoomImagesModel = require("../../../models/hotel-module/hotel-room-images/hotel-room-images.model");
-
-
+const { PaymentStatusEnum, TransactionTypeEnum } = require("../../../utils/constants/ENUM");
 
 //-------------------- create booking --------------------
 const createBooking = catchAsyncError(async (req, res) => {
@@ -38,20 +43,30 @@ const createBooking = catchAsyncError(async (req, res) => {
     noOfRoom,
     user,
   } = req.body;
+
   // Format dates and times
-  const currentDate = new Date();
   const formattedCheckIn = new Date(checkInDate);
   const formattedCheckOut = new Date(checkOutDate);
+  const checkInDateTime = new Date(
+    `${checkInDate}T${HotelPolicyModel.checkInTime || "12:00"}:00`
+  );
+  const checkOutDateTime = new Date(
+    `${checkOutDate}T${HotelPolicyModel.checkOutTime || "11:00"}:00`
+  );
 
-  const checkInDateTime = new Date(`${checkInDate}T${HotelPolicyModel.checkInTime || "12:00"}:00`);
-  const checkOutDateTime = new Date(`${checkOutDate}T${HotelPolicyModel.checkOutTime || "11:00"}:00`);
   if (
-    !bookedBy || !hotelId || !checkInDate || !checkOutDate ||
-    !noOfRoom || !roomTypeId
+    !bookedBy ||
+    !hotelId ||
+    !checkInDate ||
+    !checkOutDate ||
+    !noOfRoom ||
+    !roomTypeId
   ) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Missing required booking details.");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Missing required booking details."
+    );
   }
-
 
   // Check if user exists
   const userExists = await User.findById(bookedBy);
@@ -65,17 +80,17 @@ const createBooking = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
   }
 
+  const hotelManagerId = hotelExists.ownerId.toString();
 
-
-  // Find all rooms of this hotel
+  // Find available rooms
   const allHotelRooms = await individualRoom.find({
     hotelId,
     status: "available",
     isAvailable: true,
-    roomTypeId
+    roomTypeId,
   });
 
-  // Get all overlapping bookings for the requested date range
+  // Get overlapping bookings
   const overlappingBookings = await HotelBooking.find({
     hotelId,
     checkInDate: { $lt: formattedCheckOut },
@@ -84,8 +99,7 @@ const createBooking = catchAsyncError(async (req, res) => {
     assignedRooms: { $exists: true, $ne: [] },
   });
 
-
-  // Collect all room IDs that are already booked in overlapping bookings
+  // Collect booked rooms
   const bookedRoomIds = new Set();
   overlappingBookings.forEach((booking) => {
     booking.assignedRooms.forEach((roomId) => {
@@ -93,41 +107,147 @@ const createBooking = catchAsyncError(async (req, res) => {
     });
   });
 
-  // Filter available rooms excluding those already booked for the given time
   const trulyAvailableRooms = allHotelRooms.filter(
     (room) => !bookedRoomIds.has(room._id.toString())
   );
 
   if (trulyAvailableRooms.length < noOfRoom) {
-
     throw new ApiError(
       statusCode.BAD_REQUEST,
       `Only ${trulyAvailableRooms.length} rooms are available during your selected time. Requested: ${noOfRoom}`
     );
   }
-  const booking = await HotelBooking.create({
-    bookedBy,
-    roomTypeId,
-    hotelId,
-    checkInDate: formattedCheckIn,
-    checkOutDate: formattedCheckOut,
-    assignedRooms: [],
-    checkInTime: checkInDateTime,
-    checkOutTime: checkOutDateTime,
-    totalAmount,
-    paymentStatus,
-    noOfAdults,
-    noOfKids,
-    noOfRoom,
-    user,
-  });
-  return res.status(statusCode.CREATED).json(
-    new ApiResponse(
-      statusCode.CREATED,
-      booking,
-      "Booking created successfully"
-    )
-  );
+
+  const session = await mongoose.startSession();
+  session.startTransaction();
+
+  try {
+    // Step 1: Check wallet balance
+    const userWallet = await WalletModel.findOne({ userId: bookedBy }).session(
+      session
+    );
+
+    if (!userWallet || userWallet.balance < totalAmount) {
+      await TransactionModel.create(
+        [
+          {
+            transactionId: uuidv4(),
+            userId: bookedBy,
+            bookingId: null,
+            type: "DEBIT",
+            status: PaymentStatusEnum.FAILED,
+            amount: totalAmount,
+            currency: process.env.MOMO_CURRENCY,
+            description: "Hotel booking failed - insufficient balance",
+          },
+        ],
+        { session }
+      );
+
+      throw new ApiError(statusCode.BAD_REQUEST, "Insufficient wallet balance");
+    }
+
+    // Step 2: Create booking
+    const booking = await HotelBooking.create(
+      [
+        {
+          bookedBy,
+          roomTypeId,
+          hotelId,
+          checkInDate: formattedCheckIn,
+          checkOutDate: formattedCheckOut,
+          assignedRooms: [],
+          checkInTime: checkInDateTime,
+          checkOutTime: checkOutDateTime,
+          totalAmount,
+          paymentStatus: "PAID",
+          noOfAdults,
+          noOfKids,
+          noOfRoom,
+          user,
+        },
+      ],
+      { session }
+    );
+
+    const newBooking = booking[0];
+
+    // Step 3: Deduct from user wallet
+    userWallet.balance -= totalAmount;
+    await userWallet.save({ session });
+
+    // Step 4: Commission split
+    const platformFee = Math.floor(totalAmount * 0.1); // 10%
+    const operatorShare = totalAmount - platformFee;
+
+    await WalletModel.findOneAndUpdate(
+      { userId: hotelManagerId },
+      { $inc: { balance: operatorShare } },
+      { session, new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    await WalletModel.findOneAndUpdate(
+      { userId: "ADM001" },
+      { $inc: { balance: platformFee } },
+      { session, new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    // Step 5: Record transactions
+    await TransactionModel.insertMany(
+      [
+        {
+          transactionId: uuidv4(),
+          userId: bookedBy,
+          bookingId: newBooking._id,
+          type: "DEBIT",
+          status: PaymentStatusEnum.SUCCESS,
+          amount: totalAmount,
+          currency: process.env.MOMO_CURRENCY,
+          description: `Hotel booking ${hotelExists.hotelName}`,
+        },
+        {
+          transactionId: uuidv4(),
+          hotelManagerId,
+          bookingId: newBooking._id,
+          type: "CREDIT",
+          status: PaymentStatusEnum.SUCCESS,
+          amount: operatorShare,
+          currency: process.env.MOMO_CURRENCY,
+          description: "Earnings from hotel booking",
+          operatorShare,
+        },
+        {
+          transactionId: uuidv4(),
+          adminId: "ADM001",
+          bookingId: newBooking._id,
+          type: "CREDIT",
+          status: PaymentStatusEnum.SUCCESS,
+          amount: platformFee,
+          currency: process.env.MOMO_CURRENCY,
+          description: "Commission from hotel booking",
+          platformFee,
+        },
+      ],
+      { session }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
+    return res
+      .status(statusCode.CREATED)
+      .json(
+        new ApiResponse(
+          statusCode.CREATED,
+          newBooking,
+          "Hotel booking created successfully"
+        )
+      );
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
+  }
 });
 
 const payHotelBookingPayment = catchAsyncError(async (req, res, next) => {
@@ -146,13 +266,7 @@ const payHotelBookingPayment = catchAsyncError(async (req, res, next) => {
 });
 
 const getBookings = catchAsyncError(async (req, res) => {
-
-  const {
-    bookingId,
-    hotelId,
-    page = 1,
-    limit = 10,
-  } = req.query;
+  const { bookingId, hotelId, page = 1, limit = 10 } = req.query;
 
   const query = {};
 
@@ -174,7 +288,6 @@ const getBookings = catchAsyncError(async (req, res) => {
     if (userId) {
       query.bookedBy = userId;
     }
-
   } else {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -182,9 +295,7 @@ const getBookings = catchAsyncError(async (req, res) => {
     );
   }
 
-
   const skip = (parseInt(page) - 1) * parseInt(limit);
-
 
   const bookings = await HotelBooking.find(query)
 
@@ -198,7 +309,6 @@ const getBookings = catchAsyncError(async (req, res) => {
 
   const totalBookings = await HotelBooking.countDocuments(query);
   const totalPages = Math.ceil(totalBookings / parseInt(limit));
-
 
   return res.status(statusCode.OK).json(
     new ApiResponse(
@@ -215,19 +325,27 @@ const getBookings = catchAsyncError(async (req, res) => {
   );
 });
 
-
-
 const getHotelsByLocation = catchAsyncError(async (req, res) => {
-  const { townCity, requiredRooms, checkInDate, checkOutDate, page = 1, limit = 10 } = req.query;
+  const {
+    townCity,
+    requiredRooms,
+    checkInDate,
+    checkOutDate,
+    page = 1,
+    limit = 10,
+  } = req.query;
 
   const requiredRoomCount = parseInt(requiredRooms);
   const pageNum = parseInt(page);
   const limitNum = parseInt(limit);
-  if( isNaN(requiredRoomCount) || requiredRoomCount <= 0 ){
-    throw new ApiError(statusCode.BAD_REQUEST, "requiredRooms must be a positive integer.");
+  if (isNaN(requiredRoomCount) || requiredRoomCount <= 0) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "requiredRooms must be a positive integer."
+    );
   }
- 
-if( !requiredRoomCount ){
+
+  if (!requiredRoomCount) {
     throw new ApiError(statusCode.BAD_REQUEST, "requiredRooms is required.");
   }
   if (!townCity || typeof townCity !== "string") {
@@ -235,40 +353,60 @@ if( !requiredRoomCount ){
   }
 
   if (!checkInDate || !checkOutDate) {
-    throw new ApiError(statusCode.BAD_REQUEST, "checkInDate and checkOutDate are required.");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "checkInDate and checkOutDate are required."
+    );
   }
 
   const checkIn = new Date(checkInDate);
   const checkOut = new Date(checkOutDate);
 
   if (checkOut <= checkIn) {
-    throw new ApiError(statusCode.BAD_REQUEST, "checkOutDate must be after checkInDate.");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "checkOutDate must be after checkInDate."
+    );
   }
 
-  const matchingAddresses = await AddressModel
-    .find({ townCity: { $regex: townCity, $options: "i" } })
+  const matchingAddresses = await AddressModel.find({
+    townCity: { $regex: townCity, $options: "i" },
+  })
     .select("_id")
     .lean();
 
   if (matchingAddresses.length === 0) {
-    return res.status(statusCode.OK).json(
-      new ApiResponse(statusCode.OK, { total: 0, page: pageNum, limit: limitNum, hotelRoomTypeLayout: [] }, "No address found for this location.")
-    );
+    return res
+      .status(statusCode.OK)
+      .json(
+        new ApiResponse(
+          statusCode.OK,
+          { total: 0, page: pageNum, limit: limitNum, hotelRoomTypeLayout: [] },
+          "No address found for this location."
+        )
+      );
   }
 
-  const addressIds = matchingAddresses.map(addr => addr._id);
+  const addressIds = matchingAddresses.map((addr) => addr._id);
 
-  const hotelAddressLinks = await HotelAddressModel
-    .find({ address: { $in: addressIds } })
+  const hotelAddressLinks = await HotelAddressModel.find({
+    address: { $in: addressIds },
+  })
     .select("hotelId")
     .lean();
 
-  const hotelIds = hotelAddressLinks.map(link => link.hotelId);
+  const hotelIds = hotelAddressLinks.map((link) => link.hotelId);
 
   if (hotelIds.length === 0) {
-    return res.status(statusCode.OK).json(
-      new ApiResponse(statusCode.OK, { total: 0, page: pageNum, limit: limitNum, hotelRoomTypeLayout: [] }, "No hotels found for this location.")
-    );
+    return res
+      .status(statusCode.OK)
+      .json(
+        new ApiResponse(
+          statusCode.OK,
+          { total: 0, page: pageNum, limit: limitNum, hotelRoomTypeLayout: [] },
+          "No hotels found for this location."
+        )
+      );
   }
 
   const hotels = await Hotel.find({ _id: { $in: hotelIds } })
@@ -279,35 +417,57 @@ if( !requiredRoomCount ){
 
   const hotelRoomTypeLayout = await Promise.all(
     hotels.map(async (hotel) => {
-      const [roomTypes, hotelImages, hotelAddress, hotelPolicies, HotelFeedbacks,] = await Promise.all([
-        Room.find({ hotelId: hotel._id }).select("roomType roomPrice numberOfRoom").lean(),
-        hotelImagesModel.findOne({ hotelId: hotel._id }).select("images").lean(),
+      const [
+        roomTypes,
+        hotelImages,
+        hotelAddress,
+        hotelPolicies,
+        HotelFeedbacks,
+      ] = await Promise.all([
+        Room.find({ hotelId: hotel._id })
+          .select("roomType roomPrice numberOfRoom")
+          .lean(),
+        hotelImagesModel
+          .findOne({ hotelId: hotel._id })
+          .select("images")
+          .lean(),
         HotelAddressModel.findOne({ hotelId: hotel._id })
           .populate("address", "townCity address landmark")
           .select("address")
           .lean(),
-        HotelPolicyModel.findOne({ hotelId: hotel._id }).select("amenities checkInTime checkOutTime ").lean(),
-        HotelFeedbackModel.find({ hotelId: hotel._id }).select("rating").lean()
+        HotelPolicyModel.findOne({ hotelId: hotel._id })
+          .select("amenities checkInTime checkOutTime ")
+          .lean(),
+        HotelFeedbackModel.find({ hotelId: hotel._id }).select("rating").lean(),
       ]);
 
       const selectedImage = hotelImages?.images?.[0] || null;
       const filteredRoomTypes = await Promise.all(
         roomTypes.map(async (roomType) => {
-          const rooms = await individualRoomModule.find({
-            hotelId: hotel._id,
-            roomTypeId: roomType._id
-          }).select("_id").lean();
+          const rooms = await individualRoomModule
+            .find({
+              hotelId: hotel._id,
+              roomTypeId: roomType._id,
+            })
+            .select("_id")
+            .lean();
 
-          const roomIds = rooms.map(r => r._id);
+          const roomIds = rooms.map((r) => r._id);
 
           const conflictingBookings = await HotelBooking.find({
             roomId: { $in: roomIds },
             checkInDate: { $lt: checkOut },
-            checkOutDate: { $gt: checkIn }
-          }).select("roomId").lean();
+            checkOutDate: { $gt: checkIn },
+          })
+            .select("roomId")
+            .lean();
 
-          const bookedRoomIds = new Set(conflictingBookings.map(b => b.roomId.toString()));
-          const availableRooms = roomIds.filter(id => !bookedRoomIds.has(id.toString())).length;
+          const bookedRoomIds = new Set(
+            conflictingBookings.map((b) => b.roomId.toString())
+          );
+          const availableRooms = roomIds.filter(
+            (id) => !bookedRoomIds.has(id.toString())
+          ).length;
 
           if (availableRooms >= requiredRoomCount) {
             return {
@@ -315,7 +475,7 @@ if( !requiredRoomCount ){
               roomType: roomType.roomType,
               numberOfRoom: roomType.numberOfRoom,
               roomPrice: roomType.roomPrice,
-              availableRooms
+              availableRooms,
             };
           } else {
             return null;
@@ -328,18 +488,16 @@ if( !requiredRoomCount ){
       if (availableRoomTypes.length > 0) {
         return {
           hotel: {
-
             hotelId: hotel._id,
             hotelName: hotel.hotelName,
             rating: hotel.rating,
             totalRoom: hotel.totalRoom,
-
           },
           hotelImage: selectedImage,
           hotelAddress,
           hotelPolicies,
           hotelFeedbacks: HotelFeedbacks,
-          roomTypes: availableRoomTypes
+          roomTypes: availableRoomTypes,
         };
       }
 
@@ -348,17 +506,23 @@ if( !requiredRoomCount ){
   );
 
   const filteredHotels = hotelRoomTypeLayout.filter(Boolean);
-  
 
-const responseMessage = filteredHotels.length === 0 ? "No room found" : "Hotels retrieved successfully.";
+  const responseMessage =
+    filteredHotels.length === 0
+      ? "No room found"
+      : "Hotels retrieved successfully.";
 
   return res.status(statusCode.OK).json(
-    new ApiResponse(statusCode.OK, {
-      total: filteredHotels.length,
-      page: pageNum,
-      limit: limitNum,
-      hotelRoomTypeLayout: filteredHotels
-    }, responseMessage)
+    new ApiResponse(
+      statusCode.OK,
+      {
+        total: filteredHotels.length,
+        page: pageNum,
+        limit: limitNum,
+        hotelRoomTypeLayout: filteredHotels,
+      },
+      responseMessage
+    )
   );
 });
 //-------------------- get hotel by id --------------------
@@ -379,24 +543,29 @@ const getHotelById = catchAsyncError(async (req, res) => {
   }
 
   // Get related data
-  const [hotelImages, hotelAddress, hotelPolicies, hotelFeedbacks, roomTypes] = await Promise.all([
-    hotelImagesModel.findOne({ hotelId }).select("images").lean(),
-    HotelAddressModel.findOne({ hotelId })
-      .populate("address", "townCity address landmark")
-      .select("address")
-      .lean(),
-    HotelPolicyModel.findOne({ hotelId }).select("amenities checkInTime checkOutTime").lean(),
-    HotelFeedbackModel.find({ hotelId }).select("rating").lean(),
-    Room.find({ hotelId }).select("roomType roomPrice numberOfRoom").lean()
-  ]);
+  const [hotelImages, hotelAddress, hotelPolicies, hotelFeedbacks, roomTypes] =
+    await Promise.all([
+      hotelImagesModel.findOne({ hotelId }).select("images").lean(),
+      HotelAddressModel.findOne({ hotelId })
+        .populate("address", "townCity address landmark")
+        .select("address")
+        .lean(),
+      HotelPolicyModel.findOne({ hotelId })
+        .select("amenities checkInTime checkOutTime")
+        .lean(),
+      HotelFeedbackModel.find({ hotelId }).select("rating").lean(),
+      Room.find({ hotelId }).select("roomType roomPrice numberOfRoom").lean(),
+    ]);
   const allHotelImages = hotelImages?.images || [];
 
   const roomTypesWithImages = await Promise.all(
     roomTypes.map(async (room) => {
       const roomImageData = await HotelRoomImagesModel.findOne({
         roomId: room._id,
-        roomType: room.roomType
-      }).select("images").lean();
+        roomType: room.roomType,
+      })
+        .select("images")
+        .lean();
 
       const allImages = roomImageData?.images || [];
 
@@ -405,25 +574,29 @@ const getHotelById = catchAsyncError(async (req, res) => {
         roomType: room.roomType,
         roomPrice: room.roomPrice,
         numberOfRoom: room.numberOfRoom,
-        images: allImages // ✅ ALL images for room type
+        images: allImages, // ✅ ALL images for room type
       };
     })
   );
 
   return res.status(statusCode.OK).json(
-    new ApiResponse(statusCode.OK, {
-      hotel: {
-        hotelId,
-        hotelName: hotel.hotelName,
-        rating: hotel.rating,
-        totalRoom: hotel.totalRoom
+    new ApiResponse(
+      statusCode.OK,
+      {
+        hotel: {
+          hotelId,
+          hotelName: hotel.hotelName,
+          rating: hotel.rating,
+          totalRoom: hotel.totalRoom,
+        },
+        hotelImages: allHotelImages, // ✅ return array
+        hotelAddress,
+        hotelPolicies,
+        hotelFeedbacks,
+        roomTypes: roomTypesWithImages, // ✅ each room has full images array
       },
-      hotelImages: allHotelImages, // ✅ return array
-      hotelAddress,
-      hotelPolicies,
-      hotelFeedbacks,
-      roomTypes: roomTypesWithImages // ✅ each room has full images array
-    }, "Hotel details fetched successfully.")
+      "Hotel details fetched successfully."
+    )
   );
 });
 
@@ -449,22 +622,22 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
     .populate({
       path: "hotelId",
       model: Hotel,
-      select: "-__v -createdAt -updatedAt"
+      select: "-__v -createdAt -updatedAt",
     })
     .populate({
       path: "roomTypeId",
       model: Room,
-      select: "-__v -roomDescription"
+      select: "-__v -roomDescription",
     })
     .populate({
       path: "bookedBy",
       model: User,
-      select: "-__v -password -email -phone"
+      select: "-__v -password -email -phone",
     })
     .populate({
       path: "assignedRooms",
       model: individualRoom,
-      select: "-__v -roomStatus"
+      select: "-__v -roomStatus",
     })
     .lean();
 
@@ -479,7 +652,6 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
       const hoursLeft = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
       const isCancellable = hoursLeft >= 24;
 
-      
       const hotelImages = await hotelImagesModel
         .findOne({ hotelId: booking.hotelId._id })
         .select("images")
@@ -490,7 +662,7 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
         ...booking,
         nights,
         hotelImage,
-        isCancellable, 
+        isCancellable,
         hoursLeftUntilCheckIn: hoursLeft,
       };
     })
@@ -522,7 +694,7 @@ const getPastBookings = catchAsyncError(async (req, res) => {
 
   const query = {
     bookedBy: userId,
-    checkInDate: { $lt: today }
+    checkInDate: { $lt: today },
   };
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -545,7 +717,10 @@ const getPastBookings = catchAsyncError(async (req, res) => {
       const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
 
       // Get hotel images
-      const hotelImages = await hotelImagesModel.findOne({ hotelId: booking.hotelId._id }).select("images").lean();
+      const hotelImages = await hotelImagesModel
+        .findOne({ hotelId: booking.hotelId._id })
+        .select("images")
+        .lean();
       const hotelImage = hotelImages?.images || [];
 
       return {
@@ -573,12 +748,15 @@ const getPastBookings = catchAsyncError(async (req, res) => {
     )
   );
 });
+
 const cancelHotelBooking = catchAsyncError(async (req, res) => {
   const { bookingId } = req.params;
   const userId = req.user._id;
   const { cancelReason } = req.body;
 
-  const booking = await HotelBookingModel.findById(bookingId).populate("assignedRooms");
+  const booking = await HotelBookingModel.findById(bookingId)
+    .populate("assignedRooms")
+    .populate("hotelId", "ownerId hotelName");
 
   if (!booking) {
     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
@@ -586,7 +764,10 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
 
   // Check ownership
   if (booking.bookedBy.toString() !== userId.toString()) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "You can only cancel your own booking");
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "You can only cancel your own booking"
+    );
   }
 
   // Check if already cancelled or completed
@@ -597,7 +778,6 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
     );
   }
 
-
   const now = Date.now();
   const checkInTime = new Date(booking.checkInDate).getTime();
   const hoursBeforeCheckIn = (checkInTime - now) / (1000 * 60 * 60);
@@ -605,16 +785,80 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
   if (hoursBeforeCheckIn < 24) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "You can only cancel your booking at least 24 hours before the journey"
+      "You can only cancel your booking at least 24 hours before check-in"
     );
   }
 
-  
+  // ---- Wallet & Refund Logic ----
+  if (booking.paymentStatus === "PAID") {
+    const refundAmount = booking.totalAmount * 0.5;
+
+    const hotelManagerId = booking.hotelId.ownerId.toString();
+
+    const [userWallet, hotelWallet] = await Promise.all([
+      WalletModel.findOne({ userId }),
+      WalletModel.findOne({ userId: hotelManagerId }),
+    ]);
+
+    if (!userWallet) {
+      throw new ApiError(statusCode.NOT_FOUND, "Wallet not found for user");
+    }
+    if (!hotelWallet) {
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        "Wallet not found for hotel manager"
+      );
+    }
+
+    if (hotelWallet.balance < refundAmount) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "Insufficient balance in hotel manager wallet to process refund"
+      );
+    }
+
+    // Step 1: Add refund to user
+    userWallet.balance += refundAmount;
+    await userWallet.save();
+
+    await TransactionModel.create({
+      transactionId: uuidv4(),
+      userId,
+      bookingId,
+      type: TransactionTypeEnum.CREDIT,
+      status: PaymentStatusEnum.SUCCESS,
+      amount: refundAmount,
+      currency: userWallet.currency,
+      description: `50% refund for cancelled hotel booking ${bookingId}`,
+      refund: true,
+    });
+
+    // Step 2: Deduct from hotel manager
+    hotelWallet.balance -= refundAmount;
+    await hotelWallet.save();
+
+    await TransactionModel.create({
+      transactionId: uuidv4(),
+      hotelManagerId,
+      bookingId,
+      type: TransactionTypeEnum.DEBIT,
+      status: PaymentStatusEnum.SUCCESS,
+      amount: refundAmount,
+      currency: hotelWallet.currency,
+      description: `Deduction for 50% refund of cancelled hotel booking ${bookingId}`,
+      refund: true,
+    });
+
+    booking.paymentStatus = "REFUNDED";
+  }
+
+  // ---- Existing Room Update Logic ----
   booking.status = "Cancelled";
   booking.cancelledBy = "user";
   if (cancelReason) {
     booking.cancelReason = cancelReason;
   }
+
   const roomUpdatePromises = booking.assignedRooms.map((room) => {
     return individualRoom.updateOne(
       { _id: room._id },
@@ -634,14 +878,29 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
 
   await Promise.all([...roomUpdatePromises, booking.save()]);
 
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      booking,
-      "Booking cancelled successfully"
-    )
-  );
+  // ---- Response ----
+  const bookingResponse = {
+    checkInDate: booking.checkInDate,
+    checkOutDate: booking.checkOutDate,
+    paymentStatus: booking.paymentStatus,
+    totalAmount: booking.totalAmount,
+    status: booking.status,
+    cancelReason: booking.cancelReason,
+    cancelledBy: booking.cancelledBy,
+    updatedAt: booking.updatedAt,
+  };
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        bookingResponse,
+        "Booking cancelled successfully"
+      )
+    );
 });
+
 const getCancelReasons = (req, res) => {
   try {
     return res.status(200).json({
@@ -671,6 +930,6 @@ module.exports = {
   getHotelById,
   getUpcomingBookings,
   getPastBookings,
-getCancelReasons,
-  cancelHotelBooking
+  getCancelReasons,
+  cancelHotelBooking,
 };
