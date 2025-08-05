@@ -173,7 +173,7 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
   });
 
   await axios.post(
-    `${process.env.MOMO_BASE_URL}/disbursement/v1_0/transfer`,  
+    `${process.env.MOMO_BASE_URL}/disbursement/v1_0/transfer`,
     {
       amount: amount.toString(),
       currency,
@@ -203,7 +203,7 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
     currency,
     description: description || "Withdraw via MoMo",
     status: PaymentStatusEnum.PENDING,
-    withdraw:true
+    withdraw: true,
   });
 
   return res

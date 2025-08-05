@@ -18,7 +18,7 @@ const io = new Server(server, {
 });
 
 // ✅ Register socket namespaces
-const initializeSocket = require("./socket");
+const {initializeSocket} = require("./socket");
 initializeSocket(io);
 
 // 🔄 Graceful shutdown handlers

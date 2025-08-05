@@ -2,6 +2,7 @@ const DriverLocation = require("../../models/new-driver-module/location/driver-l
 const { LocationStatusEnum } = require("../../utils/constants/ENUM");
 
 const driverLocationHandler = (socket, io) => {
+  if (socket.data.role !== "Driver") return;
   socket.on("driver:locationUpdate", async ({ lat, lng }, ack) => {
     const driverId = socket.data.driverId;
 
@@ -24,10 +25,12 @@ const driverLocationHandler = (socket, io) => {
         { upsert: true, new: true }
       );
 
-      // Broadcast to all users for now (or restrict to nearby if optimized)
-      io.of("/user").emit("driver:locationBroadcast", { driverId, lat, lng });
+      io.emit("driver:locationUpdate", { driverId, lat, lng });
 
-      ack?.({ message: "Location updated", location: updatedLocation.location });
+      ack?.({
+        message: "Location updated",
+        location: updatedLocation.location,
+      });
     } catch (err) {
       console.error("❌ Error updating location:", err);
       ack?.({ error: "Failed to update location" });
