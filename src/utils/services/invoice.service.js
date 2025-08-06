@@ -1,5 +1,3 @@
-const fs = require("fs/promises");
-const path = require("path");
 const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
 const BusBookingModel = require("../../models/bus-module/bus-bookings/bus-bookings.model");
 const catchAsyncError = require("../response/catchAsyncError");
@@ -7,8 +5,6 @@ const ApiError = require("../response/ApiError");
 const ApiResponse = require("../response/ApiResponse");
 const statusCode = require("../constants/statusCode");
 const HotelBookingModel = require("../../models/hotel-module/hotel-bookings/hotel-bookings.model");
-const fetch = require("node-fetch");
-const hotelImagesModel = require("../../models/hotel-module/hotel-images/hotel-images.model");
 
 const getBusInvoice = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
