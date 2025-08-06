@@ -25,7 +25,7 @@ const transactionSchema = new mongoose.Schema(
     currency: {
       type: String,
       enum: WalletCurrencyEnum,
-      default: WalletCurrencyEnum.EUR,
+      default: process.env.MOMO_CURRENCY,
     },
     description: String,
 

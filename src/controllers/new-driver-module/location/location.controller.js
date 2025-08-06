@@ -8,6 +8,7 @@ const {
   getAutocomplete,
   getDirections,
   getAddressFromCoordinates,
+  getPlaceDetails,
 } = require("../../../utils/map/get-distance-and-duration");
 const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
@@ -78,7 +79,7 @@ const getPlaceAutocomplete = catchAsyncError(async (req, res) => {
       .json(
         new ApiResponse(
           statusCode.OK,
-          suggestions,
+          { places: suggestions },
           `Places fetched successfully`
         )
       );
@@ -137,11 +138,38 @@ const getDirection = catchAsyncError(async (req, res) => {
 
   const directions = await getDirections(origin, destination);
 
-  res.status(statusCode.OK).json({
-    success: true,
-    message: "Directions fetched successfully",
-    data: directions,
-  });
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { directions: directions },
+        `Address fetched successfully`
+      )
+    );
+});
+
+const getPlaceDetail = catchAsyncError(async (req, res) => {
+  const { place_id } = req.query;
+
+  if (!place_id) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Place ID is required."
+    );
+  }
+
+  const placeDetails = await getPlaceDetails(place_id);
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { placeDetails },
+        "Place details fetched successfully"
+      )
+    );
 });
 
 module.exports = {
@@ -149,4 +177,5 @@ module.exports = {
   getPlaceAutocomplete,
   getFromCoordinates,
   getDirection,
+  getPlaceDetail
 };

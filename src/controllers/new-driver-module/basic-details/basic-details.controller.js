@@ -13,6 +13,7 @@ const DriverBasicDetails = require("../../../models/new-driver-module/basic-deta
 const DriverDocDetails = require("../../../models/new-driver-module/documents/driver-documents.model");
 const DriverBankDetails = require("../../../models/new-driver-module/bank-details/bank-details.model");
 const VehicleDetails = require("../../../models/new-driver-module/vehicle-details/vehicle-details.model");
+const DriverLocations=require('../../../models/new-driver-module/location/driver-location.model')
 const {
   DriverDocStatusEnum,
   DriverDocEnum,
@@ -186,6 +187,9 @@ const getDriverProfileDetails = catchAsyncError(async (req, res) => {
   const vehicleDetails = await VehicleDetails.findOne({ driverId }).lean();
   const docGroup = await DriverDocDetails.findOne({ driverId }).lean();
 
+  const driverLocation = await DriverLocations.findOne({ driverId }).lean();
+  const isOnline = driverLocation?.status === "online";
+
   if (!basicDetails) {
     throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
   }
@@ -204,6 +208,7 @@ const getDriverProfileDetails = catchAsyncError(async (req, res) => {
     data: {
       basicDetails: {
         ...basicDetails,
+        isOnline,
         id_card: findDoc("id_card"),
         license: findDoc("license"),
         avatar: findDoc("avatar"),

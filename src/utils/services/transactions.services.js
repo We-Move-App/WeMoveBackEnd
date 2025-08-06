@@ -75,7 +75,7 @@ const isTransactionProcess = async ({
           recipientWallet: recipientWallet._id,
           amount: amount,
           type: type,
-          currency: "USD",
+          currency: process.env.MOMO_CURRENCY,
           description: description[type] || "Transaction",
           status: "completed",
           referenceId: refId,

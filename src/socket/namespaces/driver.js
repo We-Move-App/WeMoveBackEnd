@@ -1,7 +1,27 @@
 const { driverLocationHandler } = require("../handlers/locationHandler");
 const { rideHandler } = require("../handlers/rideHandler");
+const jwt = require('jsonwebtoken');
 
 const setupDriverNamespace = (driverNamespace, io) => {
+  driverNamespace.use((socket, next) => {
+    const token = socket.handshake.auth.token;
+    
+    if (!token) {
+      return next(new Error('Authentication error'));
+    }
+
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      if (decoded.role !== 'Driver') {
+        return next(new Error('Unauthorized'));
+      }
+      socket.data.driverId = decoded.userId;
+      next();
+    } catch (err) {
+      next(new Error('Authentication failed'));
+    }
+  });
+
   driverNamespace.on("connection", (socket) => {
     const { driverId } = socket.handshake.auth || {};
 
@@ -14,7 +34,7 @@ const setupDriverNamespace = (driverNamespace, io) => {
     console.log("🚗 Driver connected:", driverId);
 
     driverLocationHandler(socket, io);
-    rideHandler(socket, io, "driver");
+    rideHandler(socket, io, "Driver");
 
     socket.on("disconnect", () => {
       console.log("❌ Driver disconnected:", driverId);

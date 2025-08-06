@@ -6,31 +6,59 @@ const catchAsyncError = require("../response/catchAsyncError");
 const ApiError = require("../response/ApiError");
 const ApiResponse = require("../response/ApiResponse");
 const statusCode = require("../constants/statusCode");
+const HotelBookingModel = require("../../models/hotel-module/hotel-bookings/hotel-bookings.model");
+const fetch = require("node-fetch");
+const hotelImagesModel = require("../../models/hotel-module/hotel-images/hotel-images.model");
 
-
-const getInvoice = catchAsyncError(async (req, res, next) => {
+const getBusInvoice = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
 
-  const booking = await BusBookingModel.findById(bookingId).populate("passengers");
+  const booking =
+    await BusBookingModel.findById(bookingId).populate("passengers");
 
   if (!booking) {
     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
   }
 
-  const base64Pdf = await generateBookingInvoiceBase64(booking);
+  const base64Pdf = await generateBusBookingInvoiceBase64(booking);
 
   return res
     .status(statusCode.OK)
     .json(
       new ApiResponse(
         statusCode.OK,
-        base64Pdf ,
+        base64Pdf,
         "Invoice generated successfully"
       )
     );
 });
 
-const generateBookingInvoiceBase64 = async (booking) => {
+const getHotelInvoice = catchAsyncError(async (req, res, next) => {
+  const { bookingId } = req.params;
+
+  const booking = await HotelBookingModel.findById(bookingId).populate(
+    "hotelId",
+    "hotelName"
+  );
+
+  if (!booking) {
+    throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
+  }
+
+  const base64Pdf = await generateHotelBookingInvoiceBase64(booking);
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        base64Pdf,
+        "Invoice generated successfully"
+      )
+    );
+});
+
+const generateBusBookingInvoiceBase64 = async (booking) => {
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([600, 800]);
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -54,25 +82,54 @@ const generateBookingInvoiceBase64 = async (booking) => {
   y -= 20;
   page.drawText(`To: ${booking.to}`, { x: 50, y, size: 12, font });
   y -= 20;
-  page.drawText(`Journey Date: ${new Date(booking.journeyDate).toLocaleDateString()}`, {
+  page.drawText(
+    `Journey Date: ${new Date(booking.journeyDate).toLocaleDateString()}`,
+    {
+      x: 50,
+      y,
+      size: 12,
+      font,
+    }
+  );
+  y -= 20;
+  page.drawText(`Booking By: ${booking.bookingBy}`, {
     x: 50,
     y,
     size: 12,
     font,
   });
   y -= 20;
-  page.drawText(`Booking By: ${booking.bookingBy}`, { x: 50, y, size: 12, font });
-  y -= 20;
   page.drawText(`Status: ${booking.status}`, { x: 50, y, size: 12, font });
   y -= 20;
-  page.drawText(`No of Passengers: ${booking.noOfPassengers}`, { x: 50, y, size: 12, font });
+  page.drawText(`No of Passengers: ${booking.noOfPassengers}`, {
+    x: 50,
+    y,
+    size: 12,
+    font,
+  });
   y -= 20;
-  page.drawText(`Price: ${booking.price} EUR`, { x: 50, y, size: 12, font });
+  page.drawText(`Price: ${booking.price} ${process.env.MOMO_CURRENCY}`, {
+    x: 50,
+    y,
+    size: 12,
+    font,
+  });
   y -= 20;
-  page.drawText(`Payment Status: ${booking.paymentStatus}`, { x: 50, y, size: 12, font });
+  page.drawText(`Payment Status: ${booking.paymentStatus}`, {
+    x: 50,
+    y,
+    size: 12,
+    font,
+  });
   y -= 40;
 
-  page.drawText("Passengers:", { x: 50, y, size: 14, font, color: rgb(0, 0, 0) });
+  page.drawText("Passengers:", {
+    x: 50,
+    y,
+    size: 14,
+    font,
+    color: rgb(0, 0, 0),
+  });
   y -= 25;
 
   booking.passengers.forEach((p, idx) => {
@@ -82,7 +139,12 @@ const generateBookingInvoiceBase64 = async (booking) => {
     y -= 20;
     page.drawText(`   Email: ${p.email}`, { x: 70, y, size: 12, font });
     y -= 20;
-    page.drawText(`   Contact: ${p.contactNumber}`, { x: 70, y, size: 12, font });
+    page.drawText(`   Contact: ${p.contactNumber}`, {
+      x: 70,
+      y,
+      size: 12,
+      font,
+    });
     y -= 30;
   });
 
@@ -98,4 +160,176 @@ const generateBookingInvoiceBase64 = async (booking) => {
   return Buffer.from(pdfBytes).toString("base64");
 };
 
-module.exports = { getInvoice };
+const generateHotelBookingInvoiceBase64 = async (booking) => {
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([600, 800]);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+  const { height, width } = page.getSize();
+
+  let y = height - 60;
+
+  // Header Box
+  page.drawRectangle({
+    x: 0,
+    y: y - 40,
+    width: width,
+    height: 70,
+    color: rgb(0.2, 0.5, 0.8),
+  });
+
+  page.drawText("HOTEL BOOKING INVOICE", {
+    x: 180,
+    y: y,
+    size: 22,
+    font: boldFont,
+    color: rgb(1, 1, 1),
+  });
+
+  y -= 100;
+
+  // Booking Details Section
+  page.drawText("Booking Details", {
+    x: 50,
+    y,
+    size: 16,
+    font: boldFont,
+    color: rgb(0.1, 0.3, 0.6),
+  });
+  y -= 25;
+
+  const details = [
+    ["Booking ID", booking._id],
+    ["Hotel", booking.hotelId?.hotelName || "N/A"],
+    [
+      "Check-In",
+      `${new Date(booking.checkInDate).toLocaleDateString()} ${new Date(
+        booking.checkInTime
+      ).toLocaleTimeString()}`,
+    ],
+    [
+      "Check-Out",
+      `${new Date(booking.checkOutDate).toLocaleDateString()} ${new Date(
+        booking.checkOutTime
+      ).toLocaleTimeString()}`,
+    ],
+    ["Booking By", booking.bookingBy],
+    ["Status", booking.status],
+    ["No of Rooms", booking.noOfRoom],
+    ["Guests", `${booking.noOfAdults} Adults, ${booking.noOfKids} Kids`],
+    ["Total Amount", `${booking.totalAmount} ${process.env.MOMO_CURRENCY}`],
+    ["Payment Status", booking.paymentStatus],
+  ];
+
+  details.forEach(([label, value]) => {
+    page.drawText(`${label}:`, {
+      x: 60,
+      y,
+      size: 12,
+      font: boldFont,
+      color: rgb(0.1, 0.1, 0.1),
+    });
+    page.drawText(`${value}`, {
+      x: 200,
+      y,
+      size: 12,
+      font,
+      color: rgb(0, 0, 0),
+    });
+    y -= 20;
+  });
+
+  y -= 20;
+
+  // Guest Details Section
+  page.drawText("Guest Details", {
+    x: 50,
+    y,
+    size: 16,
+    font: boldFont,
+    color: rgb(0.1, 0.3, 0.6),
+  });
+  y -= 25;
+
+  booking.user.forEach((p, idx) => {
+    page.drawRectangle({
+      x: 45,
+      y: y - 5,
+      width: width - 90,
+      height: 80,
+      borderColor: rgb(0.2, 0.5, 0.8),
+      borderWidth: 1,
+      color: rgb(0.95, 0.95, 1),
+    });
+
+    page.drawText(`${idx + 1}. ${p.name}`, {
+      x: 60,
+      y: y + 60,
+      size: 12,
+      font: boldFont,
+      color: rgb(0, 0, 0),
+    });
+    page.drawText(`Age: ${p.age || "N/A"}, Gender: ${p.gender || "N/A"}`, {
+      x: 200,
+      y: y + 60,
+      size: 12,
+      font,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+
+    let guestY = y + 40;
+    if (p.email) {
+      page.drawText(`Email: ${p.email}`, { x: 60, y: guestY, size: 12, font });
+      guestY -= 20;
+    }
+    if (p.phoneNumber) {
+      page.drawText(`Phone: ${p.phoneNumber}`, {
+        x: 60,
+        y: guestY,
+        size: 12,
+        font,
+      });
+      guestY -= 20;
+    }
+    if (p.roomsNumber) {
+      page.drawText(`Room No: ${p.roomsNumber}`, {
+        x: 60,
+        y: guestY,
+        size: 12,
+        font,
+      });
+      guestY -= 20;
+    }
+    if (p.identityCard?.fileUrl) {
+      page.drawText(`ID Proof: ${p.identityCard.fileUrl}`, {
+        x: 60,
+        y: guestY,
+        size: 10,
+        font,
+        color: rgb(0.4, 0.4, 0.4),
+      });
+    }
+    y -= 100;
+  });
+
+  // Footer
+  page.drawLine({
+    start: { x: 50, y: 60 },
+    end: { x: width - 50, y: 60 },
+    thickness: 1,
+    color: rgb(0.7, 0.7, 0.7),
+  });
+
+  page.drawText(`Invoice generated on: ${new Date().toLocaleString()}`, {
+    x: 50,
+    y: 40,
+    size: 10,
+    font,
+    color: rgb(0.3, 0.3, 0.3),
+  });
+
+  const pdfBytes = await pdfDoc.save();
+  return Buffer.from(pdfBytes).toString("base64");
+};
+
+module.exports = { getBusInvoice, getHotelInvoice };

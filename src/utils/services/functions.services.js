@@ -122,7 +122,7 @@ const registerUserWithEmailAndPhoneNumber = async ({
     wallet = await Wallet.create({
       userId: newUser._id,
       balance: 0,
-      currency: "EUR",
+      currency: process.env.MOMO_CURRENCY,
       cardNumber: await generateUniqueCardNumber(),
     });
   }
@@ -555,7 +555,7 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
     wallet = await Wallet.create({
       userId: user._id,
       balance: 0,
-      currency: WalletCurrencyEnum.EUR,
+      currency: process.env.MOMO_CURRENCY,
       cardNumber: await generateUniqueCardNumber(),
     });
   }

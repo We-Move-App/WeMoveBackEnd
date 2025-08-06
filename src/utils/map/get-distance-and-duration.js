@@ -26,11 +26,6 @@ const getDistanceAndDuration = async (
     const response = await axios.get(url);
     const data = response.data;
 
-    console.log(
-      `Google Maps API (${mode}) Response:`,
-      JSON.stringify(data, null, 2)
-    );
-
     if (
       data.status !== "OK" ||
       !data.rows[0]?.elements?.[0] ||
@@ -153,9 +148,45 @@ const getDirections = async (origin, destination) => {
   }
 };
 
+const getPlaceDetails = async (placeId) => {
+  const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+  const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${apiKey}`;
+
+  try {
+    const response = await axios.get(url);
+
+    if (response.data.status !== "OK") {
+      throw new Error(`Google Place Details API Error: ${response.data.status}`);
+    }
+
+    const result = response.data.result;
+
+    if (!result) {
+      throw new Error("No details found for the given Place ID.");
+    }
+
+    const trimmedData = {
+      name: result.name,
+      address: result.formatted_address,
+      location: result.geometry?.location || {},
+      place_id: result.place_id,
+      types: result.types || [],
+      phoneNumber: result.formatted_phone_number || null,
+      rating: result.rating || null,
+      website: result.website || null,
+    };
+
+    return trimmedData;
+  } catch (error) {
+    console.error("Get Place Details Error:", error.message);
+    throw new Error("Failed to fetch place details");
+  }
+};
+
 module.exports = {
   getDistanceAndDuration,
   getAutocomplete,
   getAddressFromCoordinates,
-  getDirections
+  getDirections,
+  getPlaceDetails
 };

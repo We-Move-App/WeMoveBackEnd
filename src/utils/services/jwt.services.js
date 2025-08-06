@@ -39,6 +39,9 @@ const verifyTokenResult = async (req, model, next) => {
   const user = await model
     .findById({ _id: decodedToken?._id })
     .select("_id email role verificationStatus authorities parentUserId");
+
+  console.log("user", user);
+  console.log("decodedToken?._id", decodedToken?._id);
   if (!user) {
     throw new ApiError(statusCode.UNAUTHORIZED, "User not found");
   }

@@ -2,6 +2,8 @@ const jwt = require("jsonwebtoken");
 const RefreshToken = require("../../models/refresh-token/refresh-token.model");
 const DriverBasicDetails = require("../../models/new-driver-module/basic-details/basic-details.model");
 const BusDriverModel = require("../../models/bus-module/bus-drivers/bus-drivers.model");
+const ApiError = require("../response/ApiError");
+const statusCode = require("../constants/statusCode");
 
 const generateTokens = (data) => {
   const entity = data.toObject ? data.toObject() : { ...data };
@@ -9,7 +11,8 @@ const generateTokens = (data) => {
   const { password, createdAt, updatedAt, __v, ...accessPayload } = entity;
 
   const refreshPayload = {
-    id: entity.driverId || entity.userId || entity.adminId || entity.busdriverId,
+    id:
+      entity.driverId || entity.userId || entity.adminId || entity.busdriverId,
     role: entity.role,
   };
 
@@ -41,7 +44,7 @@ const decodeAccessToken = (token) => {
 
 const refreshAccessToken = async (refreshToken) => {
   if (!refreshToken) {
-    throw new Error("Refresh token is required");
+    throw new ApiError(statusCode.UNAUTHORIZED, "Refresh token is required");
   }
 
   try {
@@ -50,7 +53,10 @@ const refreshAccessToken = async (refreshToken) => {
     const { id, role } = decoded;
 
     if (!id || !role) {
-      throw new Error("Invalid refresh token payload");
+      throw new ApiError(
+        statusCode.UNAUTHORIZED,
+        "Invalid refresh token payload"
+      );
     }
 
     let user;
@@ -59,7 +65,7 @@ const refreshAccessToken = async (refreshToken) => {
       case "Driver":
         user = await DriverBasicDetails.findOne({ driverId: id });
         break;
-        case "BusDriver":
+      case "BusDriver":
         user = await BusDriverModel.findOne({ busdriverId: id });
         break;
       //   case "User":
@@ -69,18 +75,27 @@ const refreshAccessToken = async (refreshToken) => {
       //     user = await Admin.findOne({ adminId: id });
       //     break;
       default:
-        throw new Error("Invalid role in refresh token");
+        throw new ApiError(
+          statusCode.UNAUTHORIZED,
+          "Invalid role in refresh token"
+        );
     }
 
     if (!user) {
-      throw new Error("User not found");
+      throw new ApiError(
+        statusCode.UNAUTHORIZED,
+        "Invalid role in refresh token"
+      );
     }
 
     const { accessToken, refreshToken: newRefreshToken } = generateTokens(user);
 
     return { accessToken, refreshToken: newRefreshToken };
   } catch (err) {
-    throw new Error("Invalid or expired refresh token");
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Invalid or expired refresh token"
+    );
   }
 };
 

@@ -30,8 +30,7 @@ const driverWalletSchema = new mongoose.Schema(
     currency: {
       type: String,
       required: true,
-      default: "USD",
-      enum: ["USD", "EUR", "INR"],
+      default: process.env.MOMO_CURRENCY,
     },
   },
   {

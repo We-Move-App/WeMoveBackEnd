@@ -56,7 +56,7 @@ const addMoney = async (amount, phoneNumber) => {
     `${BASE_URL}/collection/v1_0/requesttopay`,
     {
       amount,
-      currency: "EUR",
+      currency: process.env.MOMO_CURRENCY,
       externalId: referenceId,
       payer: { partyIdType: "MSISDN", partyId: phoneNumber },
       payerMessage: "Deposit to wallet",
@@ -85,7 +85,7 @@ const transferMoney = async (amount, phoneNumber) => {
     `${BASE_URL}/disbursement/v1_0/transfer`,
     {
       amount,
-      currency: "EUR",
+      currency: process.env.MOMO_CURRENCY,
       externalId: referenceId,
       payee: { partyIdType: "MSISDN", partyId: phoneNumber },
       payerMessage: "Funds transfer",
