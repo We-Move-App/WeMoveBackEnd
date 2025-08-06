@@ -119,7 +119,7 @@ const allowedOrigins = allowed_origin;
 // );
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:5174",'http://localhost:3000','http://localhost:3003', 'http://192.168.0.133:3003 '],
+    origin: ["http://localhost:5173", "http://localhost:5174",'http://localhost:3000','http://localhost:3003', 'http://192.168.0.133:3003', 'https://093bf07bd9f8.ngrok-free.app'],
     credentials: true,
   })
 );

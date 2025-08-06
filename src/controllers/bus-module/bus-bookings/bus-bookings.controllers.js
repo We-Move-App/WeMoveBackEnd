@@ -401,7 +401,6 @@ const cancelBooking = catchAsyncError(async (req, res, next) => {
     booking.paymentStatus = "PARTIAL_REFUNDED";
   }
 
-  // Free booked seats
   const bookedSeat = await BusSeatsLayoutModel.findOne({
     busId: booking.busId,
     journeyDate: booking.journeyDate,

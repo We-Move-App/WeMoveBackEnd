@@ -1,3 +1,4 @@
+const { add } = require("winston");
 const BusOperatorModel = require("../../../models/bus-module/bus-operator/bus-operator.model");
 const {
   busOperatorAuthorities,
@@ -62,10 +63,12 @@ const addMemberUnderBusOperator = catchAsyncError(async (req, res, next) => {
   };
 
   const newMember = new BusOperatorModel({
+    companyName,
     fullName,
     phoneNumber,
     email,
     idNumber,
+    companyAddress,
     dob,
     password,
     role: "bus-operator-member",

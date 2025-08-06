@@ -223,11 +223,11 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
   const requiredRoomCount = parseInt(requiredRooms);
   const pageNum = parseInt(page);
   const limitNum = parseInt(limit);
-  if( isNaN(requiredRoomCount) || requiredRoomCount <= 0 ){
+  if (isNaN(requiredRoomCount) || requiredRoomCount <= 0) {
     throw new ApiError(statusCode.BAD_REQUEST, "requiredRooms must be a positive integer.");
   }
- 
-if( !requiredRoomCount ){
+
+  if (!requiredRoomCount) {
     throw new ApiError(statusCode.BAD_REQUEST, "requiredRooms is required.");
   }
   if (!townCity || typeof townCity !== "string") {
@@ -348,9 +348,9 @@ if( !requiredRoomCount ){
   );
 
   const filteredHotels = hotelRoomTypeLayout.filter(Boolean);
-  
 
-const responseMessage = filteredHotels.length === 0 ? "No room found" : "Hotels retrieved successfully.";
+
+  const responseMessage = filteredHotels.length === 0 ? "No room found" : "Hotels retrieved successfully.";
 
   return res.status(statusCode.OK).json(
     new ApiResponse(statusCode.OK, {
@@ -377,8 +377,21 @@ const getHotelById = catchAsyncError(async (req, res) => {
   if (!hotel) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
   }
+   const now = new Date();
+  const activeBookings = await HotelBookingModel.find({
+    hotelId,
+    status: "Booked",
+    checkInDate: { $lte: now },
+    checkOutDate: { $gte: now }
+  }).select("noOfRoom").lean();
 
-  // Get related data
+  const bookedRoomCount = activeBookings.reduce((total, booking) => {
+    return total + (booking.noOfRoom || 0);
+  }, 0);
+
+  const availableRoomCount = Math.max((hotel.totalRoom || 0) - bookedRoomCount, 0);
+
+
   const [hotelImages, hotelAddress, hotelPolicies, hotelFeedbacks, roomTypes] = await Promise.all([
     hotelImagesModel.findOne({ hotelId }).select("images").lean(),
     HotelAddressModel.findOne({ hotelId })
@@ -387,7 +400,7 @@ const getHotelById = catchAsyncError(async (req, res) => {
       .lean(),
     HotelPolicyModel.findOne({ hotelId }).select("amenities checkInTime checkOutTime").lean(),
     HotelFeedbackModel.find({ hotelId }).select("rating").lean(),
-    Room.find({ hotelId }).select("roomType roomPrice numberOfRoom").lean()
+    Room.find({ hotelId }).select("roomType  amenities roomPrice  numberOfRoom").lean()
   ]);
   const allHotelImages = hotelImages?.images || [];
 
@@ -399,13 +412,19 @@ const getHotelById = catchAsyncError(async (req, res) => {
       }).select("images").lean();
 
       const allImages = roomImageData?.images || [];
+      // Define current date for reference
+    
+
+  
 
       return {
         _id: room._id,
         roomType: room.roomType,
         roomPrice: room.roomPrice,
         numberOfRoom: room.numberOfRoom,
-        images: allImages // ✅ ALL images for room type
+
+        amenities: room.amenities,
+        images: allImages
       };
     })
   );
@@ -416,13 +435,16 @@ const getHotelById = catchAsyncError(async (req, res) => {
         hotelId,
         hotelName: hotel.hotelName,
         rating: hotel.rating,
-        totalRoom: hotel.totalRoom
+        totalRoom: hotel.totalRoom,
+        bookedRoom:  bookedRoomCount,
+        availableRoom: availableRoomCount
+
       },
-      hotelImages: allHotelImages, // ✅ return array
+      hotelImages: allHotelImages,
       hotelAddress,
       hotelPolicies,
       hotelFeedbacks,
-      roomTypes: roomTypesWithImages // ✅ each room has full images array
+      roomTypes: roomTypesWithImages
     }, "Hotel details fetched successfully.")
   );
 });
@@ -479,7 +501,7 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
       const hoursLeft = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
       const isCancellable = hoursLeft >= 24;
 
-      
+
       const hotelImages = await hotelImagesModel
         .findOne({ hotelId: booking.hotelId._id })
         .select("images")
@@ -490,7 +512,7 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
         ...booking,
         nights,
         hotelImage,
-        isCancellable, 
+        isCancellable,
         hoursLeftUntilCheckIn: hoursLeft,
       };
     })
@@ -609,7 +631,7 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
     );
   }
 
-  
+
   booking.status = "Cancelled";
   booking.cancelledBy = "user";
   if (cancelReason) {
@@ -671,6 +693,6 @@ module.exports = {
   getHotelById,
   getUpcomingBookings,
   getPastBookings,
-getCancelReasons,
+  getCancelReasons,
   cancelHotelBooking
 };

@@ -54,15 +54,17 @@ const getAvatar = catchAsyncError(async (req, res, next) => {
 
 const updateYourProfile = catchAsyncError(async (req, res, next) => {
   const userId = req.user?._id;
-  const { fullName, dob, nationality, nationIdExpiry } = req.body;
+  const { companyName, fullName, dob, nationality, companyAddress,nationIdExpiry } = req.body;
   const docsToUpload = req.files;
 
   const keys = Object.keys(req.files);
 
-  const reqField = ["fullName", "dob", "nationality", "nationIdExpiry"];
+  const reqField = ["fullName","companyName", "dob", "nationality", "nationIdExpiry"];
   validateRequestBody(reqField, req.body);
 
   const updateData = {};
+  if (companyName) updateData.companyName = companyName;
+  if (companyAddress) updateData.companyAddress = companyAddress;
   if (fullName) updateData.fullName = fullName;
   if (dob) updateData.dob = dob;
   if (nationality) updateData.nationality = nationality;

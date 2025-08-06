@@ -17,7 +17,11 @@ const {
 const {
   authorizeRole,
 } = require("../../../middlewares/authRoles/authorizeRole");
-const { uploadDocuments } = require("../../../utils/uploadFiles/multer");
+
+const {
+  uploadDocuments,
+  uploadAvatar,
+} = require("../../../utils/uploadFiles/multer");
 const adminAuthRoutes = express.Router();
 
 adminAuthRoutes
