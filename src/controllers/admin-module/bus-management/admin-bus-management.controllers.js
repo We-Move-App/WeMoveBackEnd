@@ -274,9 +274,7 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
   const findBank = await BusOperatorBankModel.findOne({ userId });
   if (findBank) {
     if (accountNumber && accountNumber !== findBank.accountNumber) {
-      const existingAccount = await BusOperatorBankModel.findOne({
-        accountNumber,
-      });
+      const existingAccount = await BusOperatorBankModel.findOne({ accountNumber });
       if (existingAccount) {
         throw new ApiError(
           statusCode.CONFLICT,
@@ -285,8 +283,7 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
       }
     }
 
-    findBank.accountHolderName =
-      accountHolderName || findBank.accountHolderName;
+    findBank.accountHolderName = accountHolderName || findBank.accountHolderName;
     findBank.accountNumber = accountNumber || findBank.accountNumber;
     findBank.bankName = bankName || findBank.bankName;
     findBank.ifscCode = ifscCode || findBank.ifscCode;
@@ -310,14 +307,10 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
   }
 
   // Update Bus Operator
-  const updatedUser = await BusOperatorModel.findByIdAndUpdate(
-    userId,
-    updateData,
-    {
-      new: true,
-      runValidators: true,
-    }
-  ).select("-password");
+  const updatedUser = await BusOperatorModel.findByIdAndUpdate(userId, updateData, {
+    new: true,
+    runValidators: true,
+  }).select("-password");
 
   if (!updatedUser) {
     throw new ApiError(statusCode.NOT_FOUND, "User not found.");
@@ -335,6 +328,7 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
     )
   );
 });
+
 
 const searchBusOperators = async (req, res) => {
   try {
