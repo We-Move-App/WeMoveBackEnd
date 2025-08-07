@@ -222,8 +222,8 @@ const fetchRoomStatus = catchAsyncError(async (req, res) => {
         if (isBooked) {
             roomTypeMap[typeName].booked += 1;
             roomTypeMap[typeName].bookedRooms.push({
-                roomId: room._id.toString(),  // Use the room's _id as roomId
-                roomNumber: room.roomNumber,  // Room number as human-readable
+                roomId: room._id.toString(),  
+                roomNumber: room.roomNumber, 
                 bookingId: bookedRoomsDetails[roomIdStr].bookingId,
                 status: bookedRoomsDetails[roomIdStr].status,
                 roomTypeId: bookedRoomsDetails[roomIdStr].roomTypeId,

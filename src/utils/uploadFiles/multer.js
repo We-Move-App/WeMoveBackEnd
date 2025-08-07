@@ -54,6 +54,7 @@ const uploadDocuments = uploads.fields([
   { name: "vehicle_registration_certificate", maxCount: 1 },
   { name: "vehicle_insurance", maxCount: 1 },
   { name: "identity_card", maxCount: 1 },
+  
   {
     name: "national_identity_card_front",
     maxCount: 1,

@@ -122,6 +122,7 @@ const deleteUserPermanentlyByAdmin = async({
 
 }
 
+
 module.exports = {
   getAllUsersByAdmin,
   getUserByIdByAdmin,

@@ -45,7 +45,7 @@ const registerUserWithEmailAndPhoneNumber = async ({
   req,
   reqModel,
   typeOfUser,
-  createdByAdmin = false, // Default to false if not provided
+  createdByAdmin = false, 
   res,
 }) => {
   const { email,companyAddress,companyName, fullName, password, address, phoneNumber } = req.body;

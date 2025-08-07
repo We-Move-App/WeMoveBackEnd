@@ -384,8 +384,6 @@ const getRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
   }
 
   const hotelObjectId = new mongoose.Types.ObjectId(hotelId);
-
-  // 🔍 Room of requested type
   const room = await Room.findOne({ hotelId: hotelObjectId, roomType: normalizedRoomType });
   if (!room) {
     return next(new ApiError(statusCode.NOT_FOUND, "Room not found."));
@@ -430,12 +428,12 @@ const getRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
       bookedRooms: bookedRoomsCount,
       availableRooms: availableRoomsCount,
 
-      // 👇 Hotel-wide stats
+  
       hotelTotalRooms: hotelBookedCount + hotelAvailableCount,
       hotelBookedRooms: hotelBookedCount,
       hotelAvailableRooms: hotelAvailableCount,
 
-      // 👇 Room preview
+  
       sampleRoom: {
         ...baseRoom.toObject(),
         images: roomImagesData
@@ -458,26 +456,22 @@ const getAllRooms = catchAsyncError(async (req, res, next) => {
 
   const hotelObjectId = new mongoose.Types.ObjectId(hotelId);
 
-  // Get all room types for this hotel
   const roomTypes = await Room.find({ hotelId: hotelObjectId });
   if (roomTypes.length === 0) {
     return next(new ApiError(statusCode.NOT_FOUND, "No rooms found for this hotel."));
   }
-
-  // Get all individual rooms (booked & available)
   const roomTypeIds = roomTypes.map(r => r._id);
 
   const hotelBookedCount = await individualRoom.countDocuments({
     roomTypeId: { $in: roomTypeIds },
     isAvailable: false
   });
-
   const hotelAvailableCount = await individualRoom.countDocuments({
     roomTypeId: { $in: roomTypeIds },
     isAvailable: true
   });
 
-  // For each roomType, get its stats and top 3 images
+
   const roomDetails = await Promise.all(
     roomTypes.map(async (room) => {
       const booked = await individualRoom.countDocuments({ roomTypeId: room._id, isAvailable: false });

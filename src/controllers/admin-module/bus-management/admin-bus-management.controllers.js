@@ -22,6 +22,10 @@ const {
   getUserByIdByAdmin,
   userVerifiedByAdmin,
 } = require("../../../utils/services/admin.services");
+const BusBookingModel = require("../../../models/bus-module/bus-bookings/bus-bookings.model");
+const BusModel = require("../../../models/bus-module/buses/buses.model");
+const BusRouteModel = require("../../../models/bus-module/bus-routes/bus-routes.model");
+const multer = require("../../../utils/uploadFiles/multer");
 
 const { TypeOfUser } = require("../../../utils/constants/constants");
 const getAllBusOperators = catchAsyncError(async (req, res, next) => {
@@ -110,19 +114,34 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
 });
 const updateBusOperator = catchAsyncError(async (req, res, next) => {
   const { userId } = req.params;
-  const { companyName, fullName, dob, nationality, companyAddress, nationIdExpiry } = req.body;
+  const {
+    companyName,
+    email,
+    phoneNumber,
+    fullName,
+    dob,
+    nationality,
+    companyAddress,
+    nationIdExpiry,
+    accountHolderName,
+    accountNumber,
+    bankName,
+    ifscCode,
+    branchName,
+    isPrimary,
+  } = req.body;
+
   const docsToUpload = req.files || {};
   const keys = Object.keys(docsToUpload);
+  
 
-  console.log("keys", keys);
-  console.log("docsToUpload", docsToUpload);
-
-
-  const reqField = ["fullName", "companyName", "dob", "nationality", "nationIdExpiry"];
-  validateRequestBody(reqField, req.body);
-
-  console.log("req.body", req.body);
   const updateData = {};
+  if (email) updateData.email = email.toLowerCase();
+  if (phoneNumber) {
+  updateData.phoneNumber = Array.isArray(phoneNumber)
+    ? phoneNumber.find((num) => !!num)?.trim()
+    : phoneNumber.trim();
+}
   if (companyName) updateData.companyName = companyName;
   if (companyAddress) updateData.companyAddress = companyAddress;
   if (fullName) updateData.fullName = fullName;
@@ -130,23 +149,19 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
   if (nationality) updateData.nationality = nationality;
   if (nationIdExpiry) updateData.nationIdExpiry = nationIdExpiry;
 
-  const validDocumentTypes = [
-    "national_identity_card_front",
-    "national_identity_card_back",
-  ];
 
-  const invalidKeys = keys.filter((key) => !validDocumentTypes.includes(key));
+ 
+  const validDocumentTypes = ["national_identity_card_front", "national_identity_card_back"];
+  const invalidKeys = keys.filter((key) => !validDocumentTypes.includes(key) && key !== "avatar" && key !== "bank_detail");
   if (invalidKeys.length > 0) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `Invalid document types: ${invalidKeys.join(", ")}`
-    );
+    throw new ApiError(statusCode.BAD_REQUEST, `Invalid document types: ${invalidKeys.join(", ")}`);
   }
-  const userDocument = await BusOperatorDocumentModel.findOne({ userId });
 
+  const userDocument = await BusOperatorDocumentModel.findOne({ userId });
   let docsIds = [];
-  if (Object.keys(docsToUpload).length > 0) {
-    for (const key of keys) {
+
+  for (const key of validDocumentTypes) {
+    if (docsToUpload[key]) {
       const imgFile = docsToUpload[key][0];
       const cloudImage = await uploadImageOnAws(imgFile.path);
 
@@ -164,40 +179,67 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
       docsIds.push(uploadedDoc._id);
     }
   }
-  const updatedUser = await BusOperatorModel.findByIdAndUpdate(
-    userId,
-    updateData,
-    {
-      new: true,
-      runValidators: true,
-    }
-  ).select("-password");
 
-  if (!updatedUser) {
-    throw new ApiError(statusCode.NOT_FOUND, "User not found.");
-  }
-
-  if (Object.keys(docsToUpload).length > 0) {
+  if (docsIds.length > 0) {
     if (!userDocument) {
-      await BusOperatorDocumentModel.create({
-        userId,
-        documentIds: docsIds,
-      });
+      await BusOperatorDocumentModel.create({ userId, documentIds: docsIds });
     } else {
       userDocument.documentIds.push(...docsIds);
       await userDocument.save();
     }
   }
+  const findBank = await BusOperatorBankModel.findOne({ userId });
+  if (findBank) {
+    if (accountNumber && accountNumber !== findBank.accountNumber) {
+      const existingAccount = await BusOperatorBankModel.findOne({ accountNumber });
+      if (existingAccount) {
+        throw new ApiError(statusCode.CONFLICT, "This account number is already registered by another user.");
+      }
+    }
+
+    findBank.accountHolderName = accountHolderName || findBank.accountHolderName;
+    findBank.accountNumber = accountNumber || findBank.accountNumber;
+    findBank.bankName = bankName || findBank.bankName;
+    findBank.ifscCode = ifscCode || findBank.ifscCode;
+    findBank.branchName = branchName || findBank.branchName;
+   if (phoneNumber) {
+  findBank.phoneNumber = Array.isArray(phoneNumber)
+    ? phoneNumber.find((num) => !!num)?.trim()
+    : phoneNumber.trim();
+}
+    findBank.isPrimary = isPrimary ?? findBank.isPrimary;
+if (docsToUpload["bank_detail"]) {
+  if (findBank.bankDocs?.public_id) {
+    await deleteImageFromAws(findBank.bankDocs.public_id);
+  }
+
+  const imgFile = docsToUpload["bank_detail"][0]; 
+  const cloudImage = await uploadImageOnAws(imgFile.path); 
+  findBank.bankDocs = {
+    public_id: cloudImage?.public_id,
+    url: cloudImage?.secure_url,
+  };
+}
+
+
+    await findBank.save();
+  }
+  const updatedUser = await BusOperatorModel.findByIdAndUpdate(userId, updateData, {
+    new: true,
+    runValidators: true,
+  }).select("-password");
+
+  if (!updatedUser) {
+    throw new ApiError(statusCode.NOT_FOUND, "User not found.");
+  }
+
   return res
     .status(statusCode.OK)
-    .json(
-      new ApiResponse(
-        statusCode.OK,
-        updatedUser,
-        "Profile updated successfully."
-      )
-    );
+    .json(new ApiResponse(statusCode.OK,
+      { user: updatedUser, bankDetails: findBank,  },
+       "Bus operator profile updated successfully."));
 });
+
 
 
 const searchBusOperators = async (req, res) => {
@@ -258,6 +300,97 @@ const searchBusOperators = async (req, res) => {
     });
   }
 };
+const getAllBusBookings = catchAsyncError(async (req, res, next) => {
+  const {
+    date,
+    busId,
+    routeId,
+    sortBy,
+    order,
+    limit,
+    page,
+    startDate,
+    endDate,
+    pickup,
+    drop,
+  } = req.query;
+  // Initialize query object
+  const query = {};
+
+  
+
+  if (startDate) {
+    const selectedStartDate = moment.utc(startDate, "YYYY-MM-DD", true);
+
+    if (!selectedStartDate.isValid()) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Invalid date format");
+    }
+
+    query.journeyDate = {
+      $gte: normalizeDate(selectedStartDate),
+      // $lte: normalizeDate(selectedEndDate),
+    };
+  }
+  if (endDate) {
+    const selectedEndDate = moment.utc(endDate, "YYYY-MM-DD", true);
+    if (!selectedEndDate.isValid()) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Invalid date format");
+    }
+
+    query.journeyDate = {
+      // $gte: normalizeDate(selectedStartDate),
+      $lte: normalizeDate(selectedEndDate),
+    };
+  }
+  if (pickup) {
+    query.from = { $regex: pickup, $options: "i" };
+  }
+  if (drop) {
+    query.to = { $regex: drop, $options: "i" };
+  }
+
+  
+  if (routeId) {
+    query.routeId = routeId;
+  }
+
+  const pageNumber = parseInt(page) || 1;
+  const pageSize = parseInt(limit) || 10;
+  const skip = (pageNumber - 1) * pageSize;
+
+ 
+  const sortField = sortBy || "createdAt";
+  const sortOrder = order === "desc" ? 1 : -1;
+
+  const bookings = await BusBookingModel.find(query)
+    .sort({ [sortField]: sortOrder })
+    .skip(skip)
+    .limit(pageSize)
+    .select(
+      "from to seatNumbers paymentStatus journeyDate passengers status createdAt updatedAt email phoneNumber bookedBy bookedByOperator bookingBy"
+    )
+    .populate("bookedBy", "fullName email phoneNumber")
+    .populate("bookedByOperator", "fullName email phoneNumber")
+    .populate("busId", "busRegNumber");
+
+  if (!bookings || bookings.length === 0) {
+    throw new ApiError(statusCode.NOT_FOUND, "No bookings found");
+  }
+  const totalBookings = await BusBookingModel.countDocuments(query);
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        bookings,
+        totalBookings,
+        totalPages: Math.ceil(totalBookings / pageSize),
+        currentPage: pageNumber,
+      },
+      "Bus bookings retrieved successfully"
+    )
+  );
+});
 
 
 
@@ -271,5 +404,6 @@ module.exports = {
   getSingleUser,
   verifyUserProfile,
   deleteBusOperatorAccount,
-  searchBusOperators
+  searchBusOperators,
+  getAllBusBookings
 };

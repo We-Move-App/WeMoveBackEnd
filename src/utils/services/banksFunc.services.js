@@ -98,11 +98,99 @@ const addBankFuncs = async ({ req, res, reqModel }) => {
     `Bank details added successfully`
   );
 };
+const addBankFuncsByAdmin = async ({ req, res, reqModel }) => {
+  const {
+    accountHolderName,
+    accountNumber,
+    bankName,
+    ifscCode,
+    branchName,
+    phoneNumber,
+    isPrimary = true,
+    busOperatorId, // passed in body or query
+  } = req.body;
+
+  if (!busOperatorId) {
+    throw new ApiError(statusCode.BAD_REQUEST, "busOperatorId is required");
+  }
+
+  const docsToUpload = req.files;
+  if (!docsToUpload || Object.keys(docsToUpload).length === 0) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Bank account details files are mandatory"
+    );
+  }
+
+  const keys = Object.keys(req.files);
+
+  if (!accountNumber) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "All fields are required: accountNumber"
+    );
+  }
+
+  const existingBank = await reqModel.findOne({ userId: busOperatorId });
+  if (existingBank) {
+    throw new ApiError(
+      statusCode.CONFLICT,
+      "This Bus Operator already has a registered bank account."
+    );
+  }
+
+  const existingAccountNumber = await reqModel.findOne({ accountNumber });
+  if (existingAccountNumber) {
+    throw new ApiError(
+      statusCode.CONFLICT,
+      "This account number is already registered."
+    );
+  }
+
+  const validDocumentTypes = ["bank_detail"];
+  const invalidKeys = keys.filter((key) => !validDocumentTypes.includes(key));
+
+  if (invalidKeys.length > 0) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      `Invalid document types: ${invalidKeys.join(", ")}`
+    );
+  }
+
+  const imgUpload = docsToUpload["bank_detail"];
+  const uploadImage = await uploadSingleImageToAws(imgUpload);
+
+  const addBankDetail = new reqModel({
+    accountHolderName,
+    accountNumber,
+    bankName,
+    ifscCode,
+    branchName,
+    phoneNumber,
+    isPrimary,
+    userId: busOperatorId,
+    bankDocs: uploadImage,
+  });
+
+  if (!addBankDetail) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Error occurred while adding bank detail"
+    );
+  }
+
+  await addBankDetail.save();
+
+  return new ApiResponse(
+    statusCode.OK,
+    addBankDetail,
+    `Bank details added successfully`
+  );
+};
+
 
 const getBanksFuncs = async ({ req, res, reqModel }) => {
   const { _id } = req.user;
-
-  // Fetch user bank and documents in parallel
   const userBank = await reqModel.findOne({
     userId: _id,
   });
@@ -199,6 +287,7 @@ const updateBankFunc = async ({ req, res, reqModel }) => {
 };
 
 module.exports = {
+  addBankFuncsByAdmin ,
   addBankFuncs,
   getBanksFuncs,
   deleteBankFunc,
