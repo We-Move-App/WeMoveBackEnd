@@ -4,13 +4,10 @@ const {
   RideBookStatusEnum,
   PaymentStatusEnum,
 } = require("../../utils/constants/ENUM");
-const { getIO } = require('../index');
-
 /**
  * Assigns ride sequentially to nearby drivers
  */
-const assignRideToDrivers = (bookingId, drivers, booking, vehicle, otp, index = 0) => {
-  const io = getIO();
+const assignRideToDrivers = (io, bookingId, drivers, booking, vehicle, otp, index = 0) => {
   if (index >= drivers.length) {
     RideBookingDetail.findOneAndUpdate(
       { bookingId },

@@ -266,9 +266,37 @@ const getTransactions = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
 
-  const { entity } = req.query;
-  const page = Math.max(parseInt(req.query.page) || 1, 1);
-  const limit = 10;
+  const {
+    entity,
+    page: pageQuery,
+    limit: limitQuery,
+    id: transactionId,
+  } = req.query;
+
+  // Handle single transaction request
+  if (transactionId) {
+    const transaction = await Transaction.findOne({
+      transactionId: transactionId,
+    });
+
+    if (!transaction) {
+      throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
+    }
+
+    return res
+      .status(statusCode.OK)
+      .json(
+        new ApiResponse(
+          statusCode.OK,
+          transaction,
+          "Transaction details fetched successfully"
+        )
+      );
+  }
+
+  // Handle paginated transactions list
+  const page = Math.max(parseInt(pageQuery) || 1, 1); // Minimum page is 1
+  const limit = Math.min(Math.max(parseInt(limitQuery) || 10, 1), 100); // Default 10, min 1, max 100
 
   let Model;
   let txFilter = {};
@@ -319,6 +347,68 @@ const getTransactions = catchAsyncError(async (req, res) => {
           total: totalCount,
           page,
           pages: Math.ceil(totalCount / limit),
+          limit,
+        },
+      },
+      "Transactions fetched successfully"
+    )
+  );
+});
+
+const getTransactionsAdmin = catchAsyncError(async (req, res) => {
+  const adminId = "ADM001";
+  const {
+    entity,
+    page: pageQuery,
+    limit: limitQuery,
+    id: transactionId,
+  } = req.query;
+
+  // Handle single transaction request
+  if (transactionId) {
+    const transaction = await Transaction.findOne({
+      transactionId: transactionId,
+    });
+
+    if (!transaction) {
+      throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
+    }
+
+    return res
+      .status(statusCode.OK)
+      .json(
+        new ApiResponse(
+          statusCode.OK,
+          transaction,
+          "Transaction details fetched successfully"
+        )
+      );
+  }
+
+  // Pagination params
+  const page = Math.max(parseInt(pageQuery) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(limitQuery) || 10, 1), 100);
+
+  // Correct filter using adminId field
+  const txFilter = { adminId };
+
+  const transactions = await Transaction.find(txFilter)
+    .sort({ createdAt: -1 })
+    .skip((page - 1) * limit)
+    .limit(limit);
+
+  const totalCount = await Transaction.countDocuments(txFilter);
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        transactions,
+        pagination: {
+          total: totalCount,
+          page,
+          pages: Math.ceil(totalCount / limit),
+          limit,
         },
       },
       "Transactions fetched successfully"
@@ -588,6 +678,21 @@ const getWallet = catchAsyncError(async (req, res) => {
     );
 });
 
+const getWalletAdmin = catchAsyncError(async (req, res) => {
+  const userId = "ADM001";
+
+  const wallet = await Wallet.findOne({ userId: userId });
+  if (!wallet) {
+    throw new ApiError(statusCode.NOT_FOUND, "Wallet not found");
+  }
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(statusCode.OK, wallet, "wallet fetched successfully")
+    );
+});
+
 const validatePin = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
@@ -647,4 +752,6 @@ module.exports = {
   validatePin,
   getAnalytics,
   userInternalTransaction,
+  getWalletAdmin,
+  getTransactionsAdmin,
 };
