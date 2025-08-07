@@ -831,7 +831,6 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
   }
 
-  // Check ownership
   if (booking.bookedBy.toString() !== userId.toString()) {
     throw new ApiError(
       statusCode.UNAUTHORIZED,
@@ -839,7 +838,6 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
     );
   }
 
-  // Check if already cancelled or completed
   if (["Cancelled", "Completed"].includes(booking.status)) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -854,17 +852,95 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
   if (hoursBeforeCheckIn < 24) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "You can only cancel your booking at least 24 hours before the journey"
+      "You can only cancel your booking at least 24 hours before the check-in time"
     );
   }
 
+  // Process refund if booking was paid
+  if (booking.paymentStatus === "PAID") {
+    const refundAmount = booking.totalAmount * 0.5;
 
+    const operatorTxn = await TransactionModel.findOne({
+      bookingId,
+      hotelManagerId: { $ne: null },
+    }).select("hotelManagerId currency amount");
+
+    if (!operatorTxn) {
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        "Transaction not found for this booking"
+      );
+    }
+
+    const hotelManagerId = operatorTxn.hotelManagerId;
+
+    const userWallet = await WalletModel.findOne({ userId });
+    if (!userWallet) {
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        "Wallet not found for this user"
+      );
+    }
+
+    const hotelWallet = await WalletModel.findOne({ userId: hotelManagerId });
+    if (!hotelWallet) {
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        "Wallet not found for hotel owner"
+      );
+    }
+
+    // ✅ First: Deduct from hotel wallet
+    if (hotelWallet.balance < refundAmount) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "Insufficient balance in hotel wallet to process refund"
+      );
+    }
+
+    hotelWallet.balance -= refundAmount;
+    await hotelWallet.save();
+
+    await TransactionModel.create({
+      userId: hotelManagerId,
+      hotelManagerId,
+      bookingId,
+      transactionId: uuidv4(),
+      type: TransactionTypeEnum.DEBIT,
+      amount: refundAmount,
+      currency: hotelWallet.currency,
+      description: `Deduction for 50% refund of cancelled hotel booking ${bookingId}`,
+      status: PaymentStatusEnum.SUCCESS,
+      refund: true,
+    });
+
+    // ✅ Then: Credit to user wallet
+    userWallet.balance += refundAmount;
+    await userWallet.save();
+
+    await TransactionModel.create({
+      userId,
+      bookingId,
+      transactionId: uuidv4(),
+      type: TransactionTypeEnum.CREDIT,
+      amount: refundAmount,
+      currency: userWallet.currency,
+      description: `50% refund for cancelled hotel booking ${bookingId}`,
+      status: PaymentStatusEnum.SUCCESS,
+      refund: true,
+    });
+
+    booking.paymentStatus = "REFUNDED";
+  }
+
+  // ✅ Cancel booking
   booking.status = "Cancelled";
   booking.cancelledBy = "user";
   if (cancelReason) {
     booking.cancelReason = cancelReason;
   }
 
+  // ✅ Update assigned rooms to available
   const roomUpdatePromises = booking.assignedRooms.map((room) => {
     return individualRoom.updateOne(
       { _id: room._id },
@@ -884,7 +960,7 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
 
   await Promise.all([...roomUpdatePromises, booking.save()]);
 
-  // ---- Response ----
+  // ✅ Response
   const bookingResponse = {
     checkInDate: booking.checkInDate,
     checkOutDate: booking.checkOutDate,
@@ -902,7 +978,7 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
       new ApiResponse(
         statusCode.OK,
         bookingResponse,
-        "Booking cancelled successfully"
+        "Booking cancelled and refund processed successfully"
       )
     );
 });

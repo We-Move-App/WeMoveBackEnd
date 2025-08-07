@@ -45,28 +45,48 @@ const registerUserWithEmailAndPhoneNumber = async ({
   req,
   reqModel,
   typeOfUser,
-  createdByAdmin = false, 
+  createdByAdmin = false,
   res,
 }) => {
-  const { email,companyAddress,companyName, fullName, password, address, phoneNumber } = req.body;
+  let {
+    email,
+    companyAddress,
+    companyName,
+    fullName,
+    password,
+    address,
+    phoneNumber,
+  } = req.body;
+  if (createdByAdmin) {
+    password = "operator@123";
+  }
 
-  const reqField = ["email","companyName", "password", "phoneNumber"];
-  validateRequestBody(reqField, req.body);
+  validateRequestBody(["email", "companyName", "password", "phoneNumber"], {
+    email,
+    companyName,
+    password,
+    phoneNumber,
+  });
 
   if (!createdByAdmin) {
-  // only verify email/phone if NOT created by admin
-  const isEmailVerified = await emailVerifyModel.findOne({ email, verified: true });
-  const isPhoneNumberVerified = await phoneNumberVerifyModel.findOne({ phoneNumber, verified: true });
+    // only verify email/phone if NOT created by admin
+    const isEmailVerified = await emailVerifyModel.findOne({
+      email,
+      verified: true,
+    });
+    const isPhoneNumberVerified = await phoneNumberVerifyModel.findOne({
+      phoneNumber,
+      verified: true,
+    });
 
-  if (!isEmailVerified || !isPhoneNumberVerified) {
-    const missingVerification = !isEmailVerified ? "email" : "phone number";
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `Please verify your ${missingVerification} before registering`
-    );
+    if (!isEmailVerified || !isPhoneNumberVerified) {
+      const missingVerification = !isEmailVerified ? "email" : "phone number";
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        `Please verify your ${missingVerification} before registering`
+      );
+    }
   }
-}
-
 
   const existingUser = await reqModel
     .findOne({
@@ -111,8 +131,7 @@ const registerUserWithEmailAndPhoneNumber = async ({
     phoneNumber,
     emailVerified: true,
     phoneNumberVerified: true,
-    verificationStatus: createdByAdmin ? "approved" : "submitted", 
-    
+    verificationStatus: createdByAdmin ? "approved" : "submitted",
   });
 
   await newUser.save();
@@ -541,7 +560,6 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
     );
   }
 
-  
   if (validateEmail(identifier)) {
     user.emailVerified = true;
   } else if (validatePhoneNumber(identifier)) {

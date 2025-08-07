@@ -5,7 +5,9 @@ const {
   BusOperatorDocumentModel,
 } = require("../../../models/bus-module/bus-operator-documents/bus-operator-document.model");
 const BusOperatorModel = require("../../../models/bus-module/bus-operator/bus-operator.model");
-const { DocumentsModel } = require("../../../models/global-module/documents/document.model");
+const {
+  DocumentsModel,
+} = require("../../../models/global-module/documents/document.model");
 const statusCode = require("../../../utils/constants/statusCode");
 const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
@@ -29,14 +31,13 @@ const multer = require("../../../utils/uploadFiles/multer");
 
 const { TypeOfUser } = require("../../../utils/constants/constants");
 const getAllBusOperators = catchAsyncError(async (req, res, next) => {
-
-
-
   const results = await getAllUsersByAdmin({ req, model: BusOperatorModel });
 
   return res.status(statusCode.OK).json(results);
 });
-const { validateRequestBody } = require("../../../utils/reqFunctions/reqFunction");
+const {
+  validateRequestBody,
+} = require("../../../utils/reqFunctions/reqFunction");
 
 const getSingleUser = catchAsyncError(async (req, res, next) => {
   const result = await getUserByIdByAdmin({
@@ -100,180 +101,90 @@ const deleteBusOperatorAccount = catchAsyncError(async (req, res, next) => {
     .status(statusCode.OK)
     .json(new ApiResponse(statusCode.OK, {}, "Deleted Successfully"));
 });
+
 const registerBusOperator = catchAsyncError(async (req, res, next) => {
   const {
-    companyName,
-    email,
-    phoneNumber,
-    fullName,
-    dob,
-    nationality,
-    companyAddress,
-    nationIdExpiry,
-    accountHolderName,
-    accountNumber,
-    bankName,
-    ifscCode,
-    branchName,
-    isPrimary,
+    basicInfo,
+    bankDetails,
+    national_identity_card_front,
+    national_identity_card_back,
   } = req.body;
 
-  const docsToUpload = req.files || {};
-  const keys = Object.keys(docsToUpload);
-
-  // ✅ Check email before calling .toLowerCase()
-  if (!email || typeof email !== 'string') {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Email is required and must be a valid string."
-    );
-  }
-
-  const normalizedEmail = email.toLowerCase().trim();
-
-  // ✅ Now it's safe to check if user already exists
-  const existingUser = await BusOperatorModel.findOne({ email: normalizedEmail });
-  if (existingUser) {
-    throw new ApiError(statusCode.CONFLICT, "User already exists with this email.");
-  }
-
-  const userData = {
-    companyName,
-    email: normalizedEmail,
-    phoneNumber: Array.isArray(phoneNumber)
-      ? phoneNumber.find((num) => !!num)?.trim()
-      : phoneNumber?.trim(),
-    fullName,
-    dob,
-    nationality,
-    companyAddress,
-    nationIdExpiry,
+  // Step 1: Set defaults from backend
+  const busOperatorData = {
+    ...basicInfo,
+    password: "operator@123",
+    verificationStatus: "approved",
+    termAndCondition: true,
+    emailVerified: true,
+    phoneNumberVerified: true,
+    permissions: {
+      busManagement: true,
+      dashboardManagement: true,
+      routeManagement: true,
+      driverManagement: true,
+      ticketManagement: true,
+      walletManagement: true,
+    },
+    role: "bus-operator",
+    createdBy: req.user._id,
   };
 
+  // Step 2: Create Bus Operator
+  const busOperator = await BusOperatorModel.create(busOperatorData);
+  const operatorId = busOperator._id;
 
-  // ➤ Handle avatar upload
-  if (docsToUpload["avatar"]) {
-    const imgFile = docsToUpload["avatar"][0];
-    const cloudImage = await uploadImageOnAws(imgFile.path);
-    if (!cloudImage?.public_id || !cloudImage?.secure_url) {
-      throw new ApiError(statusCode.INTERNAL_SERVER_ERROR, `Avatar upload failed`);
-    }
-    userData.avatar = {
-      public_id: cloudImage.public_id,
-      url: cloudImage.secure_url,
-    };
-  }
-
-  // ➤ Create user
-  const newUser = await BusOperatorModel.create(userData);
-
-  // ➤ Handle documents
-  const validDocumentTypes = ["national_identity_card_front", "national_identity_card_back"];
-  const invalidKeys = keys.filter(
-    (key) => !validDocumentTypes.includes(key) && key !== "avatar" && key !== "bank_detail"
-  );
-
-  if (invalidKeys.length > 0) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `Invalid document types: ${invalidKeys.join(", ")}`
-    );
-  }
-
-  let docsIds = [];
-
-  for (const key of validDocumentTypes) {
-    if (docsToUpload[key]) {
-      const imgFile = docsToUpload[key][0];
-      const cloudImage = await uploadImageOnAws(imgFile.path);
-
-      if (!cloudImage?.public_id || !cloudImage?.secure_url) {
-        throw new ApiError(
-          statusCode.INTERNAL_SERVER_ERROR,
-          `Image upload failed for document ${key}`
-        );
-      }
-
-      const uploadedDoc = await DocumentsModel.create({
-        documentName: key,
-        documentType: key,
-        file: {
-          public_id: cloudImage.public_id,
-          url: cloudImage.secure_url,
-        },
-        fileType: imgFile.mimetype,
-        ownerId: req.user?._id,
-      });
-
-      docsIds.push(uploadedDoc._id);
-    }
-  }
-
-  if (docsIds.length > 0) {
-    await BusOperatorDocumentModel.create({
-      userId: newUser._id,
-      documentIds: docsIds,
+  // Step 3: Create Bank Details
+  let bankDetailDoc = null;
+  if (bankDetails) {
+    bankDetailDoc = await BusOperatorBankModel.create({
+      ...bankDetails,
+      userId: operatorId,
     });
   }
 
-  // ➤ Handle bank details
-  if (accountNumber) {
-    const existingAccount = await BusOperatorBankModel.findOne({ accountNumber });
-    if (existingAccount) {
-      throw new ApiError(
-        statusCode.CONFLICT,
-        "This account number is already registered by another user."
-      );
-    }
+  // Step 4: Upload and Create Document Entries
+  const docs = [];
 
-    const bankData = {
-      userId: newUser._id,
-      accountHolderName,
-      accountNumber,
-      bankName,
-      ifscCode,
-      branchName,
-      phoneNumber: Array.isArray(phoneNumber)
-        ? phoneNumber.find((num) => !!num)?.trim()
-        : phoneNumber?.trim(),
-      isPrimary: isPrimary ?? false,
-    };
-
-    // ➤ Handle bank document upload
-    if (docsToUpload["bank_detail"]) {
-      const imgFile = docsToUpload["bank_detail"][0];
-      const cloudImage = await uploadImageOnAws(imgFile.path);
-
-      if (!cloudImage?.public_id || !cloudImage?.secure_url) {
-        throw new ApiError(statusCode.INTERNAL_SERVER_ERROR, "Bank document upload failed");
-      }
-
-      bankData.bankDocs = {
-        public_id: cloudImage.public_id,
-        url: cloudImage.secure_url,
-      };
-    }
-
-    await BusOperatorBankModel.create(bankData);
+  if (national_identity_card_front) {
+    const docFront = await DocumentsModel.create({
+      ...national_identity_card_front,
+      ownerId: operatorId,
+      documentType: "national_identity_card_front",
+    });
+    docs.push(docFront._id);
   }
 
-  const finalDocs = await BusOperatorDocumentModel.findOne({ userId: newUser._id }).populate("documentIds");
-  const finalBank = await BusOperatorBankModel.findOne({ userId: newUser._id });
+  if (national_identity_card_back) {
+    const docBack = await DocumentsModel.create({
+      ...national_identity_card_back,
+      ownerId: operatorId,
+      documentType: "national_identity_card_back",
+    });
+    docs.push(docBack._id);
+  }
 
+  // Step 5: Link documents to BusOperatorDocumentModel
+  if (docs.length > 0) {
+    await BusOperatorDocumentModel.create({
+      userId: operatorId,
+      documentIds: docs,
+    });
+  }
+
+  // Step 6: Send response
   return res.status(statusCode.CREATED).json(
     new ApiResponse(
       statusCode.CREATED,
       {
-        user: newUser,
-        bankDetails: finalBank,
-        documents: finalDocs || null,
+        operator: busOperator,
+        bankDetails: bankDetailDoc,
+        documentIds: docs,
       },
-      "Bus operator created successfully."
+      "Bus Operator, bank details, and documents created successfully"
     )
   );
 });
-
-
 
 const updateBusOperator = catchAsyncError(async (req, res, next) => {
   const { userId } = req.params;
@@ -292,10 +203,11 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
     ifscCode,
     branchName,
     isPrimary,
+    national_identity_card_front,
+    national_identity_card_back,
+    avatar,
+    bankDocs,
   } = req.body;
-
-  const docsToUpload = req.files || {};
-  const keys = Object.keys(docsToUpload);
 
   const updateData = {};
   if (email) updateData.email = email.toLowerCase();
@@ -311,72 +223,54 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
   if (nationality) updateData.nationality = nationality;
   if (nationIdExpiry) updateData.nationIdExpiry = nationIdExpiry;
 
-  // ➤ Handle avatar upload
-  if (docsToUpload["avatar"]) {
-    const imgFile = docsToUpload["avatar"][0];
-    const cloudImage = await uploadImageOnAws(imgFile.path);
-    if (!cloudImage?.public_id || !cloudImage?.secure_url) {
-      throw new ApiError(statusCode.INTERNAL_SERVER_ERROR, `Avatar upload failed`);
-    }
-    updateData.avatar = {
-      public_id: cloudImage.public_id,
-      url: cloudImage.secure_url,
-    };
-  }
+  const documentPayloads = [
+    { key: "national_identity_card_front", data: national_identity_card_front },
+    { key: "national_identity_card_back", data: national_identity_card_back },
+  ];
 
-  // ➤ Handle documents
-  const validDocumentTypes = ["national_identity_card_front", "national_identity_card_back"];
-  const invalidKeys = keys.filter(
-    (key) => !validDocumentTypes.includes(key) && key !== "avatar" && key !== "bank_detail"
-  );
+  const uploadedDocsInfo = {};
+  const newDocIds = [];
 
-  if (invalidKeys.length > 0) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `Invalid document types: ${invalidKeys.join(", ")}`
-    );
-  }
-
-  const userDocument = await BusOperatorDocumentModel.findOne({ userId });
-  let docsIds = [];
-
-  for (const key of validDocumentTypes) {
-    if (docsToUpload[key]) {
-      const imgFile = docsToUpload[key][0];
-      const cloudImage = await uploadImageOnAws(imgFile.path);
-
-      if (!cloudImage?.public_id || !cloudImage?.secure_url) {
-        throw new ApiError(
-          statusCode.INTERNAL_SERVER_ERROR,
-          `Image upload failed for document ${key}`
-        );
-      }
-
-      const uploadedDoc = await DocumentsModel.create({
-        documentName: key,
+  for (const { key, data } of documentPayloads) {
+    if (data && data.file?.url) {
+      // Create or replace the document
+      const newDoc = await DocumentsModel.create({
+        ...data,
+        ownerId: userId,
         documentType: key,
-        file: {
-          public_id: cloudImage.public_id,
-          url: cloudImage.secure_url,
-        },
-        fileType: imgFile.mimetype,
-        ownerId: req.user?._id,
       });
 
-      docsIds.push(uploadedDoc._id);
+      uploadedDocsInfo[key] = newDoc;
+      newDocIds.push(newDoc._id);
     }
   }
 
-  if (docsIds.length > 0) {
-    if (!userDocument) {
-      await BusOperatorDocumentModel.create({ userId, documentIds: docsIds });
+  // Update BusOperatorDocumentModel
+  if (newDocIds.length > 0) {
+    const existing = await BusOperatorDocumentModel.findOne({ userId });
+
+    if (!existing) {
+      await BusOperatorDocumentModel.create({
+        userId,
+        documentIds: newDocIds,
+      });
     } else {
-      userDocument.documentIds.push(...docsIds);
-      await userDocument.save();
+      existing.documentIds = newDocIds; // ✅ Replace, don’t append
+      await existing.save();
     }
   }
 
-  // ➤ Handle bank details
+  // Handle avatar
+  if (avatar?.url) {
+    const existingUser = await BusOperatorModel.findById(userId);
+    if (existingUser?.avatar?.public_id) {
+      await deleteImageFromAws(existingUser.avatar.public_id);
+    }
+
+    updateData.avatar = avatar;
+  }
+
+  // Handle bank details
   const findBank = await BusOperatorBankModel.findOne({ userId });
   if (findBank) {
     if (accountNumber && accountNumber !== findBank.accountNumber) {
@@ -394,41 +288,25 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
     findBank.bankName = bankName || findBank.bankName;
     findBank.ifscCode = ifscCode || findBank.ifscCode;
     findBank.branchName = branchName || findBank.branchName;
-
     if (phoneNumber) {
       findBank.phoneNumber = Array.isArray(phoneNumber)
         ? phoneNumber.find((num) => !!num)?.trim()
         : phoneNumber.trim();
     }
-
     findBank.isPrimary = isPrimary ?? findBank.isPrimary;
 
-    // ➤ Handle bank document update
-    if (docsToUpload["bank_detail"]) {
+    if (bankDocs?.url) {
       if (findBank.bankDocs?.public_id) {
         await deleteImageFromAws(findBank.bankDocs.public_id);
       }
 
-      const imgFile = docsToUpload["bank_detail"][0];
-      const cloudImage = await uploadImageOnAws(imgFile.path);
-
-      if (!cloudImage?.public_id || !cloudImage?.secure_url) {
-        throw new ApiError(
-          statusCode.INTERNAL_SERVER_ERROR,
-          "Bank document upload failed"
-        );
-      }
-
-      findBank.bankDocs = {
-        public_id: cloudImage.public_id,
-        url: cloudImage.secure_url,
-      };
+      findBank.bankDocs = bankDocs;
     }
 
     await findBank.save();
   }
 
-  // ➤ Update the user
+  // Update Bus Operator
   const updatedUser = await BusOperatorModel.findByIdAndUpdate(userId, updateData, {
     new: true,
     runValidators: true,
@@ -471,18 +349,18 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
   }
 
-  return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(
-        statusCode.OK,
-        booking,
-        "Bus booking details retrieved successfully"
-      )
-    );
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        user: updatedUser,
+        bankDetails: findBank,
+        documents: uploadedDocsInfo,
+      },
+      "Bus operator profile updated successfully."
+    )
+  );
 });
-
-
 
 
 const searchBusOperators = async (req, res) => {
@@ -504,9 +382,14 @@ const searchBusOperators = async (req, res) => {
 
     if (fullName) query.fullName = { $regex: new RegExp(fullName, "i") };
     if (email) query.email = { $regex: new RegExp(email, "i") };
-    if (phoneNumber) query.phoneNumber = { $regex: new RegExp(phoneNumber, "i") };
-    if (companyName) query.companyName = { $regex: new RegExp(companyName, "i") };
-    if (verificationStatus) query.verificationStatus = { $regex: new RegExp(verificationStatus, "i") };
+    if (phoneNumber)
+      query.phoneNumber = { $regex: new RegExp(phoneNumber, "i") };
+    if (companyName)
+      query.companyName = { $regex: new RegExp(companyName, "i") };
+    if (verificationStatus)
+      query.verificationStatus = {
+        $regex: new RegExp(verificationStatus, "i"),
+      };
 
     for (const key in filters) {
       if (!query[key]) {
@@ -518,7 +401,10 @@ const searchBusOperators = async (req, res) => {
     const sortOption = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
 
     const [users, total] = await Promise.all([
-      BusOperatorModel.find(query).sort(sortOption).skip(skip).limit(parseInt(limit)),
+      BusOperatorModel.find(query)
+        .sort(sortOption)
+        .skip(skip)
+        .limit(parseInt(limit)),
       BusOperatorModel.countDocuments(query),
     ]);
 
@@ -765,5 +651,5 @@ module.exports = {
   deleteBusOperatorAccount,
   searchBusOperators,
   getAllBusBookings,
-  searchAllBusBookings
+  searchAllBusBookings,
 };

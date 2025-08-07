@@ -115,7 +115,7 @@ const requestTopay = catchAsyncError(async (req, res) => {
     setTimeout(async () => {
       try {
         await axios.post(
-          `${pross.env.BE_BASE_URL}/api/v1/webhook/momo-status`,
+          `http://139.59.20.155:8000/api/v1/webhook/momo-status`,
           {
             referenceId,
             status: randomOutcome,
@@ -128,7 +128,13 @@ const requestTopay = catchAsyncError(async (req, res) => {
         );
         console.log(`Simulated webhook callback with status: ${randomOutcome}`);
       } catch (err) {
-        console.error("Failed to simulate webhook:", err.message);
+        console.error("Failed to simulate webhook:");
+        if (err.response) {
+          console.error("Status:", err.response.status);
+          console.error("Data:", err.response.data);
+        } else {
+          console.error("Message:", err.message);
+        }
       }
     }, 5000); // 5 seconds simulated delay
   }

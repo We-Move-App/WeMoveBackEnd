@@ -95,7 +95,7 @@ const driverDocRouter = require("./routes/new-driver-module/documents/documents.
 const rideRoutes = require("./routes/ride-module/ride.routes");
 const locationRouter = require("./routes/new-driver-module/location/location.routes");
 const momoRouter = require("./routes/momo-mtn/momo-mtn.routes");
-const webhookRouter=require("./routes/web-hook/webhook.routes");
+const webhookRouter = require("./routes/web-hook/webhook.routes");
 const walletRouter = require("./routes/wallet-module/wallet.routes");
 const invoiceRouter = require("./routes/invoice-module/invoice-routes");
 
@@ -119,10 +119,13 @@ const allowedOrigins = allowed_origin;
 // );
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://localhost:5174",'http://localhost:3000','http://localhost:3003', 'http://192.168.0.133:3003', 'https://093bf07bd9f8.ngrok-free.app'],
+    origin: (origin, callback) => {
+      callback(null, origin); 
+    },
     credentials: true,
   })
 );
+
 // app.options("*", (req, res) => {
 //   const origin = req.headers.origin;
 //   if (allowedOrigins.includes(origin)) {
@@ -184,7 +187,7 @@ app.use("/api/v1/file", UploadFileRouter);
 app.use("/api/v1/webhook", webhookRouter);
 
 // app.use("/api/v1/momo", momoRouter);
-app.use("/api/v1/momo",momoRouter)
+app.use("/api/v1/momo", momoRouter);
 
 // New Driver Routes
 app.use("/api/v1/new-driver/auth", newDriverauthRoute);
@@ -200,10 +203,10 @@ app.use("/api/v1/ride", rideRoutes);
 app.use("/api/v1/location", locationRouter);
 
 //Wallet Routes
-app.use("/api/v1/wallet",walletRouter)
+app.use("/api/v1/wallet", walletRouter);
 
 //Invoice Routes
-app.use('/api/v1/invoice',invoiceRouter)
+app.use("/api/v1/invoice", invoiceRouter);
 
 // Driver Routes
 app.use("/api/v1/driver/auth", driverAuthRoutes);
