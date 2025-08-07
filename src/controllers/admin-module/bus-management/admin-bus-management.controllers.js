@@ -5,7 +5,9 @@ const {
   BusOperatorDocumentModel,
 } = require("../../../models/bus-module/bus-operator-documents/bus-operator-document.model");
 const BusOperatorModel = require("../../../models/bus-module/bus-operator/bus-operator.model");
-const { DocumentsModel } = require("../../../models/global-module/documents/document.model");
+const {
+  DocumentsModel,
+} = require("../../../models/global-module/documents/document.model");
 const statusCode = require("../../../utils/constants/statusCode");
 const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
@@ -29,14 +31,13 @@ const multer = require("../../../utils/uploadFiles/multer");
 
 const { TypeOfUser } = require("../../../utils/constants/constants");
 const getAllBusOperators = catchAsyncError(async (req, res, next) => {
-
-
-
   const results = await getAllUsersByAdmin({ req, model: BusOperatorModel });
 
   return res.status(statusCode.OK).json(results);
 });
-const { validateRequestBody } = require("../../../utils/reqFunctions/reqFunction");
+const {
+  validateRequestBody,
+} = require("../../../utils/reqFunctions/reqFunction");
 
 const getSingleUser = catchAsyncError(async (req, res, next) => {
   const result = await getUserByIdByAdmin({
@@ -102,155 +103,85 @@ const deleteBusOperatorAccount = catchAsyncError(async (req, res, next) => {
 });
 
 const registerBusOperator = catchAsyncError(async (req, res, next) => {
-  // Parse JSON data from body (non-file fields)
-  let busOperatorData = {};
-  try {
-    busOperatorData = req.body.data ? JSON.parse(req.body.data) : {};
-  } catch (error) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Invalid JSON data in request");
-  }
-
-  // Extract all fields from the parsed data
   const {
-    fullName,
-    email,
-    phoneNumber,
-    companyName,
-    companyAddress,
-    nationality,
-    dob,
-    nationIdExpiry,
-    accountHolderName,
-    accountNumber,
-    bankName,
-    ifscCode,
-    branchName,
-    isPrimary,
-  } = busOperatorData;
+    basicInfo,
+    bankDetails,
+    national_identity_card_front,
+    national_identity_card_back,
+  } = req.body;
 
-  // Validate required fields
-  if (!email || !companyName || !phoneNumber) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Missing required fields: email, companyName, phoneNumber"
-    );
-  }
-
-  // Handle file uploads
-  const uploadedFiles = req.files || {};
-  const validDocs = ["avatar", "national_identity_card_front", "national_identity_card_back", "bank_detail"];
-  const invalidKeys = Object.keys(uploadedFiles).filter(key => !validDocs.includes(key));
-
-  if (invalidKeys.length) {
-    throw new ApiError(statusCode.BAD_REQUEST, `Invalid file fields: ${invalidKeys.join(", ")}`);
-  }
-
-  // Create bus operator user
-  const result = await registerUserWithEmailAndPhoneNumber({
-    req: { body: busOperatorData },
-    res,
-    reqModel: BusOperatorModel,
-    typeOfUser: TypeOfUser.BUSOPERATOR,
-    createdByAdmin: true,
-  });
-
-  const user = result?.data;
-
-  if (!user?._id) {
-    throw new ApiError(statusCode.INTERNAL_SERVER_ERROR, "User registration failed.");
-  }
-
-  // Prepare update data
-  const updateData = {
-    fullName,
-    companyName,
-    companyAddress,
-    nationality,
-    dob: new Date(dob),
-    nationIdExpiry: new Date(nationIdExpiry),
+  // Step 1: Set defaults from backend
+  const busOperatorData = {
+    ...basicInfo,
+    password: "operator@123",
+    verificationStatus: "approved",
+    termAndCondition: true,
+    emailVerified: true,
+    phoneNumberVerified: true,
+    permissions: {
+      busManagement: true,
+      dashboardManagement: true,
+      routeManagement: true,
+      driverManagement: true,
+      ticketManagement: true,
+      walletManagement: true,
+    },
+    role: "bus-operator",
+    createdBy: req.user._id,
   };
 
-  // Upload avatar if present
-  if (uploadedFiles["avatar"]) {
-    const avatarFile = uploadedFiles["avatar"][0];
-    const cloudImage = await uploadImageOnAws(avatarFile.path);
-    updateData.avatar = {
-      public_id: cloudImage.public_id,
-      url: cloudImage.secure_url,
-    };
-  }
+  // Step 2: Create Bus Operator
+  const busOperator = await BusOperatorModel.create(busOperatorData);
+  const operatorId = busOperator._id;
 
-  // Update user with additional profile fields
-  await BusOperatorModel.findByIdAndUpdate(user._id, updateData, { new: true });
-
-  // Upload and save national ID documents
-  let documentIds = [];
-  let uploadedDocs = {};
-
-  for (const key of ["national_identity_card_front", "national_identity_card_back"]) {
-    if (uploadedFiles[key]) {
-      const file = uploadedFiles[key][0];
-      const cloud = await uploadImageOnAws(file.path);
-
-      const doc = await DocumentsModel.create({
-        documentName: key,
-        documentType: key,
-        file: {
-          public_id: cloud.public_id,
-          url: cloud.secure_url,
-        },
-        fileType: file.mimetype,
-        ownerId: user._id,
-      });
-
-      documentIds.push(doc._id);
-      uploadedDocs[key] = doc;
-    }
-  }
-
-  if (documentIds.length) {
-    await BusOperatorDocumentModel.create({
-      userId: user._id,
-      documentIds,
+  // Step 3: Create Bank Details
+  let bankDetailDoc = null;
+  if (bankDetails) {
+    bankDetailDoc = await BusOperatorBankModel.create({
+      ...bankDetails,
+      userId: operatorId,
     });
   }
 
-  // Upload bank document and save bank info
-  let bankDocs = null;
-  if (uploadedFiles["bank_detail"]) {
-    const file = uploadedFiles["bank_detail"][0];
-    const cloud = await uploadImageOnAws(file.path);
-    bankDocs = {
-      public_id: cloud.public_id,
-      url: cloud.secure_url,
-    };
+  // Step 4: Upload and Create Document Entries
+  const docs = [];
+
+  if (national_identity_card_front) {
+    const docFront = await DocumentsModel.create({
+      ...national_identity_card_front,
+      ownerId: operatorId,
+      documentType: "national_identity_card_front",
+    });
+    docs.push(docFront._id);
   }
 
-  const bank = await BusOperatorBankModel.create({
-    userId: user._id,
-    accountHolderName,
-    accountNumber,
-    bankName,
-    ifscCode,
-    branchName,
-    phoneNumber,
-    isPrimary: isPrimary ?? true,
-    bankDocs,
-  });
+  if (national_identity_card_back) {
+    const docBack = await DocumentsModel.create({
+      ...national_identity_card_back,
+      ownerId: operatorId,
+      documentType: "national_identity_card_back",
+    });
+    docs.push(docBack._id);
+  }
 
-  const finalUser = await BusOperatorModel.findById(user._id)
-    .select("-password")
-    .lean();
+  // Step 5: Link documents to BusOperatorDocumentModel
+  if (docs.length > 0) {
+    await BusOperatorDocumentModel.create({
+      userId: operatorId,
+      documentIds: docs,
+    });
+  }
 
+  // Step 6: Send response
   return res.status(statusCode.CREATED).json(
     new ApiResponse(
       statusCode.CREATED,
       {
-        user: finalUser,
-        bankDetails: bank,
-        documents: uploadedDocs,
+        operator: busOperator,
+        bankDetails: bankDetailDoc,
+        documentIds: docs,
       },
-      "Bus operator registered successfully."
+      "Bus Operator, bank details, and documents created successfully"
     )
   );
 });
@@ -272,10 +203,11 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
     ifscCode,
     branchName,
     isPrimary,
+    national_identity_card_front,
+    national_identity_card_back,
+    avatar,
+    bankDocs,
   } = req.body;
-
-  const docsToUpload = req.files || {};
-  const keys = Object.keys(docsToUpload);
 
   const updateData = {};
   if (email) updateData.email = email.toLowerCase();
@@ -291,73 +223,60 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
   if (nationality) updateData.nationality = nationality;
   if (nationIdExpiry) updateData.nationIdExpiry = nationIdExpiry;
 
-  const validDocumentTypes = ["national_identity_card_front", "national_identity_card_back"];
-  const invalidKeys = keys.filter(
-    (key) => !validDocumentTypes.includes(key) && key !== "avatar" && key !== "bank_detail"
-  );
-  if (invalidKeys.length > 0) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `Invalid document types: ${invalidKeys.join(", ")}`
-    );
-  }
+  const documentPayloads = [
+    { key: "national_identity_card_front", data: national_identity_card_front },
+    { key: "national_identity_card_back", data: national_identity_card_back },
+  ];
 
-  const userDocument = await BusOperatorDocumentModel.findOne({ userId });
-  let docsIds = [];
-  let uploadedDocsInfo = {};
+  const uploadedDocsInfo = {};
+  const newDocIds = [];
 
-  // Upload valid documents
-  for (const key of validDocumentTypes) {
-    if (docsToUpload[key]) {
-      const imgFile = docsToUpload[key][0];
-      const cloudImage = await uploadImageOnAws(imgFile.path);
-
-      const uploadedDoc = await DocumentsModel.create({
-        documentName: key,
+  for (const { key, data } of documentPayloads) {
+    if (data && data.file?.url) {
+      // Create or replace the document
+      const newDoc = await DocumentsModel.create({
+        ...data,
+        ownerId: userId,
         documentType: key,
-        file: {
-          public_id: cloudImage?.public_id,
-          url: cloudImage?.secure_url,
-        },
-        fileType: imgFile.mimetype,
-        ownerId: req.user?._id,
       });
 
-      docsIds.push(uploadedDoc._id);
-      uploadedDocsInfo[key] = uploadedDoc;
+      uploadedDocsInfo[key] = newDoc;
+      newDocIds.push(newDoc._id);
     }
   }
 
-  if (docsIds.length > 0) {
-    if (!userDocument) {
-      await BusOperatorDocumentModel.create({ userId, documentIds: docsIds });
+  // Update BusOperatorDocumentModel
+  if (newDocIds.length > 0) {
+    const existing = await BusOperatorDocumentModel.findOne({ userId });
+
+    if (!existing) {
+      await BusOperatorDocumentModel.create({
+        userId,
+        documentIds: newDocIds,
+      });
     } else {
-      userDocument.documentIds.push(...docsIds);
-      await userDocument.save();
+      existing.documentIds = newDocIds; // ✅ Replace, don’t append
+      await existing.save();
     }
   }
 
-  // Handle avatar upload
-  if (docsToUpload["avatar"]) {
-    const imgFile = docsToUpload["avatar"][0];
-
+  // Handle avatar
+  if (avatar?.url) {
     const existingUser = await BusOperatorModel.findById(userId);
     if (existingUser?.avatar?.public_id) {
       await deleteImageFromAws(existingUser.avatar.public_id);
     }
 
-    const cloudImage = await uploadImageOnAws(imgFile.path);
-    updateData.avatar = {
-      public_id: cloudImage?.public_id,
-      url: cloudImage?.secure_url,
-    };
+    updateData.avatar = avatar;
   }
 
   // Handle bank details
   const findBank = await BusOperatorBankModel.findOne({ userId });
   if (findBank) {
     if (accountNumber && accountNumber !== findBank.accountNumber) {
-      const existingAccount = await BusOperatorBankModel.findOne({ accountNumber });
+      const existingAccount = await BusOperatorBankModel.findOne({
+        accountNumber,
+      });
       if (existingAccount) {
         throw new ApiError(
           statusCode.CONFLICT,
@@ -366,7 +285,8 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
       }
     }
 
-    findBank.accountHolderName = accountHolderName || findBank.accountHolderName;
+    findBank.accountHolderName =
+      accountHolderName || findBank.accountHolderName;
     findBank.accountNumber = accountNumber || findBank.accountNumber;
     findBank.bankName = bankName || findBank.bankName;
     findBank.ifscCode = ifscCode || findBank.ifscCode;
@@ -378,27 +298,26 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
     }
     findBank.isPrimary = isPrimary ?? findBank.isPrimary;
 
-    // Upload bank document
-    if (docsToUpload["bank_detail"]) {
+    if (bankDocs?.url) {
       if (findBank.bankDocs?.public_id) {
         await deleteImageFromAws(findBank.bankDocs.public_id);
       }
 
-      const imgFile = docsToUpload["bank_detail"][0];
-      const cloudImage = await uploadImageOnAws(imgFile.path);
-      findBank.bankDocs = {
-        public_id: cloudImage?.public_id,
-        url: cloudImage?.secure_url,
-      };
+      findBank.bankDocs = bankDocs;
     }
 
     await findBank.save();
   }
 
-  const updatedUser = await BusOperatorModel.findByIdAndUpdate(userId, updateData, {
-    new: true,
-    runValidators: true,
-  }).select("-password");
+  // Update Bus Operator
+  const updatedUser = await BusOperatorModel.findByIdAndUpdate(
+    userId,
+    updateData,
+    {
+      new: true,
+      runValidators: true,
+    }
+  ).select("-password");
 
   if (!updatedUser) {
     throw new ApiError(statusCode.NOT_FOUND, "User not found.");
@@ -436,9 +355,14 @@ const searchBusOperators = async (req, res) => {
 
     if (fullName) query.fullName = { $regex: new RegExp(fullName, "i") };
     if (email) query.email = { $regex: new RegExp(email, "i") };
-    if (phoneNumber) query.phoneNumber = { $regex: new RegExp(phoneNumber, "i") };
-    if (companyName) query.companyName = { $regex: new RegExp(companyName, "i") };
-    if (verificationStatus) query.verificationStatus = { $regex: new RegExp(verificationStatus, "i") };
+    if (phoneNumber)
+      query.phoneNumber = { $regex: new RegExp(phoneNumber, "i") };
+    if (companyName)
+      query.companyName = { $regex: new RegExp(companyName, "i") };
+    if (verificationStatus)
+      query.verificationStatus = {
+        $regex: new RegExp(verificationStatus, "i"),
+      };
 
     for (const key in filters) {
       if (!query[key]) {
@@ -450,7 +374,10 @@ const searchBusOperators = async (req, res) => {
     const sortOption = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
 
     const [users, total] = await Promise.all([
-      BusOperatorModel.find(query).sort(sortOption).skip(skip).limit(parseInt(limit)),
+      BusOperatorModel.find(query)
+        .sort(sortOption)
+        .skip(skip)
+        .limit(parseInt(limit)),
       BusOperatorModel.countDocuments(query),
     ]);
 
@@ -492,8 +419,6 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
   // Initialize query object
   const query = {};
 
-  
-
   if (startDate) {
     const selectedStartDate = moment.utc(startDate, "YYYY-MM-DD", true);
 
@@ -524,7 +449,6 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     query.to = { $regex: drop, $options: "i" };
   }
 
-  
   if (routeId) {
     query.routeId = routeId;
   }
@@ -533,7 +457,6 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
   const pageSize = parseInt(limit) || 10;
   const skip = (pageNumber - 1) * pageSize;
 
- 
   const sortField = sortBy || "createdAt";
   const sortOrder = order === "desc" ? 1 : -1;
 
@@ -567,11 +490,6 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
   );
 });
 
-
-
-
-
-
 module.exports = {
   registerBusOperator,
   updateBusOperator,
@@ -580,5 +498,5 @@ module.exports = {
   verifyUserProfile,
   deleteBusOperatorAccount,
   searchBusOperators,
-  getAllBusBookings
+  getAllBusBookings,
 };
