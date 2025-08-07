@@ -22,6 +22,25 @@ const HotelBookingModel = require("../../../models/hotel-module/hotel-bookings/h
 const Room = require("../../../models/hotel-module/hotel-registration/hotel-room-amenities.model");
 const {DocumentsModel} = require("../../../models/global-module/documents/document.model");
 const {
+  uploadSingleImageToAws, deleteImageFromAws,
+} = require("../../../utils/uploadFiles/uploadFilestoAws");
+const {
+  validateEmail,
+  validatePhoneNumber,
+} = require("../../../utils/validation/forSchema");
+const {
+  validateRequestBody,
+  getStatusMessage,
+} = require("../../../utils/reqFunctions/reqFunction");
+const {
+  generateTokens,
+  setTokenCookies,
+} = require("../../../utils/jwtToken/generateTokens");
+const { refresh_token_secret, node_env } = require("../../../config/config");
+const jwt = require("jsonwebtoken");
+
+
+const {
   getAllUsersByAdmin,
   getUserByIdByAdmin,
   userVerifiedByAdmin,
@@ -39,9 +58,6 @@ const getSingleUser = catchAsyncError(async (req, res, next) => {
     userModel: HotelManagerModel,
     userDocsModel: HotelManagerDocumentModel,
     userBankModel: HotelManagerBankModel,
-   // AssHuming no hotel model is needed for hotel managers
-
-
   });
 
   return res.status(statusCode.OK).json(result);
@@ -215,13 +231,140 @@ const hotelName = req.query?.hotelName?.trim();
   });
 });
 
+const registerHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
+  const {
+    email,
+    fullName,
+    address,
+    phoneNumber,
+    accountHolderName,
+    accountNumber,
+    bankName,
+    isPrimary = true,
+  } = req.body;
 
+  const reqFields = [
+    "email",
+    "fullName",
+    "address",
+    "phoneNumber",
+    "accountHolderName",
+    "accountNumber",
+    "bankName",
+  ];
+  validateRequestBody(reqFields, req.body);
 
+  const { avatar, bank_detail } = req.files || {};  
 
+  if (!avatar) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Avatar image is required");
+  }
 
+  if (!bank_detail) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Bank detail document is required");
+  }
 
+  const existingUser = await HotelManagerModel.findOne({
+    $or: [{ email }, { phoneNumber }],
+  });
+
+  if (existingUser) {
+    throw new ApiError(statusCode.BAD_REQUEST, "User with this email or phone number already exists.");
+  }
+
+  // Upload avatar image to AWS S3
+  const uploadedAvatar = await uploadSingleImageToAws(avatar);
+
+  // Create hotel manager (auto-approved)
+  const newHotelManager = new HotelManagerModel({
+    email,
+    fullName,
+    password:"ADMIN@123", // Default password, should be changed by the user
+    address,
+    phoneNumber,
+    avatar: uploadedAvatar,
+    verificationStatus: "approved",
+    emailVerified: true,
+    phoneNumberVerified: true,
+    isverified: true,
+    termAndCondition: true,
+  });
+
+  await newHotelManager.save();
+
+  // Wallet creation
+  let wallet = await Wallet.findOne({ userId: newHotelManager._id });
+  if (!wallet) {
+    wallet = await Wallet.create({
+      userId: newHotelManager._id,
+      balance: 0,
+      currency: process.env.MOMO_CURRENCY,
+      cardNumber: await generateUniqueCardNumber(),
+    });
+  }
+
+  // Upload and save document in `DocumentModel`
+  const uploadedBankDoc = await uploadSingleImageToAws(bank_detail);
+
+  const documentEntry = new DocumentsModel({
+    url: uploadedBankDoc.url,
+    type: "bank_detail",
+    fileName: uploadedBankDoc.fileName || "bank_document",
+  });
+
+  await documentEntry.save();
+
+  // Create bank details and reference document
+  const bankDetails = new HotelManagerBankModel({
+    userId: newHotelManager._id,
+    accountHolderName,
+    accountNumber,
+    bankName,
+    isPrimary,
+    bankDocs: uploadedBankDoc,
+  });
+
+  await bankDetails.save();
+
+  // REQUIRED: Link document in HotelManagerDocumentModel
+  const linkedDocuments = new HotelManagerDocumentModel({
+    userId: newHotelManager._id,
+    documentIds: [documentEntry._id],
+  });
+
+  await linkedDocuments.save();
+
+  // Tokens
+  const { accessToken, refreshToken } = await generateTokens(
+    newHotelManager,
+    TypeOfUser.HOTELMANAGER
+  );
+  setTokenCookies(res, accessToken, refreshToken);
+
+  const responseData = {
+    accessToken,
+    refreshToken,
+    hotelmanager: {
+      ...newHotelManager.toObject(),
+      password: undefined,
+    },
+    bankDetails,
+    documentReference: linkedDocuments,
+  };
+
+  return res
+    .status(statusCode.CREATED)
+    .json(
+      new ApiResponse(
+        statusCode.CREATED,
+        responseData,
+        "Hotel Manager registered successfully with bank document linked"
+      )
+    );
+});
 
 module.exports = {
+  registerHotelManagerFromAdmin,
   getHotelByManagerId,
   getAllHotelManagers,
   getSingleUser,

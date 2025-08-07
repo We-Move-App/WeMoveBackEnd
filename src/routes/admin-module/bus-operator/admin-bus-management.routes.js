@@ -16,7 +16,9 @@ const {
   verifyUserProfile,
   deleteBusOperatorAccount,
   searchBusOperators, 
-  getAllBusBookings
+  getAllBusBookings,
+  getBusBookingDetails,
+  searchAllBusBookings 
 } = require("../../../controllers/admin-module/bus-management/admin-bus-management.controllers");
 const adminBusManagementRoutes = express.Router();
 
@@ -46,7 +48,7 @@ adminBusManagementRoutes
   .put( 
     isAdminAuthenticated, uploadDocuments, 
     authorizeRole(["SuperAdmin", "Admin"]),
-     updateBusOperator
+     updateBusOperator 
   );  
 adminBusManagementRoutes
   .route("/bus-operators/:userId")
@@ -73,11 +75,29 @@ adminBusManagementRoutes
 
 
 adminBusManagementRoutes
+
   .route("/AllBusBookings")
   .get(
-    
+    isAdminAuthenticated,
+    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
     getAllBusBookings
   );
+  adminBusManagementRoutes
+
+  .route("/bus-booking-details/:bookingId")   
+  .get(
+    isAdminAuthenticated,
+    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+    getBusBookingDetails
+  );
+adminBusManagementRoutes
+  .route("/search-bus-bookings")
+  .get(
+    isAdminAuthenticated,
+    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+    searchAllBusBookings
+  );
+
 
 
 

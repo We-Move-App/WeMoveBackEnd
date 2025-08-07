@@ -54,6 +54,7 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
     res,
     reqModel: BusOperatorModel,
     typeOfUser: TypeOfUser.BUSOPERATOR,
+    createdByAdmin: true, // Indicating that this registration is done by an admin
   });
 
   return res.status(statusCode.OK).json(result);

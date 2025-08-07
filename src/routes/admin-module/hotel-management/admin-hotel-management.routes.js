@@ -4,6 +4,7 @@ const {
   authorizeRole,
 } = require("../../../middlewares/authRoles/authorizeRole");
 const {
+  registerHotelManagerFromAdmin,
   getHotelByManagerId,
   getAllHotelManagers,
   getSingleUser,
@@ -11,6 +12,15 @@ const {
   searchHotelManagers}
  = require("../../../controllers/admin-module/hotel-management/admin-hotel-management.controllers");
 const adminHotelManagementRoutes = express.Router();
+
+adminHotelManagementRoutes
+  .route("/hotel-managers/register")
+  .post(
+    isAdminAuthenticated,
+    authorizeRole(["SuperAdmin", "Admin"]),
+    registerHotelManagerFromAdmin
+  );
+  
 
 adminHotelManagementRoutes
   .route("/hotel-managers")
