@@ -119,9 +119,13 @@ const allowedOrigins = allowed_origin;
 // );
 app.use(
   cors({
-    origin: "*",
+    origin: (origin, callback) => {
+      callback(null, origin); 
+    },
+    credentials: true,
   })
 );
+
 // app.options("*", (req, res) => {
 //   const origin = req.headers.origin;
 //   if (allowedOrigins.includes(origin)) {
