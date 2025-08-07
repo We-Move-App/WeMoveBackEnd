@@ -19,6 +19,7 @@ const UserModel = require("../../models/user-module/users/user.model");
 const BusOperatorModel = require("../../models/bus-module/bus-operator/bus-operator.model");
 const HotelManagerModel = require("../../models/hotel-module/hotel-manager/hotel-manager.model");
 const Wallet = require("../../models/wallet-module/wallets.model");
+const { getIO } = require("../../socket");
 
 const requestTopay = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -34,7 +35,6 @@ const requestTopay = catchAsyncError(async (req, res) => {
 
   const userId = decoded?._id;
   const phoneNumber = decoded?.phoneNumber;
-
   if (!userId || !phoneNumber) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
@@ -45,13 +45,11 @@ const requestTopay = catchAsyncError(async (req, res) => {
   }
 
   const { error, value } = requestToPayValidation.validate(req.body);
-  const currency = process.env.MOMO_CURRENCY;
-
-  if (error) {
+  if (error)
     throw new ApiError(statusCode.BAD_REQUEST, error.details[0].message);
-  }
 
   const { amount, description } = value;
+  const currency = process.env.MOMO_CURRENCY;
 
   const wallet = await Wallet.findOne({ userId });
   if (!wallet) {
@@ -101,6 +99,54 @@ const requestTopay = catchAsyncError(async (req, res) => {
     description: description || "Top-up via MoMo",
     status: PaymentStatusEnum.PENDING,
   });
+
+  const io = getIO();
+  io.to(userId.toString()).emit("payment:status", {
+    transactionId: transaction.transactionId,
+    status: PaymentStatusEnum.PENDING,
+    message: "Awaiting MTN payment confirmation",
+  });
+
+  const outcomes = ["SUCCESS", "SUCCESS", "FAILED", "NR", "SUCCESS"];
+  const randomOutcome = outcomes[Math.floor(Math.random() * outcomes.length)];
+  console.log("randomOutcome", randomOutcome);
+
+  if (randomOutcome !== "NR") {
+    setTimeout(async () => {
+      try {
+        await axios.post(
+          `${pross.env.BE_BASE_URL}/api/v1/webhook/momo-status`,
+          {
+            referenceId,
+            status: randomOutcome,
+          },
+          {
+            headers: {
+              "Content-Type": "application/json",
+            },
+          }
+        );
+        console.log(`Simulated webhook callback with status: ${randomOutcome}`);
+      } catch (err) {
+        console.error("Failed to simulate webhook:", err.message);
+      }
+    }, 5000); // 5 seconds simulated delay
+  }
+
+  // Fallback timeout (350s) in case webhook does not arrive
+  setTimeout(async () => {
+    const trx = await Transaction.findOne({ momoRefId: referenceId });
+    if (trx && trx.status === PaymentStatusEnum.PENDING) {
+      trx.status = PaymentStatusEnum.FAILED;
+      await trx.save();
+      io.to(userId.toString()).emit("payment:status", {
+        transactionId: trx.transactionId,
+        amount,
+        status: PaymentStatusEnum.FAILED,
+        message: "Payment timed out after 350 seconds",
+      });
+    }
+  }, 15000); // 350 seconds
 
   return res.status(statusCode.OK).json(
     new ApiResponse(

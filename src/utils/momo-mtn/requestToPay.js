@@ -1,4 +1,3 @@
-// services/requestToPay.js
 const axios = require("axios");
 const { v4: uuidv4 } = require("uuid");
 const getMomoToken = require("./getToken");
@@ -13,7 +12,7 @@ async function requestToPay({ userId, amount, phone, currency, description }) {
   });
 
   const response = await axios.post(
-    "https://sandbox.momodeveloper.mtn.com/collection/v1_0/requesttopay",
+    `${process.env.MOMO_BASE_URL}/collection/v1_0/requesttopay`,
     {
       amount: amount.toString(),
       currency,

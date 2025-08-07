@@ -522,14 +522,36 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
     )
   );
 });
+
 //-------------------- get hotel by id --------------------
 const getHotelById = catchAsyncError(async (req, res) => {
   const { hotelId } = req.params;
+  const { checkInDate, checkOutDate } = req.query;
 
   if (!hotelId) {
     throw new ApiError(statusCode.BAD_REQUEST, "Hotel ID is required.");
   }
 
+  // Validate dates if provided
+  let checkIn, checkOut;
+  if (checkInDate || checkOutDate) {
+    if (!checkInDate || !checkOutDate) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "Both checkInDate and checkOutDate are required when filtering by dates."
+      );
+    }
+
+    checkIn = new Date(checkInDate);
+    checkOut = new Date(checkOutDate);
+
+    if (checkOut <= checkIn) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "checkOutDate must be after checkInDate."
+      );
+    }
+  }
   // Get basic hotel info
   const hotel = await Hotel.findById(hotelId)
     .select("hotelName rating totalRoom")
@@ -565,7 +587,8 @@ const getHotelById = catchAsyncError(async (req, res) => {
   ]);
   const allHotelImages = hotelImages?.images || [];
 
-  const roomTypesWithImages = await Promise.all(
+  // Process room types with availability check if dates provided
+  const roomTypesWithAvailability = await Promise.all(
     roomTypes.map(async (room) => {
       const roomImageData = await HotelRoomImagesModel.findOne({
         roomId: room._id,
@@ -575,40 +598,73 @@ const getHotelById = catchAsyncError(async (req, res) => {
         .lean();
 
       const allImages = roomImageData?.images || [];
-      // Define current date for reference
-    
 
-  
+      // If dates provided, check availability
+      let availableRooms = room.numberOfRoom;
+      if (checkIn && checkOut) {
+        const individualRooms = await individualRoomModule
+          .find({ hotelId, roomTypeId: room._id })
+          .select("_id")
+          .lean();
+
+        const roomIds = individualRooms.map(r => r._id);
+
+        if (roomIds.length > 0) {
+          const conflictingBookings = await HotelBooking.find({
+            roomId: { $in: roomIds },
+            checkInDate: { $lt: checkOut },
+            checkOutDate: { $gt: checkIn },
+          })
+            .select("roomId")
+            .lean();
+
+          const bookedRoomIds = new Set(
+            conflictingBookings.map(b => b.roomId.toString())
+          );
+          availableRooms = roomIds.filter(
+            id => !bookedRoomIds.has(id.toString())
+          ).length;
+        } else {
+          availableRooms = 0;
+        }
+      }
 
       return {
         _id: room._id,
         roomType: room.roomType,
         roomPrice: room.roomPrice,
-        numberOfRoom: room.numberOfRoom,
-
-        amenities: room.amenities,
-        images: allImages
+        totalRooms: Number(room.numberOfRoom),
+        availableRooms: Number(availableRooms),
+        images: allImages,
+        isAvailable: availableRooms > 0,
       };
     })
   );
 
   return res.status(statusCode.OK).json(
-    new ApiResponse(statusCode.OK, {
-      hotel: {
-        hotelId,
-        hotelName: hotel.hotelName,
-        rating: hotel.rating,
-        totalRoom: hotel.totalRoom,
-        bookedRoom:  bookedRoomCount,
-        availableRoom: availableRoomCount
-
+    new ApiResponse(
+      statusCode.OK,
+      {
+        hotel: {
+          hotelId,
+          hotelName: hotel.hotelName,
+          rating: hotel.rating,
+          totalRoom: hotel.totalRoom,
+        },
+        hotelImages: allHotelImages,
+        hotelAddress,
+        hotelPolicies,
+        hotelFeedbacks,
+        roomTypes: roomTypesWithAvailability,
+        ...(checkIn && checkOut ? { 
+          dateFilter: { 
+            checkInDate: checkIn.toISOString(), 
+            checkOutDate: checkOut.toISOString() 
+          } 
+        } : {}),
       },
-      hotelImages: allHotelImages,
-      hotelAddress,
-      hotelPolicies,
-      hotelFeedbacks,
-      roomTypes: roomTypesWithImages
-    }, "Hotel details fetched successfully.")
+      "Hotel details fetched successfully."
+    )
   );
 });
 

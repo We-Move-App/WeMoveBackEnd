@@ -1,18 +1,25 @@
 const statusCode = require("../../utils/constants/statusCode");
-const {getDistanceAndDuration} = require("../../utils/map/get-distance-and-duration");
+const {
+  getDistanceAndDuration,
+} = require("../../utils/map/get-distance-and-duration");
 const ApiError = require("../../utils/response/ApiError");
 const ApiResponse = require("../../utils/response/ApiResponse");
 const catchAsyncError = require("../../utils/response/catchAsyncError");
 const vehicleConfig = require("../../utils/config/vehicleConfig.json");
 const RideBookingDetail = require("../../models/new-driver-module/booking-details/booking-details.model");
-const { RideBookStatusEnum, EntityCodeEnum } = require("../../utils/constants/ENUM");
+const {
+  RideBookStatusEnum,
+  EntityCodeEnum,
+} = require("../../utils/constants/ENUM");
 const generateCustomId = require("../../utils/customId/generateCustomId");
 const findNearbyDrivers = require("../../utils/map/find-near-by-drivers");
 const { getOtp } = require("../../utils/otpService/otpService");
 const { assignRideToDrivers } = require("../../socket/handlers/rideHandler");
 const UserModel = require("../../models/user-module/users/user.model");
-const { decodeAccessToken } = require("../../utils/jwtToken/customTokenService");
-const { getIO } = require('../../socket/index');
+const {
+  decodeAccessToken,
+} = require("../../utils/jwtToken/customTokenService");
+const { getIO } = require("../../socket/index");
 
 function calculateFare(type, distanceInKm, durationInMin) {
   const config = vehicleConfig[type];
@@ -59,10 +66,18 @@ const estimateRide = catchAsyncError(async (req, res) => {
   let metrics;
   if (vehicleType === "bike") {
     try {
-      metrics = await getDistanceAndDuration(pickupCoords, dropCoords, "bicycling");
+      metrics = await getDistanceAndDuration(
+        pickupCoords,
+        dropCoords,
+        "bicycling"
+      );
     } catch (err) {
       console.warn("Bicycling mode failed, falling back to driving.");
-      metrics = await getDistanceAndDuration(pickupCoords, dropCoords, "driving");
+      metrics = await getDistanceAndDuration(
+        pickupCoords,
+        dropCoords,
+        "driving"
+      );
     }
   } else {
     metrics = await getDistanceAndDuration(pickupCoords, dropCoords, "driving");
@@ -101,30 +116,30 @@ const estimateRide = catchAsyncError(async (req, res) => {
 
 const requestRide = async (req, res, next) => {
   console.log("Api Called");
-  
+
   try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith("Bearer ")) {
-        throw new ApiError(
-          statusCode.UNAUTHORIZED,
-          "Access token is missing or invalid"
-        );
-      }
-    
-      const jwtToken = authHeader.split(" ")[1];
-      const decoded = decodeAccessToken(jwtToken);
-    
-      const userId = decoded?._id;
-      const phoneNumber = decoded?.phoneNumber;
-    
-      if (!userId || !phoneNumber) {
-        throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
-      }
-    
-      const userExists = await UserModel.findById(userId);
-      if (!userExists) {
-        throw new ApiError(statusCode.NOT_FOUND, "User not found");
-      }
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      throw new ApiError(
+        statusCode.UNAUTHORIZED,
+        "Access token is missing or invalid"
+      );
+    }
+
+    const jwtToken = authHeader.split(" ")[1];
+    const decoded = decodeAccessToken(jwtToken);
+
+    const userId = decoded?._id;
+    const phoneNumber = decoded?.phoneNumber;
+
+    if (!userId || !phoneNumber) {
+      throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+    }
+
+    const userExists = await UserModel.findById(userId);
+    if (!userExists) {
+      throw new ApiError(statusCode.NOT_FOUND, "User not found");
+    }
 
     const { pickup, drop, vehicle } = req.body;
 
@@ -164,13 +179,24 @@ const requestRide = async (req, res, next) => {
     });
 
     // Step 2: respond to frontend immediately
-    res.status(statusCode.OK).json(
-      new ApiResponse(statusCode.OK, { bookingId, otp }, "Ride requested successfully")
-    );
+    res
+      .status(statusCode.CREATED)
+      .json(
+        new ApiResponse(
+          statusCode.CREATED,
+          { _id: bookingId, otp },
+          "Ride requested successfully"
+        )
+      );
 
     // Step 3: start driver assignment in background
     const pickupCoords = [pickup.lat, pickup.lng];
-    const nearbyDrivers = await findNearbyDrivers(pickupCoords, vehicle.vehicleType);
+    const nearbyDrivers = await findNearbyDrivers(
+      pickupCoords,
+      vehicle.vehicleType
+    );
+
+    console.log("nearbyDrivers.length", nearbyDrivers.length);
 
     if (nearbyDrivers.length > 0) {
       assignRideToDrivers(bookingId, nearbyDrivers, newBooking, vehicle, otp);
@@ -185,14 +211,86 @@ const requestRide = async (req, res, next) => {
         }
       );
       const io = getIO();
-      io.to(userId).emit("ride:cancelled", { bookingId, reason: "No nearby drivers" });
+      io.to(userId).emit("ride:cancelled", {
+        bookingId,
+        reason: "No nearby drivers",
+      });
     }
   } catch (err) {
     next(err);
   }
 };
 
+const cancelRideByUser = catchAsyncError(async (req, res) => {
+  const { bookingId } = req.params;
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const jwtToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(jwtToken);
+  const userId = decoded?._id;
+
+  // 1. Find the booking
+  const booking = await RideBookingDetail.findOne({
+    bookingId,
+    userId,
+    rideStatus: {
+      $in: [
+        RideBookStatusEnum.REQUESTED,
+        RideBookStatusEnum.ACCEPTED,
+        RideBookStatusEnum.ARRIVED,
+      ],
+    },
+  });
+
+  if (!booking) {
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      "Active ride not found or already completed/cancelled"
+    );
+  }
+
+  // 2. Update booking status
+  const updatedBooking = await RideBookingDetail.findOneAndUpdate(
+    { bookingId },
+    {
+      rideStatus: RideBookStatusEnum.CANCELLED,
+      cancelledBy: "USER",
+      reasonToCancel: "Cancelled by user",
+      "timestamps.cancelledAt": new Date(),
+    },
+    { new: true }
+  );
+
+  // 3. Notify driver if ride was accepted
+  if (booking.driverId) {
+    const io = getIO();
+    io.to(booking.driverId).emit("ride:cancelled", {
+      bookingId,
+      reason: "Cancelled by user",
+    });
+  }
+
+  // 4. Respond to user
+  res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { bookingId },
+        "Ride cancelled successfully"
+      )
+    );
+});
+
 module.exports = {
   estimateRide,
-  requestRide
+  requestRide,
+  cancelRideByUser,
 };

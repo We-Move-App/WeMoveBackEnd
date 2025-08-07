@@ -4,10 +4,8 @@ const ApiError = require("../../utils/response/ApiError");
 const ApiResponse = require("../../utils/response/ApiResponse");
 const catchAsyncError = require("../../utils/response/catchAsyncError");
 const Wallet = require("../../models/wallet-module/wallets.model");
-const {
-  PaymentStatusEnum,
-  TransactionTypeEnum,
-} = require("../../utils/constants/ENUM");
+const { PaymentStatusEnum } = require("../../utils/constants/ENUM");
+const { getIO } = require("../../socket/index");
 
 const momoStatus = catchAsyncError(async (req, res) => {
   const { referenceId, status } = req.body;
@@ -17,34 +15,31 @@ const momoStatus = catchAsyncError(async (req, res) => {
   }
 
   const transaction = await Transaction.findOne({ momoRefId: referenceId });
-  if (!transaction) {
+  if (!transaction)
     throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
-  }
 
   transaction.status = status;
   await transaction.save();
 
   if (status === PaymentStatusEnum.SUCCESS) {
     const wallet = await Wallet.findOne({ userId: transaction.userId });
-    if (!wallet) {
-      throw new ApiError(statusCode.NOT_FOUND, "Wallet not found");
-    }
+    if (!wallet) throw new ApiError(statusCode.NOT_FOUND, "Wallet not found");
 
-    if (transaction.type === TransactionTypeEnum.CREDIT) {
-      wallet.balance += transaction.amount;
-    } else if (transaction.type === TransactionTypeEnum.DEBIT) {
-      if (wallet.balance < transaction.amount) {
-        throw new ApiError(
-          statusCode.BAD_REQUEST,
-          "Insufficient wallet balance"
-        );
-      }
-      wallet.balance -= transaction.amount;
-    }
-
+    wallet.balance += transaction.amount;
     await wallet.save();
   }
 
+  const io = getIO();
+
+  io.to(transaction.userId.toString()).emit("payment:status", {
+    ...transaction.toObject(),
+    message:
+      status === PaymentStatusEnum.SUCCESS
+        ? "Payment successful"
+        : "Payment failed",
+  });
+
+  // ✅ API response
   return res
     .status(statusCode.OK)
     .json(new ApiResponse(statusCode.OK, [], "Status updated successfully"));
