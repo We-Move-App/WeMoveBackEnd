@@ -112,6 +112,13 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
 
   return res.status(statusCode.OK).json(result);
 });
+
+const updateBusOperatorDoc=catchAsyncError(async (req,res)=>{
+  const {docType}=req.params.docType;
+
+
+})
+
 const updateBusOperator = catchAsyncError(async (req, res, next) => {
   const { userId } = req.params;
   const {
@@ -133,15 +140,14 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
 
   const docsToUpload = req.files || {};
   const keys = Object.keys(docsToUpload);
-  
 
   const updateData = {};
   if (email) updateData.email = email.toLowerCase();
   if (phoneNumber) {
-  updateData.phoneNumber = Array.isArray(phoneNumber)
-    ? phoneNumber.find((num) => !!num)?.trim()
-    : phoneNumber.trim();
-}
+    updateData.phoneNumber = Array.isArray(phoneNumber)
+      ? phoneNumber.find((num) => !!num)?.trim()
+      : phoneNumber.trim();
+  }
   if (companyName) updateData.companyName = companyName;
   if (companyAddress) updateData.companyAddress = companyAddress;
   if (fullName) updateData.fullName = fullName;
@@ -149,17 +155,21 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
   if (nationality) updateData.nationality = nationality;
   if (nationIdExpiry) updateData.nationIdExpiry = nationIdExpiry;
 
-
- 
   const validDocumentTypes = ["national_identity_card_front", "national_identity_card_back"];
-  const invalidKeys = keys.filter((key) => !validDocumentTypes.includes(key) && key !== "avatar" && key !== "bank_detail");
+  const invalidKeys = keys.filter(
+    (key) => !validDocumentTypes.includes(key) && key !== "avatar" && key !== "bank_detail"
+  );
   if (invalidKeys.length > 0) {
-    throw new ApiError(statusCode.BAD_REQUEST, `Invalid document types: ${invalidKeys.join(", ")}`);
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      `Invalid document types: ${invalidKeys.join(", ")}`
+    );
   }
 
   const userDocument = await BusOperatorDocumentModel.findOne({ userId });
   let docsIds = [];
 
+  // Upload valid documents
   for (const key of validDocumentTypes) {
     if (docsToUpload[key]) {
       const imgFile = docsToUpload[key][0];
@@ -188,12 +198,33 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
       await userDocument.save();
     }
   }
+
+  // Handle avatar upload
+  if (docsToUpload["avatar"]) {
+    const imgFile = docsToUpload["avatar"][0];
+
+    const existingUser = await BusOperatorModel.findById(userId);
+    if (existingUser?.avatar?.public_id) {
+      await deleteImageFromAws(existingUser.avatar.public_id);
+    }
+
+    const cloudImage = await uploadImageOnAws(imgFile.path);
+    updateData.avatar = {
+      public_id: cloudImage?.public_id,
+      url: cloudImage?.secure_url,
+    };
+  }
+
+  // Handle bank details
   const findBank = await BusOperatorBankModel.findOne({ userId });
   if (findBank) {
     if (accountNumber && accountNumber !== findBank.accountNumber) {
       const existingAccount = await BusOperatorBankModel.findOne({ accountNumber });
       if (existingAccount) {
-        throw new ApiError(statusCode.CONFLICT, "This account number is already registered by another user.");
+        throw new ApiError(
+          statusCode.CONFLICT,
+          "This account number is already registered by another user."
+        );
       }
     }
 
@@ -202,28 +233,30 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
     findBank.bankName = bankName || findBank.bankName;
     findBank.ifscCode = ifscCode || findBank.ifscCode;
     findBank.branchName = branchName || findBank.branchName;
-   if (phoneNumber) {
-  findBank.phoneNumber = Array.isArray(phoneNumber)
-    ? phoneNumber.find((num) => !!num)?.trim()
-    : phoneNumber.trim();
-}
+    if (phoneNumber) {
+      findBank.phoneNumber = Array.isArray(phoneNumber)
+        ? phoneNumber.find((num) => !!num)?.trim()
+        : phoneNumber.trim();
+    }
     findBank.isPrimary = isPrimary ?? findBank.isPrimary;
-if (docsToUpload["bank_detail"]) {
-  if (findBank.bankDocs?.public_id) {
-    await deleteImageFromAws(findBank.bankDocs.public_id);
-  }
 
-  const imgFile = docsToUpload["bank_detail"][0]; 
-  const cloudImage = await uploadImageOnAws(imgFile.path); 
-  findBank.bankDocs = {
-    public_id: cloudImage?.public_id,
-    url: cloudImage?.secure_url,
-  };
-}
+    // Upload bank document
+    if (docsToUpload["bank_detail"]) {
+      if (findBank.bankDocs?.public_id) {
+        await deleteImageFromAws(findBank.bankDocs.public_id);
+      }
 
+      const imgFile = docsToUpload["bank_detail"][0];
+      const cloudImage = await uploadImageOnAws(imgFile.path);
+      findBank.bankDocs = {
+        public_id: cloudImage?.public_id,
+        url: cloudImage?.secure_url,
+      };
+    }
 
     await findBank.save();
   }
+
   const updatedUser = await BusOperatorModel.findByIdAndUpdate(userId, updateData, {
     new: true,
     runValidators: true,
@@ -235,12 +268,14 @@ if (docsToUpload["bank_detail"]) {
 
   return res
     .status(statusCode.OK)
-    .json(new ApiResponse(statusCode.OK,
-      { user: updatedUser, bankDetails: findBank,  },
-       "Bus operator profile updated successfully."));
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { user: updatedUser, bankDetails: findBank },
+        "Bus operator profile updated successfully."
+      )
+    );
 });
-
-
 
 const searchBusOperators = async (req, res) => {
   try {
