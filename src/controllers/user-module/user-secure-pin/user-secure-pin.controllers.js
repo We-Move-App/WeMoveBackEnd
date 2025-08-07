@@ -56,7 +56,7 @@ const CreateSecurePin = catchAsyncError(async (req, res, next) => {
     securePin,
   });
   await createSecurePin.save();
-  isUser.verificationStatus = "approved";
+  isUser.verificationStatus = "submitted";
 
   await isUser.save();
 

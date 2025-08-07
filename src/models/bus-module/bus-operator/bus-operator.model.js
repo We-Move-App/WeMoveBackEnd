@@ -26,6 +26,12 @@ const busOperatorSchema = new mongoose.Schema(
       trim: true,
       minlength: [3, "fullName must be at least 3 characters long"],
     },
+    companyName: {
+      type: String, 
+    },
+    companyAddress: {
+      type: String, 
+    },
     email: {
       type: String,
       unique: true,
@@ -94,6 +100,12 @@ const busOperatorSchema = new mongoose.Schema(
         message: (props) => validateDOB(props.value).message,
       },
     },
+    createdBy: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Admin", // or whatever your admin model is called
+  default: null,
+},
+
     idNumber: { type: String },
     nationality: { type: String },
     termAndCondition: {

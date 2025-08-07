@@ -1,7 +1,8 @@
 const statusCode = require("../constants/statusCode");
 const ApiError = require("../response/ApiError");
 const ApiResponse = require("../response/ApiResponse");
-
+const busModel = require("../../models/bus-module/buses/buses.model");  
+const { HostAddress } = require("mongodb");
 const getAllUsersByAdmin = async ({ req, model, options }) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
@@ -30,11 +31,20 @@ const getAllUsersByAdmin = async ({ req, model, options }) => {
     .limit(limit)
     .skip(startIndex)
     .select("avatar email phoneNumber fullName verificationStatus");
-    
+    const  totalbusCount = await Promise.all(
+    users.map(async (user) => {
+      const busCount = await busModel.countDocuments({ ownerId: user._id });
+      return {
+        ...user.toObject(),
+        busCount,
+      };
+    })
+  );
   const totalUser = await model.countDocuments(query).exec();
 
+
   const results = {
-    users,
+    data: totalbusCount,
     totalPages: Math.ceil(totalUser / limit),
     currentPage: page,
     totalCount: totalUser,
@@ -48,9 +58,10 @@ const getUserByIdByAdmin = async ({
   userModel,
   userDocsModel,
   userBankModel,
+
 }) => {
   const { userId } = req.params;
-  const [user, userDocs, userBank] = await Promise.all([
+  const [user, userDocs, userBank , ] = await Promise.all([
     userModel
       .findOne({ _id: userId })
       .populate("verifiedBy.admin", "userName phoneNumber email"),
@@ -66,6 +77,7 @@ const getUserByIdByAdmin = async ({
     user,
     docs: userDocs,
     bank: userBank,
+    address: user.address
   };
   return new ApiResponse(statusCode.OK, result, `Data found Successfully`);
 };

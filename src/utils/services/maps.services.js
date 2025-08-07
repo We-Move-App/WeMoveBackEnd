@@ -28,6 +28,7 @@ const getAddressCoordinate = async (address) => {
 };
 
 const getDistanceTime = async (pickup, drop) => {
+  console.log("Pickup:", pickup, "Drop:", drop);
   if (!pickup || !drop) {
     throw new ApiError("Origin and destination are required");
   }

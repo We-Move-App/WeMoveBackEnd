@@ -8,6 +8,7 @@ const {
 
 const googleSearch = catchAsyncError(async (req, res, next) => {
   const { address, index } = req.query;
+console.log("Address:", address, "Index:", index)
 
   if (!address) {
     throw new ApiError(statusCode.BAD_REQUEST, "Address must be provided");

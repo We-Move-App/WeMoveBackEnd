@@ -339,10 +339,7 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
   const pageNum = parseInt(page);
   const limitNum = parseInt(limit);
   if (isNaN(requiredRoomCount) || requiredRoomCount <= 0) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "requiredRooms must be a positive integer."
-    );
+    throw new ApiError(statusCode.BAD_REQUEST, "requiredRooms must be a positive integer.");
   }
 
   if (!requiredRoomCount) {
@@ -563,21 +560,31 @@ const getHotelById = catchAsyncError(async (req, res) => {
   if (!hotel) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
   }
+   const now = new Date();
+  const activeBookings = await HotelBookingModel.find({
+    hotelId,
+    status: "Booked",
+    checkInDate: { $lte: now },
+    checkOutDate: { $gte: now }
+  }).select("noOfRoom").lean();
 
-  // Get related data
-  const [hotelImages, hotelAddress, hotelPolicies, hotelFeedbacks, roomTypes] =
-    await Promise.all([
-      hotelImagesModel.findOne({ hotelId }).select("images").lean(),
-      HotelAddressModel.findOne({ hotelId })
-        .populate("address", "townCity address landmark")
-        .select("address")
-        .lean(),
-      HotelPolicyModel.findOne({ hotelId })
-        .select("amenities checkInTime checkOutTime")
-        .lean(),
-      HotelFeedbackModel.find({ hotelId }).select("rating").lean(),
-      Room.find({ hotelId }).select("roomType roomPrice numberOfRoom").lean(),
-    ]);
+  const bookedRoomCount = activeBookings.reduce((total, booking) => {
+    return total + (booking.noOfRoom || 0);
+  }, 0);
+
+  const availableRoomCount = Math.max((hotel.totalRoom || 0) - bookedRoomCount, 0);
+
+
+  const [hotelImages, hotelAddress, hotelPolicies, hotelFeedbacks, roomTypes] = await Promise.all([
+    hotelImagesModel.findOne({ hotelId }).select("images").lean(),
+    HotelAddressModel.findOne({ hotelId })
+      .populate("address", "townCity address landmark")
+      .select("address")
+      .lean(),
+    HotelPolicyModel.findOne({ hotelId }).select("amenities checkInTime checkOutTime").lean(),
+    HotelFeedbackModel.find({ hotelId }).select("rating").lean(),
+    Room.find({ hotelId }).select("roomType  amenities roomPrice  numberOfRoom").lean()
+  ]);
   const allHotelImages = hotelImages?.images || [];
 
   // Process room types with availability check if dates provided
@@ -713,6 +720,7 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
       const hoursLeft = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
       const isCancellable = hoursLeft >= 24;
 
+
       const hotelImages = await hotelImagesModel
         .findOne({ hotelId: booking.hotelId._id })
         .select("images")
@@ -846,74 +854,11 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
   if (hoursBeforeCheckIn < 24) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "You can only cancel your booking at least 24 hours before check-in"
+      "You can only cancel your booking at least 24 hours before the journey"
     );
   }
 
-  // ---- Wallet & Refund Logic ----
-  if (booking.paymentStatus === "PAID") {
-    const refundAmount = booking.totalAmount * 0.5;
 
-    const hotelManagerId = booking.hotelId.ownerId.toString();
-
-    const [userWallet, hotelWallet] = await Promise.all([
-      WalletModel.findOne({ userId }),
-      WalletModel.findOne({ userId: hotelManagerId }),
-    ]);
-
-    if (!userWallet) {
-      throw new ApiError(statusCode.NOT_FOUND, "Wallet not found for user");
-    }
-    if (!hotelWallet) {
-      throw new ApiError(
-        statusCode.NOT_FOUND,
-        "Wallet not found for hotel manager"
-      );
-    }
-
-    if (hotelWallet.balance < refundAmount) {
-      throw new ApiError(
-        statusCode.BAD_REQUEST,
-        "Insufficient balance in hotel manager wallet to process refund"
-      );
-    }
-
-    // Step 1: Add refund to user
-    userWallet.balance += refundAmount;
-    await userWallet.save();
-
-    await TransactionModel.create({
-      transactionId: uuidv4(),
-      userId,
-      bookingId,
-      type: TransactionTypeEnum.CREDIT,
-      status: PaymentStatusEnum.SUCCESS,
-      amount: refundAmount,
-      currency: userWallet.currency,
-      description: `50% refund for cancelled hotel booking ${bookingId}`,
-      refund: true,
-    });
-
-    // Step 2: Deduct from hotel manager
-    hotelWallet.balance -= refundAmount;
-    await hotelWallet.save();
-
-    await TransactionModel.create({
-      transactionId: uuidv4(),
-      hotelManagerId,
-      bookingId,
-      type: TransactionTypeEnum.DEBIT,
-      status: PaymentStatusEnum.SUCCESS,
-      amount: refundAmount,
-      currency: hotelWallet.currency,
-      description: `Deduction for 50% refund of cancelled hotel booking ${bookingId}`,
-      refund: true,
-    });
-
-    booking.paymentStatus = "REFUNDED";
-  }
-
-  // ---- Existing Room Update Logic ----
   booking.status = "Cancelled";
   booking.cancelledBy = "user";
   if (cancelReason) {
@@ -992,5 +937,5 @@ module.exports = {
   getUpcomingBookings,
   getPastBookings,
   getCancelReasons,
-  cancelHotelBooking,
+  cancelHotelBooking
 };

@@ -443,7 +443,6 @@ const getRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
     }, "Room data fetched successfully.")
   );
 });
-// ......fetchAllRoomsByHotel
 
 const getAllRooms = catchAsyncError(async (req, res, next) => {
   const { hotelId } = req.query;

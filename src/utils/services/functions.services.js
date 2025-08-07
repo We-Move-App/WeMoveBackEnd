@@ -45,21 +45,18 @@ const registerUserWithEmailAndPhoneNumber = async ({
   req,
   reqModel,
   typeOfUser,
+  createdByAdmin = false, // Default to false if not provided
   res,
 }) => {
-  const { email, fullName, password, address, phoneNumber } = req.body;
+  const { email,companyAddress,companyName, fullName, password, address, phoneNumber } = req.body;
 
-  const reqField = ["email", "password", "phoneNumber"];
+  const reqField = ["email","companyName", "password", "phoneNumber"];
   validateRequestBody(reqField, req.body);
 
-  const isEmailVerified = await emailVerifyModel.findOne({
-    email,
-    verified: true,
-  });
-  const isPhoneNumberVerified = await phoneNumberVerifyModel.findOne({
-    phoneNumber,
-    verified: true,
-  });
+  if (!createdByAdmin) {
+  // only verify email/phone if NOT created by admin
+  const isEmailVerified = await emailVerifyModel.findOne({ email, verified: true });
+  const isPhoneNumberVerified = await phoneNumberVerifyModel.findOne({ phoneNumber, verified: true });
 
   if (!isEmailVerified || !isPhoneNumberVerified) {
     const missingVerification = !isEmailVerified ? "email" : "phone number";
@@ -68,6 +65,8 @@ const registerUserWithEmailAndPhoneNumber = async ({
       `Please verify your ${missingVerification} before registering`
     );
   }
+}
+
 
   const existingUser = await reqModel
     .findOne({
@@ -103,6 +102,8 @@ const registerUserWithEmailAndPhoneNumber = async ({
   }
 
   const newUser = new reqModel({
+    companyName,
+    companyAddress,
     email,
     fullName,
     password,
@@ -110,6 +111,8 @@ const registerUserWithEmailAndPhoneNumber = async ({
     phoneNumber,
     emailVerified: true,
     phoneNumberVerified: true,
+    verificationStatus: createdByAdmin ? "approved" : "submitted", 
+    
   });
 
   await newUser.save();
@@ -538,7 +541,7 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
     );
   }
 
-  // ✅ Update verification flags BEFORE generating response
+  
   if (validateEmail(identifier)) {
     user.emailVerified = true;
   } else if (validatePhoneNumber(identifier)) {
