@@ -484,6 +484,116 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
   );
 });
 
+const searchAllBusBookings = catchAsyncError(async (req, res, next) => {
+  const {
+    from,
+    to,
+    busRegNumber,
+    passengerName,
+    email,
+    phone,
+    journeyDate,
+    paymentStatus,
+    sortBy,
+    order,
+    limit,
+    page,
+  } = req.query;
+
+  const query = {};
+
+  if (from) {
+    query.from = { $regex: from, $options: "i" };
+  }
+
+  if (to) {
+    query.to = { $regex: to, $options: "i" };
+  }
+
+  if (paymentStatus) {
+    query.paymentStatus = paymentStatus;
+  }
+
+  if (journeyDate) {
+    const jd = moment.utc(journeyDate, "YYYY-MM-DD", true);
+    if (!jd.isValid()) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Invalid journeyDate format");
+    }
+    query.journeyDate = {
+      $eq: normalizeDate(jd),
+    };
+  }
+
+  if (passengerName || email || phone) {
+    query.passengers = {
+      $elemMatch: {},
+    };
+    if (passengerName) {
+      query.passengers.$elemMatch.name = { $regex: passengerName, $options: "i" };
+    }
+    if (email) {
+      query.passengers.$elemMatch.email = { $regex: email, $options: "i" };
+    }
+    if (phone) {
+      query.passengers.$elemMatch.contactNumber = { $regex: phone, $options: "i" };
+    }
+  }
+
+  const pageNumber = parseInt(page) || 1;
+  const pageSize = parseInt(limit) || 10;
+  const skip = (pageNumber - 1) * pageSize;
+  const sortField = sortBy || "createdAt";
+  const sortOrder = order === "desc" ? 1 : -1;
+
+  // Main query with busId filtering to get busRegNumber
+  const bookings = await BusBookingModel.find(query)
+    .populate({
+      path: "busId",
+      select: "busRegNumber",
+      match: busRegNumber ? { busRegNumber: { $regex: busRegNumber, $options: "i" } } : {},
+    })
+    .sort({ [sortField]: sortOrder })
+    .skip(skip)
+    .limit(pageSize);
+
+  // Filter out bookings where busId is null due to busRegNumber mismatch
+  const validBookings = bookings.filter((b) => b.busId);
+
+  if (!validBookings.length) {
+    throw new ApiError(statusCode.NOT_FOUND, "No bookings found");
+  }
+
+  const formattedBookings = validBookings.flatMap((booking) =>
+    booking.passengers.map((passenger) => ({
+      bookingId: booking._id,
+      busRegNumber: booking.busId?.busRegNumber || "N/A",
+      customerName: passenger.name,
+      phone: passenger.contactNumber,
+      email: passenger.email,
+      from: booking.from,
+      to: booking.to,
+      journeyDate: booking.journeyDate,
+      amount: booking.price || 0,
+      paymentStatus: booking.paymentStatus,
+    }))
+  );
+
+  const totalBookings = await BusBookingModel.countDocuments(query);
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        bookings: formattedBookings,
+        totalBookings,
+        totalPages: Math.ceil(totalBookings / pageSize),
+        currentPage: pageNumber,
+      },
+      "Bus bookings retrieved successfully"
+    )
+  );
+});
+
 module.exports = {
   registerBusOperator,
   updateBusOperator,
@@ -493,4 +603,5 @@ module.exports = {
   deleteBusOperatorAccount,
   searchBusOperators,
   getAllBusBookings,
+  searchAllBusBookings
 };
