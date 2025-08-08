@@ -335,32 +335,45 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
 
 const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
+
   if (!bookingId) {
     throw new ApiError(statusCode.BAD_REQUEST, "Booking ID is required");
   }
+
   const booking = await BusBookingModel.findById(bookingId)
-    .populate(
-      "busId",
-      "busName busRegNumber"
-    )
-    .populate("routeId", "startLocation endLocation departureTime arrivalTime")
+    .populate("busId", "busRegNumber")
+    .populate("routeId", "startLocation endLocation");
 
   if (!booking) {
     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
   }
 
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      {
-        user: updatedUser,
-        bankDetails: findBank,
-        documents: uploadedDocsInfo,
-      },
-      "Bus operator profile updated successfully."
-    )
-  );
+  const filteredResponse = {
+    bookingId: booking._id,
+    passengers: booking.passengers.map((p) => ({
+      name: p.name,
+      email: p.email,
+      contactNumber: p.contactNumber,
+    })),
+    busRegNumber: booking.busId?.busRegNumber,
+    paymentStatus: booking.paymentStatus,
+    paymentAmount: booking.price,
+    from: booking.routeId?.startLocation || booking.from,
+    to: booking.routeId?.endLocation || booking.to,
+    journeyDate: booking.journeyDate,
+  };
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        filteredResponse,
+        "Bus booking details retrieved successfully"
+      )
+    );
 });
+
 
 
 const searchBusOperators = async (req, res) => {
