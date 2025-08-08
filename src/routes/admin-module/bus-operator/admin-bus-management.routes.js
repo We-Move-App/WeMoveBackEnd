@@ -16,7 +16,8 @@ const {
   verifyUserProfile,
   deleteBusOperatorAccount,
   searchBusOperators, 
-  getAllBusBookings
+  getAllBusBookings,
+  searchAllBusBookings
 } = require("../../../controllers/admin-module/bus-management/admin-bus-management.controllers");
 const adminBusManagementRoutes = express.Router();
 
@@ -79,6 +80,13 @@ adminBusManagementRoutes
     getAllBusBookings
   );
 
+  adminBusManagementRoutes
+  .route("/search-bus-bookings")
+  .get(
+    isAdminAuthenticated,
+    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+    searchAllBusBookings
+  );
 
 
 
