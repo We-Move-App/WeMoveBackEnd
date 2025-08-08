@@ -25,6 +25,7 @@ const {
   userVerifiedByAdmin,
 } = require("../../../utils/services/admin.services");
 const BusBookingModel = require("../../../models/bus-module/bus-bookings/bus-bookings.model");
+const Wallet = require("../../../models/wallet-module/wallets.model");
 const BusModel = require("../../../models/bus-module/buses/buses.model");
 const BusRouteModel = require("../../../models/bus-module/bus-routes/bus-routes.model");
 const multer = require("../../../utils/uploadFiles/multer");
@@ -38,6 +39,7 @@ const getAllBusOperators = catchAsyncError(async (req, res, next) => {
 const {
   validateRequestBody,
 } = require("../../../utils/reqFunctions/reqFunction");
+const generateUniqueCardNumber = require("../../../utils/customId/generateUniqueCardNumber");
 
 const getSingleUser = catchAsyncError(async (req, res, next) => {
   const result = await getUserByIdByAdmin({
@@ -133,6 +135,17 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
   // Step 2: Create Bus Operator
   const busOperator = await BusOperatorModel.create(busOperatorData);
   const operatorId = busOperator._id;
+
+  //creating the wallet
+  let wallet = await Wallet.findOne({ userId: operatorId });
+  if (!wallet) {
+    wallet = await Wallet.create({
+      userId: operatorId,
+      balance: 0,
+      currency: process.env.MOMO_CURRENCY,
+      cardNumber: await generateUniqueCardNumber(),
+    });
+  }
 
   // Step 3: Create Bank Details
   let bankDetailDoc = null;
@@ -274,7 +287,9 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
   const findBank = await BusOperatorBankModel.findOne({ userId });
   if (findBank) {
     if (accountNumber && accountNumber !== findBank.accountNumber) {
-      const existingAccount = await BusOperatorBankModel.findOne({ accountNumber });
+      const existingAccount = await BusOperatorBankModel.findOne({
+        accountNumber,
+      });
       if (existingAccount) {
         throw new ApiError(
           statusCode.CONFLICT,
@@ -283,7 +298,8 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
       }
     }
 
-    findBank.accountHolderName = accountHolderName || findBank.accountHolderName;
+    findBank.accountHolderName =
+      accountHolderName || findBank.accountHolderName;
     findBank.accountNumber = accountNumber || findBank.accountNumber;
     findBank.bankName = bankName || findBank.bankName;
     findBank.ifscCode = ifscCode || findBank.ifscCode;
@@ -307,10 +323,14 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
   }
 
   // Update Bus Operator
-  const updatedUser = await BusOperatorModel.findByIdAndUpdate(userId, updateData, {
-    new: true,
-    runValidators: true,
-  }).select("-password");
+  const updatedUser = await BusOperatorModel.findByIdAndUpdate(
+    userId,
+    updateData,
+    {
+      new: true,
+      runValidators: true,
+    }
+  ).select("-password");
 
   if (!updatedUser) {
     throw new ApiError(statusCode.NOT_FOUND, "User not found.");
@@ -335,27 +355,22 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.BAD_REQUEST, "Booking ID is required");
   }
   const booking = await BusBookingModel.findById(bookingId)
-    .populate(
-      "busId",
-      "busName busRegNumber"
-    )
-    .populate("routeId", "startLocation endLocation departureTime arrivalTime")
+    .populate("busId", "busName busRegNumber")
+    .populate("routeId", "startLocation endLocation departureTime arrivalTime");
 
   if (!booking) {
     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
   }
 
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      {
-        user: updatedUser,
-        bankDetails: findBank,
-        documents: uploadedDocsInfo,
-      },
-      "Bus operator profile updated successfully."
-    )
-  );
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        booking,
+        "Bus operator profile updated successfully."
+      )
+    );
 });
 
 const searchBusOperators = async (req, res) => {
@@ -487,7 +502,7 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     .skip(skip)
     .limit(pageSize)
     .select(
-      "from to seatNumbers paymentStatus journeyDate passengers status createdAt updatedAt email phoneNumber bookedBy bookedByOperator bookingBy"
+      "from to seatNumbers paymentStatus journeyDate passengers status price createdAt updatedAt email phoneNumber bookedBy bookedByOperator bookingBy"
     )
     .populate("bookedBy", "fullName email phoneNumber")
     .populate("bookedByOperator", "fullName email phoneNumber")
@@ -557,13 +572,19 @@ const searchAllBusBookings = catchAsyncError(async (req, res, next) => {
       $elemMatch: {},
     };
     if (passengerName) {
-      query.passengers.$elemMatch.name = { $regex: passengerName, $options: "i" };
+      query.passengers.$elemMatch.name = {
+        $regex: passengerName,
+        $options: "i",
+      };
     }
     if (email) {
       query.passengers.$elemMatch.email = { $regex: email, $options: "i" };
     }
     if (phone) {
-      query.passengers.$elemMatch.contactNumber = { $regex: phone, $options: "i" };
+      query.passengers.$elemMatch.contactNumber = {
+        $regex: phone,
+        $options: "i",
+      };
     }
   }
 
@@ -578,7 +599,9 @@ const searchAllBusBookings = catchAsyncError(async (req, res, next) => {
     .populate({
       path: "busId",
       select: "busRegNumber",
-      match: busRegNumber ? { busRegNumber: { $regex: busRegNumber, $options: "i" } } : {},
+      match: busRegNumber
+        ? { busRegNumber: { $regex: busRegNumber, $options: "i" } }
+        : {},
     })
     .sort({ [sortField]: sortOrder })
     .skip(skip)
@@ -632,5 +655,5 @@ module.exports = {
   searchBusOperators,
   getAllBusBookings,
   getBusBookingDetails,
-  searchAllBusBookings
+  searchAllBusBookings,
 };
