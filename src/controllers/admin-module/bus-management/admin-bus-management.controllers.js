@@ -329,6 +329,34 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
   );
 });
 
+const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
+  const { bookingId } = req.params;
+  if (!bookingId) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Booking ID is required");
+  }
+  const booking = await BusBookingModel.findById(bookingId)
+    .populate(
+      "busId",
+      "busName busRegNumber"
+    )
+    .populate("routeId", "startLocation endLocation departureTime arrivalTime")
+
+  if (!booking) {
+    throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
+  }
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        user: updatedUser,
+        bankDetails: findBank,
+        documents: uploadedDocsInfo,
+      },
+      "Bus operator profile updated successfully."
+    )
+  );
+});
 
 const searchBusOperators = async (req, res) => {
   try {
@@ -603,5 +631,6 @@ module.exports = {
   deleteBusOperatorAccount,
   searchBusOperators,
   getAllBusBookings,
+  getBusBookingDetails,
   searchAllBusBookings
 };
