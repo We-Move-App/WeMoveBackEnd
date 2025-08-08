@@ -10,15 +10,15 @@ const {
 
 const {
   registerBusOperator,
-   updateBusOperator,  
+  updateBusOperator,
   getAllBusOperators,
   getSingleUser,
   verifyUserProfile,
   deleteBusOperatorAccount,
-  searchBusOperators, 
+  searchBusOperators,
   getAllBusBookings,
   searchAllBusBookings,
-  getBusBookingDetails
+  getBusBookingDetails,
 } = require("../../../controllers/admin-module/bus-management/admin-bus-management.controllers");
 const adminBusManagementRoutes = express.Router();
 
@@ -29,27 +29,28 @@ adminBusManagementRoutes
     authorizeRole(["SuperAdmin", "Admin"]),
     getAllBusOperators
   );
-  adminBusManagementRoutes
+adminBusManagementRoutes
   .route("/bus-operators/register")
   .post(
     isAdminAuthenticated,
     authorizeRole(["SuperAdmin", "Admin"]),
     registerBusOperator
   );
-  adminBusManagementRoutes
+adminBusManagementRoutes
   .route("/bus-operators/search")
   .get(
     isAdminAuthenticated,
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
     searchBusOperators
   );
-    adminBusManagementRoutes
+adminBusManagementRoutes
   .route("/bus-operators/updateBusOperator/:userId")
-  .put( 
-    isAdminAuthenticated, uploadDocuments, 
+  .put(
+    isAdminAuthenticated,
+    uploadDocuments,
     authorizeRole(["SuperAdmin", "Admin"]),
-     updateBusOperator
-  );  
+    updateBusOperator
+  );
 adminBusManagementRoutes
   .route("/bus-operators/:userId")
   .get(
@@ -73,31 +74,23 @@ adminBusManagementRoutes
     deleteBusOperatorAccount
   );
 
+adminBusManagementRoutes.route("/AllBusBookings").get(getAllBusBookings);
 
 adminBusManagementRoutes
-  .route("/AllBusBookings")
-  .get(
-    
-    getAllBusBookings
-  );
-
-  adminBusManagementRoutes
-  .route("/bus-booking-details/:bookingId")   
+  .route("/bus-booking-details/:bookingId")
   .get(
     isAdminAuthenticated,
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
     getBusBookingDetails
   );
 
-  adminBusManagementRoutes
+adminBusManagementRoutes
   .route("/search-bus-bookings")
   .get(
     isAdminAuthenticated,
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
     searchAllBusBookings
   );
-
-
 
 module.exports = {
   adminBusManagementRoutes,
