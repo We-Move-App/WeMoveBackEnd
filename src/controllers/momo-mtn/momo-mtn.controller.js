@@ -107,7 +107,7 @@ const requestTopay = catchAsyncError(async (req, res) => {
     message: "Awaiting MTN payment confirmation",
   });
 
-  const outcomes = ["SUCCESS", "SUCCESS", "FAILED", "NR", "SUCCESS"];
+  const outcomes = ["SUCCESS", "FAILED", "SUCCESS", "NR", "SUCCESS"];
   const randomOutcome = outcomes[Math.floor(Math.random() * outcomes.length)];
   console.log("randomOutcome", randomOutcome);
 
@@ -115,7 +115,7 @@ const requestTopay = catchAsyncError(async (req, res) => {
     setTimeout(async () => {
       try {
         await axios.post(
-          `http://139.59.20.155:8000/api/v1/webhook/momo-status`,
+          `${process.env.BE_BASE_URL}/api/v1/webhook/momo-status`,
           {
             referenceId,
             status: randomOutcome,
@@ -126,7 +126,9 @@ const requestTopay = catchAsyncError(async (req, res) => {
             },
           }
         );
-        console.log(`Simulated webhook callback with status: ${randomOutcome}`);
+        console.log(
+          `Simulated webhook callback with status: ${randomOutcome} ${process.env.BE_BASE_URL}`
+        );
       } catch (err) {
         console.error("Failed to simulate webhook:");
         if (err.response) {
@@ -152,7 +154,7 @@ const requestTopay = catchAsyncError(async (req, res) => {
         message: "Payment timed out after 350 seconds",
       });
     }
-  }, 15000); // 350 seconds
+  }, 15000); // 350 seconds 350000
 
   return res.status(statusCode.OK).json(
     new ApiResponse(
