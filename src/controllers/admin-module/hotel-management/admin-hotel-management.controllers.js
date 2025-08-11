@@ -1,17 +1,17 @@
-
+ const express = require("express");
+ const ApiError = require("../../../utils/response/ApiError");
+ const catchAsyncError = require("../../../utils/response/catchAsyncError");
+ const ApiResponse = require("../../../utils/response/ApiResponse");
+ const statusCode = require("../../../utils/constants/statusCode");
 const {
   HotelManagerBankModel,
 } = require("../../../models/hotel-module/hotel-manager-banks/hotel-manager-banks.model");
 const {
   HotelManagerDocumentModel,
 } = require("../../../models/hotel-module/hotel-manager-documents/hotel-manager-documents.model");
-const HotelManagerModel = require("../../../models/hotel-module/hotel-manager/hotel-manager.model");
-const statusCode = require("../../../utils/constants/statusCode");
-const catchAsyncError = require("../../../utils/response/catchAsyncError");
+const HotelManagerModel = require("../../../models/hotel-module/hotel-manager/hotel-manager.model")
 const Hotel = require("../../../models/hotel-module/hotel-registration/hotel-details.model");
 const HotelAddressModel = require("../../../models/hotel-module/hotel-registration/hotel-location.model");
-const ApiError = require("../../../utils/response/ApiError");
-const ApiResponse = require("../../../utils/response/ApiResponse");
 const mongoose = require("mongoose");
 const individualRoomModule = require("../../../models/hotel-module/single-room/individual-room.module");
 const hotelImagesModel = require("../../../models/hotel-module/hotel-images/hotel-images.model");
@@ -21,11 +21,15 @@ const HotelRoomImagesModel= require("../../../models/hotel-module/hotel-room-ima
 const HotelBookingModel = require("../../../models/hotel-module/hotel-bookings/hotel-bookings.model");
 const Room = require("../../../models/hotel-module/hotel-registration/hotel-room-amenities.model");
 const {DocumentsModel} = require("../../../models/global-module/documents/document.model");
+const Wallet=require('../../../models/wallet-module/wallets.model')
+const { uploadSingleImageToAws } = require("../../../utils/uploadFiles/images/uploadImages");
+const generateUniqueCardNumber = require("../../../utils/customId/generateUniqueCardNumber");
 const {
   getAllUsersByAdmin,
   getUserByIdByAdmin,
   userVerifiedByAdmin,
 } = require("../../../utils/services/admin.services");
+
 
 const getAllHotelManagers = catchAsyncError(async (req, res, next) => {
   const results = await getAllUsersByAdmin({ req, model: HotelManagerModel });
@@ -39,9 +43,6 @@ const getSingleUser = catchAsyncError(async (req, res, next) => {
     userModel: HotelManagerModel,
     userDocsModel: HotelManagerDocumentModel,
     userBankModel: HotelManagerBankModel,
-   // AssHuming no hotel model is needed for hotel managers
-
-
   });
 
   return res.status(statusCode.OK).json(result);
@@ -142,9 +143,6 @@ const bankDocument = await DocumentsModel.findOne({
   );
 });
 
-//..................searchHotelManagers........................
-
-
 const searchHotelManagers = catchAsyncError(async (req, res, next) => {
   const phoneNumber = req.query?.phoneNumber?.trim();
 const email = req.query?.email?.trim();
@@ -215,13 +213,90 @@ const hotelName = req.query?.hotelName?.trim();
   });
 });
 
+const registerHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
+ 
+  if (!req.body) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Request body is missing");
+  }
+
+  const { fullName, phoneNumber, email } = req.body || {};
+
+  // ✅ Validate required fields
+  if (!fullName || !phoneNumber || !email) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Full name, phone number, and email are required."
+    );
+  }
 
 
+  const existingUser = await HotelManagerModel.findOne({
+    $or: [
+      { email: email.toLowerCase() },
+      { phoneNumber }
+    ]
+  }).select("-password");
 
+  if (existingUser) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Email or phone number already exists.");
+  }
+
+  let avatarData = null;
+  if (req.files?.avatar?.[0]) {
+    const localFilePath = req.files.avatar[0].path;
+    avatarData = await uploadSingleImageToAws(localFilePath, "hotel-managers");
+  }
+
+  const newHotelManager = new HotelManagerModel({
+    fullName,
+    phoneNumber,
+    email: email.toLowerCase(),
+    password: "hotelManager@123",
+    avatar: avatarData
+      ? {
+          secure_url: avatarData.secure_url,
+          public_id: avatarData.public_id,
+        }
+      : null,
+    isverified: true,
+    emailVerified: true,
+    phoneNumberVerified: true,
+    verificationStatus: "approved",
+  });
+
+  await newHotelManager.save();
+
+  // ✅ Create wallet if not exists
+  let wallet = await Wallet.findOne({ userId: newHotelManager._id });
+  if (!wallet) {
+    wallet = await Wallet.create({
+      userId: newHotelManager._id,
+      balance: 0,
+      currency: process.env.MOMO_CURRENCY || "USD",
+      cardNumber: await generateUniqueCardNumber(),
+    });
+  }
+
+  // ✅ Remove password before sending response
+  const userObject = newHotelManager.toObject();
+  delete userObject.password;
+
+  // ✅ Send success response
+  return res
+    .status(statusCode.CREATED)
+    .json(
+      new ApiResponse(
+        statusCode.CREATED,
+        { ...userObject, wallet },
+        "Hotel Manager created successfully."
+      )
+    );
+});
 
 
 
 module.exports = {
+  registerHotelManagerFromAdmin,
   getHotelByManagerId,
   getAllHotelManagers,
   getSingleUser,
