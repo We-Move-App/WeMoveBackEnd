@@ -204,9 +204,9 @@ const loginHotelManager = catchAsyncError(async (req, res, next) => {
 
   const isPasswordMatch = await existingUser.comparePassword(password);
 
-  // if (!isPasswordMatch) {
-  //   throw new ApiError(statusCode.BAD_REQUEST, `Invalid Credentials`);
-  // }
+  if (!isPasswordMatch) {
+    throw new ApiError(statusCode.BAD_REQUEST, `Invalid Credentials`);
+  }
 
   const userObject = existingUser.toObject();
   delete userObject.password;

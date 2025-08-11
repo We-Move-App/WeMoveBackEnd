@@ -225,7 +225,8 @@ const requestRide = async (req, res, next) => {
 
         // Step 6.3: Assign or cancel
         if (nearbyDrivers.length > 0) {
-          assignRideToDrivers(bookingId, nearbyDrivers, newBooking, vehicle, otp);
+          const io = getIO();
+          assignRideToDrivers(io,bookingId, nearbyDrivers, newBooking, vehicle, otp);
         } else {
           await RideBookingDetail.findOneAndUpdate(
             { bookingId },

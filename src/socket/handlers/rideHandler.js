@@ -7,9 +7,10 @@ const {
 /**
  * Assigns ride sequentially to nearby drivers
  */
-const assignRideToDrivers = (io, bookingId, drivers, booking, vehicle, otp, index = 0) => {
+const assignRideToDrivers = async (io, bookingId, drivers, booking, vehicle, otp, index = 0) => {
   if (index >= drivers.length) {
-    RideBookingDetail.findOneAndUpdate(
+    console.log('🚫 No more drivers to assign - cancelling ride');
+    await RideBookingDetail.findOneAndUpdate(
       { bookingId },
       {
         rideStatus: RideBookStatusEnum.CANCELLED,
@@ -18,7 +19,7 @@ const assignRideToDrivers = (io, bookingId, drivers, booking, vehicle, otp, inde
         "timestamps.cancelledAt": new Date(),
       }
     );
-    io.to(booking.userId).emit("ride:cancelled", {
+    io.to(booking.userId.toString()).emit("ride:cancelled", {
       bookingId,
       reason: "No drivers accepted",
     });
@@ -26,24 +27,54 @@ const assignRideToDrivers = (io, bookingId, drivers, booking, vehicle, otp, inde
   }
 
   const driver = drivers[index];
-  RideBookingDetail.findOneAndUpdate({ bookingId }, { driverId: driver.driverId });
+  console.log(`🔄 Attempting to assign ride ${bookingId} to driver ${driver.driverId} (${index + 1}/${drivers.length})`);
 
-  io.to(driver.driverId).emit("ride:incoming", {
-    bookingId,
-    pickup: booking.pickupLocation,
-    drop: booking.dropLocation,
-    fare: vehicle.estimatedFare,
-    vehicleType: vehicle.vehicleType,
-    userId: booking.userId,
-    otp,
-  });
+  try {
+    // Update booking with current driver
+    await RideBookingDetail.findOneAndUpdate(
+      { bookingId },
+      { driverId: driver.driverId }
+    );
 
-  setTimeout(async () => {
-    const current = await RideBookingDetail.findOne({ bookingId });
-    if (current.rideStatus === RideBookStatusEnum.REQUESTED) {
-      assignRideToDrivers(io, bookingId, drivers, booking, vehicle, otp, index + 1);
-    }
-  }, 6000);
+    console.log(`📢 Emitting 'ride:incoming' to driver ${driver.driverId}`);
+    console.log(`   - Driver room exists: ${io.sockets.adapter.rooms.has(driver.driverId)}`);
+    
+    io.to(driver.driverId).emit("ride:incoming", {
+      bookingId,
+      pickup: booking.pickupLocation,
+      drop: booking.dropLocation,
+      fare: vehicle.estimatedFare,
+      vehicleType: vehicle.vehicleType,
+      userId: booking.userId,
+      otp,
+    });
+
+    console.log(`✅ Emission successful to driver ${driver.driverId}`);
+
+    // Set timeout for next driver
+    const timeoutId = setTimeout(async () => {
+      console.log(`⏰ Timeout checking status for ride ${bookingId}`);
+      const current = await RideBookingDetail.findOne({ bookingId });
+      if (current?.rideStatus === RideBookStatusEnum.REQUESTED) {
+        console.log(`🔄 Moving to next driver for ride ${bookingId}`);
+        assignRideToDrivers(io, bookingId, drivers, booking, vehicle, otp, index + 1);
+      }
+    }, 6000);
+
+    // Clean up if ride is accepted
+    const cleanup = () => {
+      console.log(`🧹 Cleaning up timeout for ride ${bookingId}`);
+      clearTimeout(timeoutId);
+    };
+    
+    // Listen for acceptance to clean up
+    io.once(`ride:accepted:${bookingId}`, cleanup);
+
+  } catch (error) {
+    console.error(`❌ Error assigning to driver ${driver.driverId}:`, error);
+    // Move to next driver if current fails
+    assignRideToDrivers(io, bookingId, drivers, booking, vehicle, otp, index + 1);
+  }
 };
 
 /**
