@@ -351,9 +351,11 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
 
 const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
+
   if (!bookingId) {
     throw new ApiError(statusCode.BAD_REQUEST, "Booking ID is required");
   }
+
   const booking = await BusBookingModel.findById(bookingId)
     .populate("busId", "busName busRegNumber")
     .populate("routeId", "startLocation endLocation departureTime arrivalTime");
