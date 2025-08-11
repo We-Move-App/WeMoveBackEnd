@@ -7,21 +7,25 @@ const ApiResponse = require("../../utils/response/ApiResponse");
 const catchAsyncError = require("../../utils/response/catchAsyncError");
 const vehicleConfig = require("../../utils/config/vehicleConfig.json");
 const RideBookingDetail = require("../../models/new-driver-module/booking-details/booking-details.model");
-const DriverLocation=require('../../models/new-driver-module/location/driver-location.model')
+const DriverLocation = require("../../models/new-driver-module/location/driver-location.model");
 const {
   RideBookStatusEnum,
   EntityCodeEnum,
   LocationStatusEnum,
+  DriverDocEnum,
 } = require("../../utils/constants/ENUM");
 const generateCustomId = require("../../utils/customId/generateCustomId");
 const findNearbyDrivers = require("../../utils/map/find-near-by-drivers");
 const { getOtp } = require("../../utils/otpService/otpService");
 const { assignRideToDrivers } = require("../../socket/handlers/rideHandler");
 const UserModel = require("../../models/user-module/users/user.model");
+const DriverDocDetails = require("../../models/new-driver-module/documents/driver-documents.model");
 const {
   decodeAccessToken,
 } = require("../../utils/jwtToken/customTokenService");
 const { getIO } = require("../../socket/index");
+const DriverBasicDetails = require("../../models/new-driver-module/basic-details/basic-details.model");
+const DriverVehicleDetails = require("../../models/new-driver-module/vehicle-details/vehicle-details.model");
 
 function calculateFare(type, distanceInKm, durationInMin) {
   const config = vehicleConfig[type];
@@ -147,6 +151,8 @@ const requestRide = async (req, res, next) => {
 
     // ----------------- Step 3: Request Body Validation -----------------
     const { pickup, drop, vehicle } = req.body;
+    console.log("pickup", pickup);
+    console.log("drop", drop);
 
     if (!pickup?.lat || !pickup?.lng || !pickup?.address) {
       throw new ApiError(statusCode.BAD_REQUEST, "Pickup details required");
@@ -167,11 +173,11 @@ const requestRide = async (req, res, next) => {
       userId,
       pickupLocation: {
         address: pickup.address,
-        location: { type: "Point", coordinates: [pickup.lat, pickup.lng] },
+        location: { type: "Point", coordinates: [pickup.lng, pickup.lat] },
       },
       dropLocation: {
         address: drop.address,
-        location: { type: "Point", coordinates: [drop.lat, drop.lng] },
+        location: { type: "Point", coordinates: [drop.lng, drop.lat] },
       },
       fare: vehicle.estimatedFare,
       vehicleType: vehicle.vehicleType,
@@ -184,20 +190,22 @@ const requestRide = async (req, res, next) => {
     });
 
     // ----------------- Step 5: Respond Immediately -----------------
-    res.status(statusCode.CREATED).json(
-      new ApiResponse(
-        statusCode.CREATED,
-        { _id: bookingId, otp },
-        "Ride requested successfully"
-      )
-    );
+    res
+      .status(statusCode.CREATED)
+      .json(
+        new ApiResponse(
+          statusCode.CREATED,
+          { _id: bookingId, otp },
+          "Ride requested successfully"
+        )
+      );
 
     // ----------------- Step 6: Run Background Assignment -----------------
     process.nextTick(async () => {
       try {
         // Step 6.1: Log all online drivers
         const onlineDrivers = await DriverLocation.find({
-          status: LocationStatusEnum.ONLINE
+          status: LocationStatusEnum.ONLINE,
         }).select("_id location");
 
         console.log(`Total online drivers: ${onlineDrivers.length}`);
@@ -226,7 +234,14 @@ const requestRide = async (req, res, next) => {
         // Step 6.3: Assign or cancel
         if (nearbyDrivers.length > 0) {
           const io = getIO();
-          assignRideToDrivers(io,bookingId, nearbyDrivers, newBooking, vehicle, otp);
+          assignRideToDrivers(
+            io,
+            bookingId,
+            nearbyDrivers,
+            newBooking,
+            vehicle,
+            otp
+          );
         } else {
           await RideBookingDetail.findOneAndUpdate(
             { bookingId },
@@ -320,8 +335,96 @@ const cancelRideByUser = catchAsyncError(async (req, res) => {
     );
 });
 
+const getUserDetailsByRideId = catchAsyncError(async (req, res, next) => {
+  const rideId = req.params.rideId;
+
+  const booking = await RideBookingDetail.findOne({ bookingId: rideId });
+
+  if (!booking) {
+    throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
+  }
+
+  const user = await UserModel.findById(booking.userId).lean();
+
+  if (!user) {
+    throw new ApiError(statusCode.NOT_FOUND, "User not found");
+  }
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { basicDetails: user },
+        "User details found successfully"
+      )
+    );
+});
+
+const getDriverDetailsByRideId = catchAsyncError(async (req, res, next) => {
+  const rideId = req.params.rideId;
+
+  const booking = await RideBookingDetail.findOne({ bookingId: rideId });
+
+  if (!booking) {
+    throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
+  }
+
+  const driver = await DriverBasicDetails.findOne({
+    driverId: booking.driverId,
+  });
+
+  if (!driver) {
+    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+  }
+
+  const vehicle = await DriverVehicleDetails.findOne({
+    driverId: booking.driverId,
+  });
+
+  if (!vehicle) {
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      "Vehicle not found for this driver"
+    );
+  }
+
+  const driverDocument = await DriverDocDetails.findOne({
+    driverId: booking.driverId,
+  });
+
+  const avatarUrl =
+    driverDocument?.documents?.find(
+      (doc) => doc.documentType === DriverDocEnum.AVATAR
+    )?.fileUrl || null;
+
+  const vehiclePhotoUrl =
+    driverDocument?.documents?.find(
+      (doc) => doc.documentType === DriverDocEnum.VEHICLEPHOTO
+    )?.fileUrl || null;
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        driver: {
+          ...driver.toObject(),
+          driverImage: avatarUrl,
+        },
+        vehicle: {
+          ...vehicle.toObject(),
+          vehicleImage: vehiclePhotoUrl,
+        },
+      },
+      "User details found successfully"
+    )
+  );
+});
+
 module.exports = {
   estimateRide,
   requestRide,
   cancelRideByUser,
+  getUserDetailsByRideId,
+  getDriverDetailsByRideId,
 };
