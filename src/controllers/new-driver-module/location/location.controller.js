@@ -42,9 +42,10 @@ const updateDriverStatus = catchAsyncError(async (req, res) => {
   };
 
   if (Array.isArray(coordinates) && coordinates.length === 2) {
+    const [lat, lng] = coordinates; // frontend sends lat, lng
     update.location = {
       type: "Point",
-      coordinates,
+      coordinates: [lng, lat], // store as lng, lat
     };
   }
 

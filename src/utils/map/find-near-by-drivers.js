@@ -2,6 +2,10 @@ const DriverLocation = require("../../models/new-driver-module/location/driver-l
 const { LocationStatusEnum } = require("../constants/ENUM");
 
 async function findNearbyDrivers(pickupCoords, vehicleType) {
+  // Swap [lat, lng] → [lng, lat]
+  const [lat, lng] = pickupCoords;
+  const mongoCoords = [lng, lat];
+
   // Radii to try in km
   const searchRadii = [1, 3];
 
@@ -11,7 +15,7 @@ async function findNearbyDrivers(pickupCoords, vehicleType) {
         $geoNear: {
           near: {
             type: "Point",
-            coordinates: pickupCoords
+            coordinates: mongoCoords // swapped coordinates
           },
           distanceField: "distance",
           maxDistance: radius * 1000, // meters
@@ -49,13 +53,11 @@ async function findNearbyDrivers(pickupCoords, vehicleType) {
       }
     ]);
 
-    // Found drivers at this radius → return immediately
     if (nearbyDrivers.length > 0) {
       return nearbyDrivers;
     }
   }
 
-  // If no drivers found in any radius
   return [];
 }
 
