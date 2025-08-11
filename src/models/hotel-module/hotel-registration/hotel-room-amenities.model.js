@@ -12,10 +12,15 @@ const roomSchema = new mongoose.Schema(
       enum: ["standard","luxury"],
       required: true,
     },
+     standardRoomPrice:{
+      type: Number
 
-    
+     },
+  luxuryRoomPrice:{
+    type: Number
 
-    numberOfRoom: { type: String, required: true },
+  },
+    numberOfRoom: { type: String},
 
 
     roomPrice: { type: Number, required: true, min: 0 },

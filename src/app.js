@@ -272,5 +272,25 @@ app.use((req, res, next) => {
 });
 // app.use(cors)
 
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught exception:', err);
+});
+process.on('unhandledRejection', (err) => {
+  console.error('Unhandled rejection:', err);
+});
+app.use((err, req, res, next) => {
+  console.error('Express error handler caught an error:', err);
+  const statusCode = err.statusCode || 500;
+  const message = err.message || 'Internal Server Error';
+  res.status(statusCode).json({
+    success: false,
+    statusCode,
+    message,
+    errors: [],
+    data: null,
+  });
+});
+
+
 app.use(errorHandler);
 module.exports = app;

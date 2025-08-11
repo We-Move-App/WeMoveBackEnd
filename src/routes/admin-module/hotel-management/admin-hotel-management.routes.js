@@ -6,6 +6,7 @@ const {
 const {
   uploadDocuments,
   uploadAvatar,
+   uploadHotelManagerFiles
 } = require("../../../utils/uploadFiles/multer");
 const {
   registerHotelManagerFromAdmin,
@@ -20,12 +21,10 @@ const adminHotelManagementRoutes = express.Router();
 adminHotelManagementRoutes
   .route("/hotel-managers/register")
   .post(
-    isAdminAuthenticated,  uploadAvatar,
+    isAdminAuthenticated,  uploadHotelManagerFiles,
     authorizeRole(["SuperAdmin", "Admin"]),
     registerHotelManagerFromAdmin
   );
-  
-
 adminHotelManagementRoutes
   .route("/hotel-managers")
   .get(
