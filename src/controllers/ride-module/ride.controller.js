@@ -7,9 +7,11 @@ const ApiResponse = require("../../utils/response/ApiResponse");
 const catchAsyncError = require("../../utils/response/catchAsyncError");
 const vehicleConfig = require("../../utils/config/vehicleConfig.json");
 const RideBookingDetail = require("../../models/new-driver-module/booking-details/booking-details.model");
+const DriverLocation=require('../../models/new-driver-module/location/driver-location.model')
 const {
   RideBookStatusEnum,
   EntityCodeEnum,
+  LocationStatusEnum,
 } = require("../../utils/constants/ENUM");
 const generateCustomId = require("../../utils/customId/generateCustomId");
 const findNearbyDrivers = require("../../utils/map/find-near-by-drivers");
@@ -118,6 +120,7 @@ const requestRide = async (req, res, next) => {
   console.log("Api Called");
 
   try {
+    // ----------------- Step 1: Token Validation -----------------
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
       throw new ApiError(
@@ -136,11 +139,13 @@ const requestRide = async (req, res, next) => {
       throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
     }
 
+    // ----------------- Step 2: User Exists Check -----------------
     const userExists = await UserModel.findById(userId);
     if (!userExists) {
       throw new ApiError(statusCode.NOT_FOUND, "User not found");
     }
 
+    // ----------------- Step 3: Request Body Validation -----------------
     const { pickup, drop, vehicle } = req.body;
 
     if (!pickup?.lat || !pickup?.lng || !pickup?.address) {
@@ -153,7 +158,7 @@ const requestRide = async (req, res, next) => {
       throw new ApiError(statusCode.BAD_REQUEST, "Vehicle details required");
     }
 
-    // Step 1: Create booking
+    // ----------------- Step 4: Create Booking -----------------
     const bookingId = await generateCustomId(EntityCodeEnum.RIDES, "R");
     const otp = getOtp();
 
@@ -178,44 +183,69 @@ const requestRide = async (req, res, next) => {
       timestamps: { requestedAt: new Date() },
     });
 
-    // Step 2: respond to frontend immediately
-    res
-      .status(statusCode.CREATED)
-      .json(
-        new ApiResponse(
-          statusCode.CREATED,
-          { _id: bookingId, otp },
-          "Ride requested successfully"
-        )
-      );
-
-    // Step 3: start driver assignment in background
-    const pickupCoords = [pickup.lat, pickup.lng];
-    const nearbyDrivers = await findNearbyDrivers(
-      pickupCoords,
-      vehicle.vehicleType
+    // ----------------- Step 5: Respond Immediately -----------------
+    res.status(statusCode.CREATED).json(
+      new ApiResponse(
+        statusCode.CREATED,
+        { _id: bookingId, otp },
+        "Ride requested successfully"
+      )
     );
 
-    console.log("nearbyDrivers.length", nearbyDrivers.length);
+    // ----------------- Step 6: Run Background Assignment -----------------
+    process.nextTick(async () => {
+      try {
+        // Step 6.1: Log all online drivers
+        const onlineDrivers = await DriverLocation.find({
+          status: LocationStatusEnum.ONLINE
+        }).select("_id location");
 
-    if (nearbyDrivers.length > 0) {
-      assignRideToDrivers(bookingId, nearbyDrivers, newBooking, vehicle, otp);
-    } else {
-      await RideBookingDetail.findOneAndUpdate(
-        { bookingId },
-        {
-          rideStatus: RideBookStatusEnum.CANCELLED,
-          cancelledBy: "SYSTEM",
-          reasonToCancel: "No nearby drivers",
-          "timestamps.cancelledAt": new Date(),
+        console.log(`Total online drivers: ${onlineDrivers.length}`);
+        onlineDrivers.forEach((driver) => {
+          console.log(
+            `Driver ${driver._id} Location:`,
+            driver.location?.coordinates || "N/A"
+          );
+        });
+
+        // Step 6.2: Find available drivers near pickup
+        const pickupCoords = [pickup.lat, pickup.lng];
+        const nearbyDrivers = await findNearbyDrivers(
+          pickupCoords,
+          vehicle.vehicleType
+        );
+
+        console.log(`Available nearby drivers: ${nearbyDrivers.length}`);
+        nearbyDrivers.forEach((driver) => {
+          console.log(
+            `Available Driver ${driver._id} Location:`,
+            driver.location?.coordinates || "N/A"
+          );
+        });
+
+        // Step 6.3: Assign or cancel
+        if (nearbyDrivers.length > 0) {
+          assignRideToDrivers(bookingId, nearbyDrivers, newBooking, vehicle, otp);
+        } else {
+          await RideBookingDetail.findOneAndUpdate(
+            { bookingId },
+            {
+              rideStatus: RideBookStatusEnum.CANCELLED,
+              cancelledBy: "SYSTEM",
+              reasonToCancel: "No nearby drivers",
+              "timestamps.cancelledAt": new Date(),
+            }
+          );
+          const io = getIO();
+          io.to(userId).emit("ride:cancelled", {
+            bookingId,
+            reason: "No nearby drivers",
+          });
         }
-      );
-      const io = getIO();
-      io.to(userId).emit("ride:cancelled", {
-        bookingId,
-        reason: "No nearby drivers",
-      });
-    }
+      } catch (err) {
+        console.error("Error in background driver assignment:", err);
+      }
+    });
   } catch (err) {
     next(err);
   }
