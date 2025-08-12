@@ -10,6 +10,7 @@ const {
 } = require("../../../utils/uploadFiles/multer");
 const {
   registerHotelManagerFromAdmin,
+  updateHotelManagerFromAdmin ,
   getHotelByManagerId,
   getAllHotelManagers,
   getSingleUser,
@@ -34,7 +35,7 @@ adminHotelManagementRoutes
   );
 
 adminHotelManagementRoutes
-  .route("/hotel-managers/:userId")
+  .route("/hotel-managers/:managerId")
   .get(
     isAdminAuthenticated,
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
@@ -64,6 +65,15 @@ adminHotelManagementRoutes
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
     getHotelByManagerId 
   );
+  adminHotelManagementRoutes
+  .route("/hotel-manager/update/:managerId")
+  .put(  isAdminAuthenticated,
+    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+     updateHotelManagerFromAdmin)
+
+
+
+  
 
 
 module.exports = {
