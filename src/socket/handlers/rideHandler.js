@@ -121,7 +121,7 @@ const assignRideToDrivers = async (
           index + 1
         );
       }
-    }, 12000);
+    }, 180000);
 
     activeAssignTimers.set(bookingId, timeoutId);
 
@@ -332,7 +332,7 @@ const rideHandler = (socket, io, role) => {
         await RideBookingDetail.findOneAndUpdate(
           { bookingId: data.bookingId },
           {
-            rideStatus: RideBookStatusEnum.ON_RIDE,
+            rideStatus: RideBookStatusEnum.ONGOING,
             "timestamps.rideStartedAt": new Date(),
           }
         );
@@ -340,7 +340,10 @@ const rideHandler = (socket, io, role) => {
           bookingId: data.bookingId,
         });
         io.to(booking.userId).emit("ride:started", {
-          bookingId: data.bookingId,
+          rideId: data.bookingId,
+          driverId:data.driverId,
+          isRideStarted:true,
+          rideStatus:RideBookStatusEnum.ONGOING
         });
         ack({ success: true });
       } catch (err) {

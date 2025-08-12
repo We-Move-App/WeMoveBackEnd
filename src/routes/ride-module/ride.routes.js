@@ -2,7 +2,15 @@ const express = require("express");
 const rideRoutes = express.Router();
 
 const {
-  estimateRide,requestRide,cancelRideByUser,getUserDetailsByRideId,getDriverDetailsByRideId
+  estimateRide,
+  requestRide,
+  cancelRideByUser,
+  getUserDetailsByRideId,
+  getDriverDetailsByRideId,
+  verifyOtp,
+  completeRide,
+  rideCancelledByUser,
+  rideCancelledByDriver
 } = require("../../controllers/ride-module/ride.controller");
 
 rideRoutes.post("/estimate", estimateRide);
@@ -10,5 +18,9 @@ rideRoutes.post("/request", requestRide);
 rideRoutes.post("/cancel-by-user/:bookingId", cancelRideByUser);
 rideRoutes.get("/:rideId/ride-user-details", getUserDetailsByRideId);
 rideRoutes.get("/:rideId/ride-driver-details", getDriverDetailsByRideId);
+rideRoutes.post("/:rideId/verify-otp", verifyOtp);
+rideRoutes.post("/:rideId/complete", completeRide);
+rideRoutes.post("/:rideId/cancel-by-user", rideCancelledByUser);
+rideRoutes.post("/:rideId/cancel-by-driver", rideCancelledByDriver);
 
-module.exports=rideRoutes;
+module.exports = rideRoutes;
