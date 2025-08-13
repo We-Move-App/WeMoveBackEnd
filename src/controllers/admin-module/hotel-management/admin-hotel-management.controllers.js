@@ -58,164 +58,230 @@ const verifyUserProfile = catchAsyncError(async (req, res, next) => {
 
   return res.status(statusCode.OK).json(result);
 });
-//----------Hotel-By-ManagerID-
+
+
+
 const getHotelByManagerId = catchAsyncError(async (req, res) => {
   const { ownerId } = req.params;
+   const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
 
   if (!ownerId) {
     throw new ApiError(statusCode.BAD_REQUEST, "Owner ID is required.");
   }
+  if (!mongoose.Types.ObjectId.isValid(ownerId)) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid Owner ID.");
+  }
 
-  // Step 1: Get hotel by manager (ownerId)
+  // 1) Hotel by manager
   const hotel = await Hotel.findOne({ ownerId: new mongoose.Types.ObjectId(ownerId) })
-    .select("hotelName rating businessLicense totalRoom")
+    .select("ownerId hotelName rating businessLicense totalRoom description totalRatingCount termsAndConditions")
     .lean();
 
   if (!hotel) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found for the given manager.");
   }
-  //getBankDocuments
-  const bankDocument = await DocumentsModel.findOne({
-    ownerId,
-    documentType: "bank_detail",
-  }).select("documentName file fileType -_id").lean();
 
   const hotelId = hotel._id;
 
-  // Step 2: Fetch all required related data in parallel
+  // 2) Parallel fetches
   const [
-    hotelImages,
-    hotelAddress,
+    hotelImagesDoc,
+    hotelAddressLink,
     hotelPolicies,
     hotelFeedbacks,
-    roomTypes,
+    rooms,
     hotelManager,
-    hotelManagerBank
-
+    hotelManagerBank,
+    bankDocumentDoc
   ] = await Promise.all([
+    // full hotel images array
     hotelImagesModel.findOne({ hotelId }).select("images").lean(),
+
+    // full address: include country/state/coordinates
     HotelAddressModel.findOne({ hotelId })
-      .populate("address", "townCity locality pincode address landmark")
+      .populate("address", "address townCity landmark locality pincode country state coordinates")
       .lean(),
-    HotelPolicyModel.findOne({ hotelId }).select("amenities uploadDocuments checkInTime checkOutTime").lean(),
+
+    // full policy details
+    HotelPolicyModel.findOne({ hotelId })
+      .select("amenities uploadDocuments checkInTime checkOutTime")
+      .lean(),
+
+    // feedback ratings (as you had)
     HotelFeedbackModel.find({ hotelId }).select("rating").lean(),
-    Room.find({ hotelId }).select("roomType roomPrice numberOfRoom").lean(),
-    HotelManagerModel.findById(ownerId).select("fullName email phoneNumber avatar gender nationality dob").lean(),
-    HotelManagerBankModel.findOne({ userId: ownerId }).select("-_id bankName accountNumber bankDocs").lean()
+
+    // rooms with amenities
+    Room.find({ hotelId }).select("roomType roomPrice numberOfRoom amenities").lean(),
+
+    // manager with company fields
+    HotelManagerModel.findById(ownerId)
+      .select("fullName email phoneNumber avatar gender nationality dob companyName companyAddress")
+      .lean(),
+
+    // bank account with docs + holder name + isPrimary
+    HotelManagerBankModel.findOne({ userId: ownerId })
+      .select("bankName accountHolderName accountNumber isPrimary bankDocs")
+      .lean(),
+
+    // optional: separate documents table (might be absent)
+    DocumentsModel.findOne({ ownerId, documentType: "bank_detail" })
+      .select("documentName file fileType")
+      .lean()
   ]);
 
-  const selectedImage = hotelImages?.images?.[0] || null;
+  // 3) Normalize hotel images
+  const hotelImagesArray = hotelImagesDoc?.images || [];
+  const selectedImage = hotelImagesArray[0] || null;
 
+  // 4) Rooms with images array
   const roomTypesWithImages = await Promise.all(
-    roomTypes.map(async (room) => {
-      const roomImageData = await HotelRoomImagesModel.findOne({
+    rooms.map(async (room) => {
+      const roomImagesDoc = await HotelRoomImagesModel.findOne({
         roomId: room._id,
         roomType: room.roomType
-      }).select("images").lean();
-
-      const thumbnailImage = roomImageData?.images?.[0] || null;
+      })
+        .select("images")
+        .lean();
 
       return {
         _id: room._id,
         roomType: room.roomType,
         roomPrice: room.roomPrice,
         numberOfRoom: room.numberOfRoom,
-        image: thumbnailImage
+        amenities: room.amenities || [],
+        images: roomImagesDoc?.images || []
       };
     })
   );
 
-  return res.status(statusCode.OK).json(
-    new ApiResponse(statusCode.OK, {
-      hotel: {
-        hotelId,
-        hotelName: hotel.hotelName,
-        rating: hotel.rating,
-        totalRoom: hotel.totalRoom,
-        businessLicense: hotel.businessLicense,
-      },
-      hotelImage: selectedImage,
-      hotelAddress,
-      hotelPolicies,
-      hotelFeedbacks,
-      roomTypes: roomTypesWithImages,
-      hotelManager,
-      hotelManagerBank,
-      bankDocument
+  // 5) Bank document: prefer DocumentsModel; else fallback to bankDocs
+  let bankDocument = null;
+  if (bankDocumentDoc) {
+    bankDocument = {
+      name: bankDocumentDoc.documentName || "Bank Document",
+      fileUrl: bankDocumentDoc.file,           // your schema uses `file`
+      fileType: bankDocumentDoc.fileType || null
+    };
+  } else if (hotelManagerBank?.bankDocs?.url) {
+    bankDocument = {
+      name: "Bank Document",
+      fileUrl: hotelManagerBank.bankDocs.url,
+      fileType: null
+    };
+  }
 
-    }, "Hotel and manager details fetched successfully.")
+  // 6) Build response (keeps your current keys, but also enriches)
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        // Hotel block now mirrors POST more closely
+        hotel: {
+          _id: hotelId,
+          ownerId: hotel.ownerId,
+          hotelName: hotel.hotelName,
+          businessLicense: hotel.businessLicense,
+          totalRoom: hotel.totalRoom,
+          description: hotel.description || null,
+          rating: hotel.rating ?? 0,
+          totalRatingCount: hotel.totalRatingCount ?? 0,
+          termsAndConditions: !!hotel.termsAndConditions,
+          address: hotelAddressLink?.address || null,
+          images: hotelImagesArray
+        },
+
+        // Backward-compat keys you were returning before (still provided)
+        hotelImage: selectedImage,
+        hotelAddress: hotelAddressLink,
+        hotelPolicies,
+        hotelFeedbacks,
+
+        // Rooms now include amenities + full images
+        roomTypes: roomTypesWithImages,
+
+        // Manager now includes company fields
+        hotelManager,
+
+        // Bank account with docs
+        hotelManagerBank,
+
+        // Ensured non-null via fallback above if bankDocs exists
+        bankDocument
+      },
+      "Hotel and manager details fetched successfully."
+    )
   );
 });
 
-const searchHotelManagers = catchAsyncError(async (req, res, next) => {
-  const phoneNumber = req.query?.phoneNumber?.trim();
-  const email = req.query?.email?.trim();
-  const hotelName = req.query?.hotelName?.trim();
+
+// controllers/hotelManagerController.js
 
 
-  console.log("ownerIds for hotelName search:", req.query);
+const searchHotelManagers = async (req, res) => {
+  try {
+    const {
+      fullName,
+      email,
+      phoneNumber,
+      companyName,
+      verificationStatus,
+      page = 1,
+      limit = 10,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      ...filters
+    } = req.query;
 
+    const query = {};
 
-  if (!phoneNumber && !email && !hotelName) {
-    return res.status(statusCode.BAD_REQUEST).json({
-      success: false,
-      message: "Please provide phoneNumber, email, or hotelName to search",
-    });
-  }
+    if (fullName) query.fullName = { $regex: new RegExp(fullName, "i") };
+    if (email) query.email = { $regex: new RegExp(email, "i") };
+    if (phoneNumber) query.phoneNumber = { $regex: new RegExp(phoneNumber, "i") };
+    if (companyName) query.companyName = { $regex: new RegExp(companyName, "i") };
+    if (verificationStatus)
+      query.verificationStatus = { $regex: new RegExp(verificationStatus, "i") };
 
-
-  let managersByPhone = [];
-  let managersByEmail = [];
-  let managersByHotel = [];
-
-  if (phoneNumber) {
-    managersByPhone = await HotelManagerModel.find({
-      phoneNumber: { $regex: phoneNumber, $options: "i" },
-    });
-  }
-
-  if (email) {
-    managersByEmail = await HotelManagerModel.find({
-      email: { $regex: email, $options: "i" },
-    });
-  }
-
-  if (hotelName) {
-    const hotels = await HotelModel.find({
-      hotelName: { $regex: hotelName, $options: "i" },
-    });
-
-    const ownerIds = hotels
-      .map((hotel) => hotel.ownerId)
-      .filter(
-        (id) => typeof id === "string" && id.trim() !== "" && mongoose.Types.ObjectId.isValid(id)
-      )
-      .map((id) => mongoose.Types.ObjectId(id));
-
-    if (ownerIds.length > 0) {
-      managersByHotel = await HotelManagerModel.find({
-        _id: { $in: ownerIds },
-      });
-    } else {
-      managersByHotel = [];
+    // Add any additional filters passed in query
+    for (const key in filters) {
+      if (!query[key]) {
+        query[key] = filters[key];
+      }
     }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const sortOption = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
+
+    const [users, total] = await Promise.all([
+      HotelManagerModel.find(query)
+        .sort(sortOption)
+        .skip(skip)
+        .limit(parseInt(limit)),
+      HotelManagerModel.countDocuments(query),
+    ]);
+
+    res.status(200).json({
+      success: true,
+      message: "Hotel managers fetched successfully",
+      data: {
+        users,
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(total / parseInt(limit)),
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Search Error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
   }
-
-  const allManagers = [...managersByPhone, ...managersByEmail, ...managersByHotel];
-  const uniqueManagersMap = new Map();
-
-  allManagers.forEach((manager) => {
-    uniqueManagersMap.set(manager._id.toString(), manager);
-  });
-
-  const uniqueManagers = Array.from(uniqueManagersMap.values());
-
-  return res.status(statusCode.OK).json({
-    success: true,
-    message: "Hotel managers fetched successfully",
-    data: uniqueManagers,
-  });
-});
+};
 
 
 
@@ -828,7 +894,7 @@ const registerHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => 
   }
 });
 const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
-  const { managerId } = req.params; // get id string
+  const { managerId } = req.params; 
   console.log('Manager ID:', managerId);
 
   const { profileInfo, bankInfo, hotelInfo, addressInfo, roomInfo, policyInfo } = req.body;
@@ -1022,6 +1088,75 @@ const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
     next(err instanceof ApiError ? err : new ApiError(statusCode.INTERNAL_SERVER_ERROR, err.message));
   }
 });
+const getAllHotelBookings = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 10,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+      status,         // optional filter
+      hotelId,        // optional filter
+      customerName,   // optional filter
+      phone           // optional filter
+    } = req.query;
+
+    const query = {};
+
+    if (status) query.status = { $regex: new RegExp(status, "i") };
+    if (hotelId) query.hotelId = hotelId;
+    if (customerName) query["user.name"] = { $regex: new RegExp(customerName, "i") };
+    if (phone) query["user.phoneNumber"] = { $regex: new RegExp(phone, "i") };
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const sortOption = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
+
+    const [bookings, total] = await Promise.all([
+      HotelBookingModel.find(query)
+        .select("hotelId checkInDate checkOutDate totalAmount status user")
+        .populate("hotelId", "_id") // only hotel ID, can add "name" if required
+        .sort(sortOption)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      HotelBookingModel.countDocuments(query)
+    ]);
+
+    // Format the response
+    const formattedBookings = bookings.map(booking => ({
+      bookingId: booking._id,
+      hotelId: booking.hotelId?._id || null,
+      customerName: booking.user?.[0]?.name || null,
+      phone: booking.user?.[0]?.phoneNumber || null,
+      email: booking.user?.[0]?.email || null,
+      checkInDate: booking.checkInDate,
+      checkOutDate: booking.checkOutDate,
+      amount: booking.totalAmount,
+      status: booking.status
+    }));
+
+    res.status(200).json({
+      success: true,
+      message: "Hotel bookings fetched successfully",
+      data: {
+        bookings: formattedBookings,
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(total / parseInt(limit))
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching bookings:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error"
+    });
+  }
+};
 
 
 
@@ -1040,5 +1175,6 @@ module.exports = {
   getAllHotelManagers,
   getSingleUser,
   verifyUserProfile,
-  searchHotelManagers
+  searchHotelManagers,
+  getAllHotelBookings 
 };
