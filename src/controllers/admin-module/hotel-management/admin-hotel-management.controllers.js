@@ -117,7 +117,7 @@ const getHotelByManagerId = catchAsyncError(async (req, res) => {
 
     // manager with company fields
     HotelManagerModel.findById(ownerId)
-      .select("fullName email phoneNumber avatar gender nationality dob companyName companyAddress")
+      .select("fullName email phoneNumber avatar gender nationality dob companyName companyAddress verificationStatus")
       .lean(),
 
     // bank account with docs + holder name + isPrimary
