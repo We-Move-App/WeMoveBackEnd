@@ -801,13 +801,17 @@ const getUserActiveRide = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
 
-  // Fetch active ride (not completed or cancelled)
+  // Fetch active ride
   const activeRide = await RideBookingDetail.findOne({
     userId,
     rideStatus: {
       $nin: [RideBookStatusEnum.COMPLETED, RideBookStatusEnum.CANCELLED],
     },
-  }).sort({ createdAt: -1 });
+  })
+    .sort({ createdAt: -1 })
+    .select(
+      "bookingId rideStatus expectedOtp pickupLocation dropLocation otpVerified userId driverId"
+    );
 
   if (!activeRide) {
     return res.status(statusCode.OK).json({
@@ -817,15 +821,41 @@ const getUserActiveRide = catchAsyncError(async (req, res, next) => {
     });
   }
 
-  return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(
-        statusCode.OK,
-        activeRide,
-        "Bus Operator, bank details, and documents created successfully"
-      )
-    );
+  const driverData = await DriverBasicDetails.findOne({
+    driverId: activeRide.driverId,
+  }).select("driverId fullName phoneNo");
+
+  const rideData = {
+    rideId: activeRide.bookingId,
+    status: activeRide.rideStatus,
+    otp: activeRide.expectedOtp,
+    pickupLocation: {
+      address: activeRide.pickupLocation?.address || "",
+      coordinates: [
+        ...(activeRide.pickupLocation?.location?.coordinates ?? []),
+      ].reverse(),
+    },
+    dropLocation: {
+      address: activeRide.dropLocation?.address || "",
+      coordinates: [
+        ...(activeRide.dropLocation?.location?.coordinates || []),
+      ].reverse(),
+    },
+    otpVerified: activeRide.otpVerified,
+    user: driverData
+      ? {
+          _id: driverData.driverId,
+          fullName: driverData.fullName,
+          phoneNo: driverData.phoneNo,
+        }
+      : null, // handle missing driver case
+  };
+
+  return res.status(statusCode.OK).json({
+    success: true,
+    data: rideData,
+    message: "Active ride fetched successfully",
+  });
 });
 
 const getDriverActiveRide = catchAsyncError(async (req, res, next) => {

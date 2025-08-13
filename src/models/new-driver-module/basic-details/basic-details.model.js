@@ -28,6 +28,7 @@ const driverBasicDetailSchema = new mongoose.Schema({
     default: DriverBasicStatus.PENDING,
   },
   isActive: { type: Boolean, default: true },
+  createdBy: { type: String, enum: ["user", "admin"], default: "user" },
 });
 
 module.exports = mongoose.model("DriverBasicDetails", driverBasicDetailSchema);
