@@ -16,6 +16,7 @@ const {
   getSingleUser,
   verifyUserProfile,
   getAllHotelBookings ,
+  getBookingDetailsById,
   searchHotelManagers}
  = require("../../../controllers/admin-module/hotel-management/admin-hotel-management.controllers");
 const adminHotelManagementRoutes = express.Router();
@@ -74,12 +75,19 @@ adminHotelManagementRoutes
 
 
   adminHotelManagementRoutes
-  .route("/hotel-booking-details/:bookingId")
+  .route("/hotel-booking-details")
   .get(
     isAdminAuthenticated,
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
     getAllHotelBookings
   );
+  adminHotelManagementRoutes
+   .route("/booking-details/:bookingId")
+    .get(
+      isAdminAuthenticated,
+      authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+     getBookingDetailsById
+    );
 
 
   
