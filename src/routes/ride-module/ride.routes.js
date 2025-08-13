@@ -10,7 +10,9 @@ const {
   verifyOtp,
   completeRide,
   rideCancelledByUser,
-  rideCancelledByDriver
+  rideCancelledByDriver,
+  getUserActiveRide,
+  getDriverActiveRide,
 } = require("../../controllers/ride-module/ride.controller");
 
 rideRoutes.post("/estimate", estimateRide);
@@ -22,5 +24,7 @@ rideRoutes.post("/:rideId/verify-otp", verifyOtp);
 rideRoutes.post("/:rideId/complete", completeRide);
 rideRoutes.post("/:rideId/cancel-by-user", rideCancelledByUser);
 rideRoutes.post("/:rideId/cancel-by-driver", rideCancelledByDriver);
+rideRoutes.get("/user-active-ride", getUserActiveRide);
+rideRoutes.get("/driver-active-ride", getDriverActiveRide);
 
 module.exports = rideRoutes;

@@ -4,6 +4,7 @@ const {
   RideBookStatusEnum,
   PaymentStatusEnum,
   DriverDocEnum,
+  LocationStatusEnum,
 } = require("../../utils/constants/ENUM");
 const {
   getDistanceAndDuration,
@@ -12,6 +13,7 @@ const DriverBasicDetails = require("../../models/new-driver-module/basic-details
 const VehicleDetails = require("../../models/new-driver-module/vehicle-details/vehicle-details.model");
 const DriverDocDetails = require("../../models/new-driver-module/documents/driver-documents.model");
 const activeAssignTimers = new Map();
+const DriverLocation = require("../../models/new-driver-module/location/driver-location.model");
 /**
  * Assigns ride sequentially to nearby drivers
  */
@@ -180,6 +182,11 @@ const rideHandler = (socket, io, role) => {
           });
         }
 
+        await DriverLocation.findOneAndUpdate(
+          { driverId: socket.data.driverId },
+          { status: LocationStatusEnum.ONTRIP }
+        );
+
         const driverDetails = await DriverBasicDetails.findOne({
           driverId: socket.data.driverId,
         });
@@ -341,9 +348,9 @@ const rideHandler = (socket, io, role) => {
         });
         io.to(booking.userId).emit("ride:started", {
           rideId: data.bookingId,
-          driverId:data.driverId,
-          isRideStarted:true,
-          rideStatus:RideBookStatusEnum.ONGOING
+          driverId: data.driverId,
+          isRideStarted: true,
+          rideStatus: RideBookStatusEnum.ONGOING,
         });
         ack({ success: true });
       } catch (err) {

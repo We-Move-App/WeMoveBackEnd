@@ -1,3 +1,5 @@
+const mongoose = require("mongoose");
+const { v4: uuidv4 } = require("uuid");
 const statusCode = require("../../utils/constants/statusCode");
 const {
   getDistanceAndDuration,
@@ -8,6 +10,7 @@ const catchAsyncError = require("../../utils/response/catchAsyncError");
 const vehicleConfig = require("../../utils/config/vehicleConfig.json");
 const RideBookingDetail = require("../../models/new-driver-module/booking-details/booking-details.model");
 const DriverLocation = require("../../models/new-driver-module/location/driver-location.model");
+const TransactionModel = require("../../models/transaction-module/transaction.model");
 const {
   RideBookStatusEnum,
   EntityCodeEnum,
@@ -16,6 +19,7 @@ const {
   PaymentStatusEnum,
   BookCancelledByEnum,
 } = require("../../utils/constants/ENUM");
+const WalletModel = require("../../models/wallet-module/wallets.model");
 const generateCustomId = require("../../utils/customId/generateCustomId");
 const findNearbyDrivers = require("../../utils/map/find-near-by-drivers");
 const { getOtp } = require("../../utils/otpService/otpService");
@@ -473,56 +477,135 @@ const completeRide = catchAsyncError(async (req, res, next) => {
   const rideId = req.params.rideId;
 
   const booking = await RideBookingDetail.findOne({ bookingId: rideId });
-
   if (!booking) {
     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
   }
 
-  // Prevent double-completion
   if (booking.rideStatus === RideBookStatusEnum.COMPLETED) {
     throw new ApiError(statusCode.BAD_REQUEST, "Ride already completed");
   }
 
-  // Update ride status and timestamps
-  booking.rideStatus = RideBookStatusEnum.COMPLETED;
-  booking.timestamps.completedAt = Date.now();
-  booking.paymentStatus = PaymentStatusEnum.SUCCESS;
-  await booking.save();
+  const session = await mongoose.startSession();
+  session.startTransaction();
 
-  const response = {
-    rideId: booking.bookingId,
-    pickupLocation: {
-      address: booking.pickupLocation.address || "",
-      coordinates: booking.pickupLocation.coordinates || [],
-    },
-    dropLocation: {
-      address: booking.dropLocation.address || "",
-      coordinates: booking.dropLocation.coordinates || [],
-    },
-    estimatedDistance: booking.distanceInKm || "0 km",
-    estimatedFare: booking.fare || 0,
-    rideStatus: RideBookStatusEnum.COMPLETED,
-    completedAt: booking.timestamps.completedAt.toISOString(),
-    verifiedTime: new Date().toISOString(),
-  };
+  try {
+    // --- Step 1: Wallet deduction for user ---
+    const userWallet = await WalletModel.findOne({
+      userId: booking.userId,
+    }).session(session);
+    if (!userWallet || userWallet.balance < booking.fare) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Insufficient wallet balance");
+    }
 
-  // Emit events to user and driver
-  const io = req.io || getIO();
-  if (io) {
-    io.to(booking.userId.toString()).emit("ride:completed", {
-      ...response
-    });
+    // Deduct from user wallet
+    userWallet.balance -= booking.fare;
+    await userWallet.save({ session });
 
-    io.to(booking.driverId.toString()).emit("ride:completed", {
-      ...response
-    });
-  }
+    // --- Step 2: Commission split ---
+    const platformFee = parseFloat((booking.fare * 0.1).toFixed(2));
+    const driverShare = parseFloat((booking.fare - platformFee).toFixed(2));
 
-  return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(statusCode.OK, true, "Ride completed successfully")
+    await WalletModel.findOneAndUpdate(
+      { userId: booking.driverId },
+      { $inc: { balance: driverShare } },
+      { session, new: true, upsert: true, setDefaultsOnInsert: true }
     );
+
+    await WalletModel.findOneAndUpdate(
+      { userId: "ADM001" },
+      { $inc: { balance: platformFee } },
+      { session, new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    // --- Step 3: Create transactions ---
+    await TransactionModel.insertMany(
+      [
+        {
+          transactionId: uuidv4(),
+          userId: booking.userId,
+          bookingId: booking.bookingId,
+          type: "DEBIT",
+          status: PaymentStatusEnum.SUCCESS,
+          amount: booking.fare,
+          currency: process.env.MOMO_CURRENCY,
+          description: `Ride fare from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
+        },
+        {
+          transactionId: uuidv4(),
+          userId: booking.driverId,
+          bookingId: booking.bookingId,
+          type: "CREDIT",
+          status: PaymentStatusEnum.SUCCESS,
+          amount: driverShare,
+          currency: process.env.MOMO_CURRENCY,
+          description: "Driver earnings from completed ride",
+        },
+        {
+          transactionId: uuidv4(),
+          userId: "ADM001",
+          bookingId: booking.bookingId,
+          type: "CREDIT",
+          status: PaymentStatusEnum.SUCCESS,
+          amount: platformFee,
+          currency: process.env.MOMO_CURRENCY,
+          description: "Platform commission from ride",
+        },
+      ],
+      { session }
+    );
+
+    // --- Step 4: Update ride status ---
+    booking.rideStatus = RideBookStatusEnum.COMPLETED;
+    booking.timestamps.completedAt = Date.now();
+    booking.paymentStatus = PaymentStatusEnum.SUCCESS;
+    await booking.save({ session });
+
+    // --- Step 5: Make driver online ---
+    await DriverLocation.findOneAndUpdate(
+      { driverId: booking.driverId },
+      { status: LocationStatusEnum.ONLINE }
+    );
+
+    await session.commitTransaction();
+    session.endSession();
+
+    // --- Step 6: Response payload ---
+    const response = {
+      rideId: booking.bookingId,
+      pickupLocation: {
+        address: booking.pickupLocation.address || "",
+        coordinates: booking.pickupLocation.coordinates || [],
+      },
+      dropLocation: {
+        address: booking.dropLocation.address || "",
+        coordinates: booking.dropLocation.coordinates || [],
+      },
+      estimatedDistance: booking.distanceInKm || "0 km",
+      estimatedFare: booking.fare || 0,
+      rideStatus: RideBookStatusEnum.COMPLETED,
+      completedAt: booking.timestamps.completedAt.toISOString(),
+      verifiedTime: new Date().toISOString(),
+    };
+
+    // --- Step 7: Emit socket events ---
+    const io = req.io || getIO();
+    if (io) {
+      io.to(booking.userId.toString()).emit("ride:completed", { ...response });
+      io.to(booking.driverId.toString()).emit("ride:completed", {
+        ...response,
+      });
+    }
+
+    return res
+      .status(statusCode.OK)
+      .json(
+        new ApiResponse(statusCode.OK, true, "Ride completed successfully")
+      );
+  } catch (error) {
+    await session.abortTransaction();
+    session.endSession();
+    throw error;
+  }
 });
 
 const rideCancelledByUser = catchAsyncError(async (req, res, next) => {
@@ -530,7 +613,10 @@ const rideCancelledByUser = catchAsyncError(async (req, res, next) => {
   const { reason } = req.body || {};
 
   if (!reason) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Cancellation reason is required");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Cancellation reason is required"
+    );
   }
 
   const booking = await RideBookingDetail.findOne({ bookingId: rideId });
@@ -542,7 +628,10 @@ const rideCancelledByUser = catchAsyncError(async (req, res, next) => {
     booking.rideStatus === RideBookStatusEnum.COMPLETED ||
     booking.rideStatus === RideBookStatusEnum.CANCELLED
   ) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Ride cannot be cancelled at this stage");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Ride cannot be cancelled at this stage"
+    );
   }
 
   booking.rideStatus = RideBookStatusEnum.CANCELLED;
@@ -550,12 +639,12 @@ const rideCancelledByUser = catchAsyncError(async (req, res, next) => {
   booking.cancelledBy = BookCancelledByEnum.USER;
   booking.reasonToCancel = reason;
   await booking.save();
-  const response={
-    rideId:booking.bookingId,
-    by:booking.cancelledBy,
-    reason:booking.reasonToCancel,
-    cancelled:true
-  }
+  const response = {
+    rideId: booking.bookingId,
+    by: booking.cancelledBy,
+    reason: booking.reasonToCancel,
+    cancelled: true,
+  };
 
   const io = req.io || getIO();
   if (io) {
@@ -568,12 +657,42 @@ const rideCancelledByUser = catchAsyncError(async (req, res, next) => {
   return res.status(statusCode.OK).json(true);
 });
 
+const getNearbyDriversExcluding = async (
+  pickupLocation,
+  excludedDriverIds,
+  vehicleType
+) => {
+  return await DriverLocation.aggregate([
+    {
+      $geoNear: {
+        near: {
+          type: "Point",
+          coordinates: pickupLocation.location.coordinates,
+        },
+        distanceField: "distance",
+        spherical: true,
+        maxDistance: 3000, // 3 km
+      },
+    },
+    {
+      $match: {
+        driverId: { $nin: excludedDriverIds },
+        vehicleType,
+        status: "ONLINE",
+      },
+    },
+  ]);
+};
+
 const rideCancelledByDriver = catchAsyncError(async (req, res, next) => {
   const rideId = req.params.rideId;
   const { reason } = req.body || {};
 
   if (!reason) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Cancellation reason is required");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Cancellation reason is required"
+    );
   }
 
   const booking = await RideBookingDetail.findOne({ bookingId: rideId });
@@ -582,33 +701,176 @@ const rideCancelledByDriver = catchAsyncError(async (req, res, next) => {
   }
 
   if (
-    booking.rideStatus === RideBookStatusEnum.COMPLETED ||
-    booking.rideStatus === RideBookStatusEnum.CANCELLED
+    [RideBookStatusEnum.COMPLETED, RideBookStatusEnum.CANCELLED].includes(
+      booking.rideStatus
+    )
   ) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Ride cannot be cancelled at this stage");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Ride cannot be cancelled at this stage"
+    );
   }
 
-  booking.rideStatus = RideBookStatusEnum.CANCELLED;
-  booking.timestamps.cancelledAt = Date.now();
-  booking.cancelledBy = BookCancelledByEnum.DRIVER;
+  const cancelledDriverId = booking.driverId; // store before nulling
+
+  booking.cancelledByDrivers.push({
+    driverId: cancelledDriverId,
+    cancelledAt: new Date(),
+  });
+
   booking.reasonToCancel = reason;
+  booking.cancelledBy = BookCancelledByEnum.DRIVER;
+  booking.driverId = null;
   await booking.save();
-  const response={
-    rideId:booking.bookingId,
-    by:booking.cancelledBy,
-    reason:booking.reasonToCancel,
-    cancelled:true
-  }
+
+  await DriverLocation.findOneAndUpdate(
+    { driverId: booking.driverId },
+    { status: LocationStatusEnum.ONLINE }
+  );
 
   const io = req.io || getIO();
   if (io) {
-    io.to(booking.userId.toString()).emit("ride:cancelled", response);
-    if (booking.driverId) {
-      io.to(booking.driverId.toString()).emit("ride:cancelled", response);
-    }
+    io.to(cancelledDriverId.toString()).emit("ride:cancelled", {
+      rideId: booking.bookingId,
+      by: booking.cancelledBy,
+      reason: booking.reasonToCancel,
+      cancelled: true,
+    });
+
+    io.to(booking.userId.toString()).emit("ride:driver_cancelled", {
+      rideId: booking.bookingId,
+      message: "Driver cancelled, finding another driver...",
+    });
   }
 
-  return res.status(statusCode.OK).json(true);
+  const availableDrivers = await getNearbyDriversExcluding(
+    booking.pickupLocation,
+    booking.cancelledByDrivers.map((d) => d.driverId),
+    booking.vehicleType
+  );
+
+  if (availableDrivers.length) {
+    const vehicle = await VehicleDetail.findOne({
+      driverId: availableDrivers[0]?.driverId,
+    });
+    if (!vehicle) {
+      console.warn(
+        `⚠️ No vehicle found for driver ${availableDrivers[0]?.driverId}`
+      );
+    }
+    assignRideToDrivers(
+      io,
+      booking.bookingId,
+      availableDrivers,
+      booking,
+      vehicle,
+      generateOtp()
+    );
+  } else {
+    booking.rideStatus = RideBookStatusEnum.CANCELLED;
+    booking.reasonToCancel = "No more drivers available";
+    booking.cancelledBy = BookCancelledByEnum.SYSTEM;
+    booking.timestamps.cancelledAt = new Date();
+    await booking.save();
+    io.to(booking.userId.toString()).emit("ride:cancelled", {
+      rideId: booking.bookingId,
+      reason: "No drivers available",
+    });
+  }
+
+  return res
+    .status(statusCode.OK)
+    .json({ reassigned: !!availableDrivers.length });
+});
+
+const getUserActiveRide = catchAsyncError(async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const userId = decoded?._id;
+
+  if (!userId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  // Fetch active ride (not completed or cancelled)
+  const activeRide = await RideBookingDetail.findOne({
+    userId,
+    rideStatus: {
+      $nin: [RideBookStatusEnum.COMPLETED, RideBookStatusEnum.CANCELLED],
+    },
+  }).sort({ createdAt: -1 });
+
+  if (!activeRide) {
+    return res.status(statusCode.OK).json({
+      success: true,
+      message: "No active rides found",
+      data: null,
+    });
+  }
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        activeRide,
+        "Bus Operator, bank details, and documents created successfully"
+      )
+    );
+});
+
+const getDriverActiveRide = catchAsyncError(async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const driverId = decoded?.driverId;
+
+  if (!driverId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  // Fetch active ride (not completed or cancelled)
+  const activeRide = await RideBookingDetail.findOne({
+    driverId,
+    rideStatus: {
+      $nin: [RideBookStatusEnum.COMPLETED, RideBookStatusEnum.CANCELLED],
+    },
+  }).sort({ createdAt: -1 });
+
+  if (!activeRide) {
+    return res.status(statusCode.OK).json({
+      success: true,
+      message: "No active rides found",
+      data: null,
+    });
+  }
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        activeRide,
+        "Bus Operator, bank details, and documents created successfully"
+      )
+    );
 });
 
 module.exports = {
@@ -620,5 +882,7 @@ module.exports = {
   verifyOtp,
   completeRide,
   rideCancelledByUser,
-  rideCancelledByDriver
+  rideCancelledByDriver,
+  getUserActiveRide,
+  getDriverActiveRide,
 };

@@ -41,7 +41,6 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.NOT_FOUND, "Bookings not found");
   }
 
-
   const transformedBookings = await Promise.all(
     bookings.map(async (booking) => {
       // Create a new booking object to ensure we can modify properties
@@ -250,8 +249,8 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     await userWallet.save({ session });
 
     // Step 6: Commission split
-    const platformFee = Math.floor(price * 0.1); // 10% commission
-    const operatorShare = price - platformFee;
+    const platformFee = parseFloat((price * 0.1).toFixed(2)); // 10% commission
+    const operatorShare = parseFloat((price - platformFee).toFixed(2));
 
     await WalletModel.findOneAndUpdate(
       { userId: ownerId },
@@ -706,7 +705,7 @@ const UpcomingBusBookings = catchAsyncError(async (req, res) => {
   const query = {
     bookedBy: userId,
     journeyDate: { $gte: today },
-     status: "Booked"
+    status: "Booked",
   };
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
@@ -817,7 +816,7 @@ const OldBusBookings = catchAsyncError(async (req, res) => {
   const query = {
     bookedBy: userId,
     journeyDate: { $lt: now },
-     status: "Completed"
+    status: "Completed",
   };
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
