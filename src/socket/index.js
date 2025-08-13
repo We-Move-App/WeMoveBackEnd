@@ -22,6 +22,7 @@ const initializeSocket = (io) => {
 
       if (decoded.role === "Driver") {
         socket.data.driverId = decoded.driverId;
+        socket.join(socket.data.driverId);
         driverLocationHandler(socket, io);
         rideHandler(socket, io, "driver");
 

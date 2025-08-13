@@ -24,7 +24,10 @@ const hotelImagesModel = require("../../../models/hotel-module/hotel-images/hote
 const HotelFeedbackModel = require("../../../models/hotel-module/hotel-feedback/hotel-feedback.model");
 const HotelPolicyModel = require("../../../models/hotel-module/hotel-registration/hotel-policy.model");
 const HotelRoomImagesModel = require("../../../models/hotel-module/hotel-room-images/hotel-room-images.model");
-const { PaymentStatusEnum, TransactionTypeEnum } = require("../../../utils/constants/ENUM");
+const {
+  PaymentStatusEnum,
+  TransactionTypeEnum,
+} = require("../../../utils/constants/ENUM");
 
 //-------------------- create booking --------------------
 const createBooking = catchAsyncError(async (req, res) => {
@@ -177,8 +180,8 @@ const createBooking = catchAsyncError(async (req, res) => {
     await userWallet.save({ session });
 
     // Step 4: Commission split
-    const platformFee = Math.floor(totalAmount * 0.1); // 10%
-    const operatorShare = totalAmount - platformFee;
+    const platformFee = parseFloat((totalAmount * 0.1).toFixed(2)); // 10%
+    const operatorShare = parseFloat((totalAmount - platformFee).toFixed(2));
 
     await WalletModel.findOneAndUpdate(
       { userId: hotelManagerId },
@@ -339,7 +342,10 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
   const pageNum = parseInt(page);
   const limitNum = parseInt(limit);
   if (isNaN(requiredRoomCount) || requiredRoomCount <= 0) {
-    throw new ApiError(statusCode.BAD_REQUEST, "requiredRooms must be a positive integer.");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "requiredRooms must be a positive integer."
+    );
   }
 
   if (!requiredRoomCount) {
@@ -560,31 +566,40 @@ const getHotelById = catchAsyncError(async (req, res) => {
   if (!hotel) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
   }
-   const now = new Date();
+  const now = new Date();
   const activeBookings = await HotelBookingModel.find({
     hotelId,
     status: "Booked",
     checkInDate: { $lte: now },
-    checkOutDate: { $gte: now }
-  }).select("noOfRoom").lean();
+    checkOutDate: { $gte: now },
+  })
+    .select("noOfRoom")
+    .lean();
 
   const bookedRoomCount = activeBookings.reduce((total, booking) => {
     return total + (booking.noOfRoom || 0);
   }, 0);
 
-  const availableRoomCount = Math.max((hotel.totalRoom || 0) - bookedRoomCount, 0);
+  const availableRoomCount = Math.max(
+    (hotel.totalRoom || 0) - bookedRoomCount,
+    0
+  );
 
-
-  const [hotelImages, hotelAddress, hotelPolicies, hotelFeedbacks, roomTypes] = await Promise.all([
-    hotelImagesModel.findOne({ hotelId }).select("images").lean(),
-    HotelAddressModel.findOne({ hotelId })
-      .populate("address", "townCity address landmark")
-      .select("address")
-      .lean(),
-    HotelPolicyModel.findOne({ hotelId }).select("amenities checkInTime checkOutTime").lean(),
-    HotelFeedbackModel.find({ hotelId }).select("rating").lean(),
-    Room.find({ hotelId }).select("roomType  amenities roomPrice  numberOfRoom").lean()
-  ]);
+  const [hotelImages, hotelAddress, hotelPolicies, hotelFeedbacks, roomTypes] =
+    await Promise.all([
+      hotelImagesModel.findOne({ hotelId }).select("images").lean(),
+      HotelAddressModel.findOne({ hotelId })
+        .populate("address", "townCity address landmark")
+        .select("address")
+        .lean(),
+      HotelPolicyModel.findOne({ hotelId })
+        .select("amenities checkInTime checkOutTime")
+        .lean(),
+      HotelFeedbackModel.find({ hotelId }).select("rating").lean(),
+      Room.find({ hotelId })
+        .select("roomType  amenities roomPrice  numberOfRoom")
+        .lean(),
+    ]);
   const allHotelImages = hotelImages?.images || [];
 
   // Process room types with availability check if dates provided
@@ -607,7 +622,7 @@ const getHotelById = catchAsyncError(async (req, res) => {
           .select("_id")
           .lean();
 
-        const roomIds = individualRooms.map(r => r._id);
+        const roomIds = individualRooms.map((r) => r._id);
 
         if (roomIds.length > 0) {
           const conflictingBookings = await HotelBooking.find({
@@ -619,10 +634,10 @@ const getHotelById = catchAsyncError(async (req, res) => {
             .lean();
 
           const bookedRoomIds = new Set(
-            conflictingBookings.map(b => b.roomId.toString())
+            conflictingBookings.map((b) => b.roomId.toString())
           );
           availableRooms = roomIds.filter(
-            id => !bookedRoomIds.has(id.toString())
+            (id) => !bookedRoomIds.has(id.toString())
           ).length;
         } else {
           availableRooms = 0;
@@ -656,12 +671,14 @@ const getHotelById = catchAsyncError(async (req, res) => {
         hotelPolicies,
         hotelFeedbacks,
         roomTypes: roomTypesWithAvailability,
-        ...(checkIn && checkOut ? { 
-          dateFilter: { 
-            checkInDate: checkIn.toISOString(), 
-            checkOutDate: checkOut.toISOString() 
-          } 
-        } : {}),
+        ...(checkIn && checkOut
+          ? {
+              dateFilter: {
+                checkInDate: checkIn.toISOString(),
+                checkOutDate: checkOut.toISOString(),
+              },
+            }
+          : {}),
       },
       "Hotel details fetched successfully."
     )
@@ -719,7 +736,6 @@ const getUpcomingBookings = catchAsyncError(async (req, res) => {
       const diffMs = checkIn - now;
       const hoursLeft = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
       const isCancellable = hoursLeft >= 24;
-
 
       const hotelImages = await hotelImagesModel
         .findOne({ hotelId: booking.hotelId._id })
@@ -1013,5 +1029,5 @@ module.exports = {
   getUpcomingBookings,
   getPastBookings,
   getCancelReasons,
-  cancelHotelBooking
+  cancelHotelBooking,
 };

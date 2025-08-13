@@ -10,7 +10,7 @@ const {
   resetPassword,
   updateAvatar,
   assignBranch,
-  resetPassword2,
+  resetPassword2
 } = require("../../../controllers/user-module/users/users.controllers");
 const { isUserAuthenticated } = require("../../../middlewares/authUser");
 const {
@@ -21,7 +21,6 @@ const {
 const userRoutes = express.Router();
 
 userRoutes.route("/profile").get(isUserAuthenticated, getProfile);
-
 userRoutes.route("/get-avatar").get(isUserAuthenticated, getAvatar);
 
 userRoutes

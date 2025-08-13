@@ -53,6 +53,7 @@ const RideBookStatusEnum = {
   STARTED: "started",
   COMPLETED: "completed",
   CANCELLED: "cancelled",
+  ONGOING:'ongoing'
 };
 
 const PaymentStatusEnum = {
