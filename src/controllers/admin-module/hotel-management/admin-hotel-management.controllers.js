@@ -117,7 +117,7 @@ const getHotelByManagerId = catchAsyncError(async (req, res) => {
 
     // manager with company fields
     HotelManagerModel.findById(ownerId)
-      .select("fullName email phoneNumber avatar gender nationality dob companyName companyAddress")
+      .select("fullName email phoneNumber avatar gender nationality dob companyName companyAddress verificationStatus")
       .lean(),
 
     // bank account with docs + holder name + isPrimary
@@ -1216,6 +1216,142 @@ const getBookingDetailsById = async (req, res) => {
 };
 
 
+const searchHotelBookings = async (req, res) => {
+  try {
+    let {
+      bookingId,
+      hotelId,
+      customerName,
+      phone,
+      email,
+      checkInDate,
+      checkOutDate,
+      status,
+      page = 1,
+      limit = 10,
+      sortBy = "createdAt",
+      sortOrder = "desc",
+    } = req.query;
+
+    const query = {};
+
+    // Search by bookingId
+    if (bookingId) {
+      if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid booking ID",
+        });
+      }
+      query._id = bookingId;
+    }
+
+    // Search by hotelId
+    if (hotelId) {
+      if (!mongoose.Types.ObjectId.isValid(hotelId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid hotel ID",
+        });
+      }
+      query.hotelId = hotelId;
+    }
+
+    // Search by customer name
+    if (customerName) {
+      query["user.name"] = { $regex: new RegExp(customerName, "i") };
+    }
+
+    // Search by phone
+    if (phone) {
+      query["user.phoneNumber"] = { $regex: new RegExp(phone, "i") };
+    }
+
+    // Search by email
+    if (email) {
+      query["user.email"] = { $regex: new RegExp(email, "i") };
+    }
+
+    // Search by check-in date
+    if (checkInDate) {
+      const checkInStart = new Date(checkInDate);
+      const checkInEnd = new Date(checkInDate);
+      checkInEnd.setHours(23, 59, 59, 999);
+      query.checkInDate = { $gte: checkInStart, $lte: checkInEnd };
+    }
+
+    // Search by check-out date
+    if (checkOutDate) {
+      const checkOutStart = new Date(checkOutDate);
+      const checkOutEnd = new Date(checkOutDate);
+      checkOutEnd.setHours(23, 59, 59, 999);
+      query.checkOutDate = { $gte: checkOutStart, $lte: checkOutEnd };
+    }
+
+    // Search by status
+    if (status) {
+      query.status = { $regex: new RegExp(status, "i") };
+    }
+
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const sortOption = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
+
+    const [bookings, total] = await Promise.all([
+      HotelBookingModel.find(query)
+        .populate("hotelId", "_id")
+        .sort(sortOption)
+        .skip(skip)
+        .limit(parseInt(limit))
+        .lean(),
+      HotelBookingModel.countDocuments(query),
+    ]);
+
+    const formattedBookings = bookings.map((b) => ({
+      bookingId: b._id,
+      hotelId: b.hotelId?._id || null,
+      customerName: b.user?.[0]?.name || null,
+      phone: b.user?.[0]?.phoneNumber || null,
+      email: b.user?.[0]?.email || null,
+      checkInDate: b.checkInDate,
+      checkOutDate: b.checkOutDate,
+      amount: b.totalAmount,
+      status: b.status,
+    }));
+
+    if (formattedBookings.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No bookings found",
+        data: [],
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Hotel bookings fetched successfully",
+      data: {
+        bookings: formattedBookings,
+        pagination: {
+          total,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: Math.ceil(total / parseInt(limit)),
+        },
+      },
+    });
+  } catch (error) {
+    console.error("Error searching bookings:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+
+
+
+
 
 
 
@@ -1238,5 +1374,6 @@ module.exports = {
   verifyUserProfile,
   searchHotelManagers,
   getAllHotelBookings ,
-  getBookingDetailsById
+  getBookingDetailsById,
+  searchHotelBookings
 };
