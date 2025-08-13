@@ -22,26 +22,18 @@ const locationSchema = new mongoose.Schema({
 
 locationSchema.index({ location: "2dsphere" });
 
-const polylinePointSchema = new mongoose.Schema({
-  lat: { type: Number, required: true },
-  lng: { type: Number, required: true },
-});
-
 const bookingDetailsSchema = new mongoose.Schema(
   {
     bookingId: { type: String, required: true, unique: true },
     driverId: { type: String, index: true },
     userId: {
-      type:String,
+      type: String,
       required: true,
       index: true,
     },
-
     pickupLocation: { type: locationSchema, required: true },
     dropLocation: { type: locationSchema, required: true },
-
-    routePolyline: [polylinePointSchema],
-
+    routePolyline: { type: String },
     distanceInKm: { type: Number, required: true },
     durationInMin: { type: Number, required: true },
     fare: { type: Number, required: true },

@@ -4,7 +4,7 @@ const {
 const {
   UserBankModel,
 } = require("../../../models/user-module/user-banks/user-banks.model");
-
+const RideBookingDetail = require("../../../models/new-driver-module/booking-details/booking-details.model");
 const {
   UserDocumentModel,
 } = require("../../../models/user-module/user-documents/user-document.model");
@@ -199,7 +199,7 @@ const assignBranch = catchAsyncError(async (req, res, next) => {
 const mongoose = require("mongoose");
 
 const getBeneficiary = catchAsyncError(async (req, res, next) => {
-  const {userId} = req.body;
+  const { userId } = req.body;
 
   if (!mongoose.Types.ObjectId.isValid(userId)) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid QR");
