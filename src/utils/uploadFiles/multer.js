@@ -27,6 +27,8 @@ const storage = multer.diskStorage({
   },
 });
 
+
+
 const uploads = multer({ storage: storage });
 const uploadAvatar = uploads.fields([{ name: "avatar", maxCount: 1 }]);
 
@@ -104,6 +106,26 @@ const deleteFileFromDisk = async (filePath) => {
     );
   }
 };
+const uploadHotelManagerFiles = uploads.fields([
+  { name: "avatar", maxCount: 1 },
+  { name: "hotelImages", maxCount: 10 },
+  { name: "roomImages", maxCount: 20 },
+
+  { name: "driver_license", maxCount: 1 },
+  { name: "hotel_license", maxCount: 1 },
+  { name: "bus_license", maxCount: 1 },
+  { name: "bank_detail", maxCount: 1 },
+  { name: "vehicle_registration_certificate", maxCount: 1 },
+  { name: "vehicle_insurance", maxCount: 1 },
+  { name: "identity_card", maxCount: 1 },
+
+  { name: "national_identity_card_front", maxCount: 1 },
+  { name: "national_identity_card_back", maxCount: 1 },
+  { name: "vehicle_photo", maxCount: 1 },
+  { name: "driver_license_front", maxCount: 1 },
+  { name: "driver_license_back", maxCount: 1 },
+]);
+
 
 module.exports = {
   uploadAvatar,
@@ -115,4 +137,5 @@ module.exports = {
   uploadHotelImages,
   uploadRoomImages,
   uploadDriverDetailsDocs,
+  uploadHotelManagerFiles
 };

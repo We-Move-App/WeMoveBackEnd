@@ -6,13 +6,18 @@ const {
 const {
   uploadDocuments,
   uploadAvatar,
+   uploadHotelManagerFiles
 } = require("../../../utils/uploadFiles/multer");
 const {
   registerHotelManagerFromAdmin,
+  updateHotelManagerFromAdmin ,
   getHotelByManagerId,
   getAllHotelManagers,
   getSingleUser,
   verifyUserProfile,
+  getAllHotelBookings ,
+  getBookingDetailsById,
+  searchHotelBookings,
   searchHotelManagers}
  = require("../../../controllers/admin-module/hotel-management/admin-hotel-management.controllers");
 const adminHotelManagementRoutes = express.Router();
@@ -20,12 +25,10 @@ const adminHotelManagementRoutes = express.Router();
 adminHotelManagementRoutes
   .route("/hotel-managers/register")
   .post(
-    isAdminAuthenticated,  uploadAvatar,
+    isAdminAuthenticated,  uploadHotelManagerFiles,
     authorizeRole(["SuperAdmin", "Admin"]),
     registerHotelManagerFromAdmin
   );
-  
-
 adminHotelManagementRoutes
   .route("/hotel-managers")
   .get(
@@ -35,7 +38,7 @@ adminHotelManagementRoutes
   );
 
 adminHotelManagementRoutes
-  .route("/hotel-managers/:userId")
+  .route("/hotel-managers/:managerId")
   .get(
     isAdminAuthenticated,
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
@@ -65,6 +68,37 @@ adminHotelManagementRoutes
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
     getHotelByManagerId 
   );
+  adminHotelManagementRoutes
+  .route("/hotel-manager/update/:managerId")
+  .put(  isAdminAuthenticated,
+    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+     updateHotelManagerFromAdmin)
+
+
+  adminHotelManagementRoutes
+  .route("/hotel-booking-details")
+  .get(
+    isAdminAuthenticated,
+    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+    getAllHotelBookings
+  );
+  adminHotelManagementRoutes
+   .route("/booking-details/:bookingId")
+    .get(
+      isAdminAuthenticated,
+      authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+     getBookingDetailsById
+    );
+     adminHotelManagementRoutes
+  .route("/searchHotelBooking")
+  .get(
+    isAdminAuthenticated,
+    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+   searchHotelBookings
+  );
+
+
+  
 
 
 module.exports = {

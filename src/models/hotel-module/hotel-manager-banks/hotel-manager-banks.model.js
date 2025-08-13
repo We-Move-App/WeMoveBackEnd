@@ -14,7 +14,7 @@ const HotelManagerBankSchema = new mongoose.Schema(
     },
      bankName: {
       type: String,
-      required: true,
+      required: false,
      },
     accountHolderName: {
       type: String,

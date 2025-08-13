@@ -5,7 +5,7 @@ const locationSchema = new mongoose.Schema(
     hotelId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Hotel",
-      required: true,
+      required: false,
     },
     address: {
       type: mongoose.Schema.Types.ObjectId,

@@ -43,6 +43,13 @@ const hotelManagerSchema = new mongoose.Schema(
     avatar: {
       type: ImageSchema,
     },
+    companyName:{
+      type: String,
+    },
+    companyAddress:{
+      type: String
+    },
+    
     role: {
       type: String,
       default: "hotel-manager",
