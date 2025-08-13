@@ -1160,6 +1160,67 @@ const getAllHotelBookings = async (req, res) => {
 
 
 
+const getBookingDetailsById = async (req, res) => {
+  try {
+    const { bookingId } = req.params;
+
+    // Validate ObjectId
+    if (!mongoose.Types.ObjectId.isValid(bookingId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid booking ID",
+      });
+    }
+
+    const booking = await HotelBookingModel.findById(bookingId)
+      .populate("hotelId", "_id")
+      .lean();
+
+    if (!booking) {
+      return res.status(404).json({
+        success: false,
+        message: "Booking not found",
+      });
+    }
+
+    const responseData = {
+      bookingDetails: {
+        bookingId: booking._id,
+        status: booking.status,
+        hotelId: booking.hotelId?._id || null,
+        amount: `$${booking.totalAmount.toFixed(2)}`,
+      },
+      customerInformation: {
+        name: booking.user?.[0]?.name || null,
+        phone: booking.user?.[0]?.phoneNumber || null,
+        email: booking.user?.[0]?.email || null,
+      },
+      stayDetails: {
+        checkInDate: booking.checkInDate?.toISOString().split("T")[0] || null,
+        checkOutDate: booking.checkOutDate?.toISOString().split("T")[0] || null,
+      },
+    };
+
+    res.status(200).json({
+      success: true,
+      message: "Booking details fetched successfully",
+      data: responseData,
+    });
+  } catch (error) {
+    console.error("Error fetching booking details:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+
+
+
+
+
+
 
 
 
@@ -1176,5 +1237,6 @@ module.exports = {
   getSingleUser,
   verifyUserProfile,
   searchHotelManagers,
-  getAllHotelBookings 
+  getAllHotelBookings ,
+  getBookingDetailsById
 };
