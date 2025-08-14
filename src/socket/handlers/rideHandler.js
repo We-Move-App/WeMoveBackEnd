@@ -5,6 +5,7 @@ const {
   PaymentStatusEnum,
   DriverDocEnum,
   LocationStatusEnum,
+  BookCancelledByEnum,
 } = require("../../utils/constants/ENUM");
 const {
   getDistanceAndDuration,
@@ -27,7 +28,7 @@ const assignRideToDrivers = async (
   index = 0
 ) => {
   console.log("bookingId", bookingId);
-  // Prevent overlapping timers for same booking
+
   if (activeAssignTimers.has(bookingId)) {
     console.log(`⚠️ Skipping duplicate assignment loop for ${bookingId}`);
     return;
@@ -40,7 +41,7 @@ const assignRideToDrivers = async (
       { bookingId },
       {
         rideStatus: RideBookStatusEnum.CANCELLED,
-        cancelledBy: "SYSTEM",
+        cancelledBy: BookCancelledByEnum.SYSTEM,
         reasonToCancel: "No drivers accepted",
         "timestamps.cancelledAt": new Date(),
       }
@@ -58,7 +59,7 @@ const assignRideToDrivers = async (
   );
 
   try {
-    // Distance calculation (unchanged)
+    // Distance calculation
     const driverLoc = driver.location?.coordinates;
     const pickupLoc = booking.pickupLocation?.location?.coordinates;
     let distanceToPickup = null;
@@ -80,11 +81,7 @@ const assignRideToDrivers = async (
       }
     }
 
-    await RideBookingDetail.findOneAndUpdate(
-      { bookingId },
-      { driverId: driver.driverId }
-    );
-
+    // 📌 Do NOT set driverId here, only emit request
     console.log(`📢 Emitting 'ride:incoming' to driver ${driver.driverId}`);
     io.to(driver.driverId).emit("ride:incoming", {
       rideId: bookingId,
@@ -106,12 +103,32 @@ const assignRideToDrivers = async (
 
     console.log(`✅ Emission successful to driver ${driver.driverId}`);
 
-    // Store active timer so no duplicates run
+    // Wait for 8 seconds
     const timeoutId = setTimeout(async () => {
-      console.log(`⏰ Timeout checking status for ride ${bookingId}`);
+      console.log(
+        `⏰ 8s timeout for driver ${driver.driverId} on ride ${bookingId}`
+      );
       activeAssignTimers.delete(bookingId);
+
       const current = await RideBookingDetail.findOne({ bookingId });
+
       if (current?.rideStatus === RideBookStatusEnum.REQUESTED) {
+        console.log(
+          `🚫 Driver ${driver.driverId} ignored ride, adding to cancelled list`
+        );
+
+        await RideBookingDetail.findOneAndUpdate(
+          { bookingId },
+          {
+            $push: {
+              cancelledByDrivers: {
+                driverId: driver.driverId,
+                cancelledAt: new Date(),
+              },
+            },
+          }
+        );
+
         console.log(`🔄 Moving to next driver for ride ${bookingId}`);
         assignRideToDrivers(
           io,
@@ -123,7 +140,7 @@ const assignRideToDrivers = async (
           index + 1
         );
       }
-    }, 180000);
+    }, 8000); // 8 seconds
 
     activeAssignTimers.set(bookingId, timeoutId);
 
@@ -133,6 +150,7 @@ const assignRideToDrivers = async (
       activeAssignTimers.delete(bookingId);
     };
 
+    // When driver accepts, cleanup
     io.once(`ride:accepted:${bookingId}`, cleanup);
   } catch (error) {
     console.error(`❌ Error assigning to driver ${driver.driverId}:`, error);
@@ -161,19 +179,20 @@ const rideHandler = (socket, io, role) => {
     socket.on("ride:accept", async (data, ack) => {
       try {
         console.log("bookingId ...", data.bookingId);
+
+        // Update driverId now when accepting
         const updated = await RideBookingDetail.findOneAndUpdate(
           {
             bookingId: data.bookingId,
             rideStatus: RideBookStatusEnum.REQUESTED,
           },
           {
+            driverId: socket.data.driverId, // set driverId here
             rideStatus: RideBookStatusEnum.ACCEPTED,
             "timestamps.acceptedAt": new Date(),
           },
           { new: true }
         );
-
-        console.log("updated", updated);
 
         if (!updated) {
           return ack({
@@ -182,10 +201,16 @@ const rideHandler = (socket, io, role) => {
           });
         }
 
+        // Make driver on trip
         await DriverLocation.findOneAndUpdate(
           { driverId: socket.data.driverId },
           { status: LocationStatusEnum.ONTRIP }
         );
+
+        // Emit cleanup signal
+        io.emit(`ride:accepted:${data.bookingId}`);
+
+        // Rest of your existing code remains unchanged...
 
         const driverDetails = await DriverBasicDetails.findOne({
           driverId: socket.data.driverId,

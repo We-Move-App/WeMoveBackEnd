@@ -13,6 +13,7 @@ const {
   rideCancelledByDriver,
   getUserActiveRide,
   getDriverActiveRide,
+  getDriverAnalytics
 } = require("../../controllers/ride-module/ride.controller");
 
 rideRoutes.post("/estimate", estimateRide);
@@ -26,5 +27,6 @@ rideRoutes.post("/:rideId/cancel-by-user", rideCancelledByUser);
 rideRoutes.post("/:rideId/cancel-by-driver", rideCancelledByDriver);
 rideRoutes.get("/user-active-ride", getUserActiveRide);
 rideRoutes.get("/driver-active-ride", getDriverActiveRide);
+rideRoutes.get("/driver-analtics", getDriverAnalytics);
 
 module.exports = rideRoutes;

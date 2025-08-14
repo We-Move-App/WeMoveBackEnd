@@ -903,6 +903,128 @@ const getDriverActiveRide = catchAsyncError(async (req, res, next) => {
     );
 });
 
+const getDriverAnalytics = catchAsyncError(async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const driverId = decoded?.driverId;
+
+  if (!driverId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  // Query params
+  const entity = (req.query.entity || "completed").toLowerCase(); // completed / cancelled
+  const filter = (req.query.filter || "daily").toLowerCase(); // daily / weekly / monthly
+
+  // Date filter logic
+  let startDate = new Date();
+  let endDate = new Date();
+
+  if (filter === "daily") {
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+  } else if (filter === "weekly") {
+    const day = startDate.getDay();
+    const diff = startDate.getDate() - day + (day === 0 ? -6 : 1);
+    startDate = new Date(startDate.setDate(diff));
+    startDate.setHours(0, 0, 0, 0);
+    endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
+    endDate.setHours(23, 59, 59, 999);
+  } else if (filter === "monthly") {
+    startDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    endDate = new Date(
+      startDate.getFullYear(),
+      startDate.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999
+    );
+  }
+
+  let matchQuery = {};
+
+  if (entity === "completed") {
+    matchQuery = {
+      driverId,
+      rideStatus: RideBookStatusEnum.COMPLETED,
+      "timestamps.completedAt": { $gte: startDate, $lte: endDate },
+    };
+  } else if (entity === "cancelled") {
+    matchQuery = {
+      rideStatus: RideBookStatusEnum.CANCELLED,
+      "cancelledByDrivers.driverId": driverId,
+      "timestamps.cancelledAt": { $gte: startDate, $lte: endDate },
+    };
+  }
+
+  // Fetch rides
+  const rides = await RideBookingDetail.find(matchQuery).sort({ createdAt: -1 });
+
+  if (!rides.length) {
+    return res.status(statusCode.OK).json({
+      success: true,
+      message: `No ${entity} rides found for this ${filter} period`,
+      data: null,
+    });
+  }
+
+  // Calculate totalEarnings / totalLoss (90% to driver)
+  const totalFare = rides.reduce((sum, ride) => sum + ride.fare * 0.9, 0);
+
+  // Transform location format
+  const formattedRides = rides.map((r) => ({
+    bookingId: r.bookingId,
+    pickupLocation: {
+      address: r.pickupLocation.address,
+      coordinates: [
+        r.pickupLocation.location.coordinates[1],
+        r.pickupLocation.location.coordinates[0],
+      ], // reverse [lng, lat] to [lat, lng]
+    },
+    dropLocation: {
+      address: r.dropLocation.address,
+      coordinates: [
+        r.dropLocation.location.coordinates[1],
+        r.dropLocation.location.coordinates[0],
+      ],
+    },
+    distanceInKm: r.distanceInKm,
+    durationInMin: r.durationInMin,
+    fare: r.fare * 0.9,
+    rideStatus: r.rideStatus,
+    completedAt: r.timestamps.completedAt,
+    cancelledAt: r.timestamps.cancelledAt,
+  }));
+
+  const response = {
+    driverId,
+    [entity === "completed" ? "totalEarnings" : "totalLoss"]: totalFare,
+    rides: formattedRides,
+  };
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        response,
+        `${entity} rides analytics fetched successfully`
+      )
+    );
+});
+
 module.exports = {
   estimateRide,
   requestRide,
@@ -915,4 +1037,5 @@ module.exports = {
   rideCancelledByDriver,
   getUserActiveRide,
   getDriverActiveRide,
+  getDriverAnalytics
 };
