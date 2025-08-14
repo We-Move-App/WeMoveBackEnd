@@ -5,7 +5,7 @@ const {
 } = require("../../../middlewares/authRoles/authorizeRole");
 const {
   getAllDrivers,
-  getSingleUser,
+getdriverDetailsById,
   verifyUserProfile,
 } = require("../../../controllers/admin-module/driver-management/admin-drivers.controllers");
 const adminDriverManagementRoutes = express.Router();
@@ -19,11 +19,11 @@ adminDriverManagementRoutes
   );
 
 adminDriverManagementRoutes
-  .route("/drivers/:userId")
+  .route("/drivers/:driverId")
   .get(
     isAdminAuthenticated,
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
-    getSingleUser
+    getdriverDetailsById
   );
 adminDriverManagementRoutes
   .route("/drivers/verify/:userId")
