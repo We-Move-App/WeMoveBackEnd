@@ -6,7 +6,7 @@ const vehicleDetailsSchema = new mongoose.Schema({
   vehicleType: { type: String, enum: VehicleTypeEnum },
   seats: { type: Number, index: true },
   model: { type: String },
-  registrationNo: { type: String },
+  registrationNo: { type: String,unique: true,},
 });
 
 module.exports = mongoose.model("VehicleDetail", vehicleDetailsSchema);
