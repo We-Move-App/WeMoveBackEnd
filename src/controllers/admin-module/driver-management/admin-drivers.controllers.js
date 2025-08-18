@@ -1055,8 +1055,8 @@ const getAllBikeBookings = catchAsyncError(async (req, res) => {
     from,
     to,
     vehicleType, // required
-    page = 1,
-    limit = 10,
+    page ,
+    limit 
   } = req.query;
 
   if (!vehicleType) {
@@ -1239,11 +1239,10 @@ const getBookingDetailsById = catchAsyncError(async (req, res) => {
           : "N/A",
       },
       customerInformation: booking.user?.fullName || "N/A",
-      riderInformation: booking.driver?.fullName || "N/A",
+      driverInformation: booking.driver?.fullName || "N/A",
     },
   });
 });
-
 
 
 

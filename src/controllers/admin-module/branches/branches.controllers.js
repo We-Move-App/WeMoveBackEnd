@@ -108,7 +108,6 @@ const getAllBranches = catchAsyncError(async (req, res, next) => {
     .json(new ApiResponse(statusCode.OK, data, "Data found"));
 });
 
-// GET BRANCH BY ID
 const getBranchById = catchAsyncError(async (req, res, next) => {
   const { branchId } = req.params;
 
@@ -122,7 +121,6 @@ const getBranchById = catchAsyncError(async (req, res, next) => {
     .json(new ApiResponse(statusCode.OK, branch, "Branch Found Successfully"));
 });
 
-// DELETE BRANCH BY ID
 const deleteBranchById = catchAsyncError(async (req, res, next) => {
   const { branchId } = req.params;
 
@@ -137,7 +135,7 @@ const deleteBranchById = catchAsyncError(async (req, res, next) => {
     .json(new ApiResponse(statusCode.OK, {}, "Deleted Successfully"));
 });
 
-// UPDATE BRANCH BY ID
+
 const updateBranchById = catchAsyncError(async (req, res, next) => {
   const { branchId } = req.params;
   const { name, location, latitude, longitude, adminId } = req.body;
