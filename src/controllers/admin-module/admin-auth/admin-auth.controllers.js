@@ -33,13 +33,18 @@ const {
 } = require("../../../utils/services/functions.services");
 const bcrypt = require("bcrypt");
 const { hash_rounds } = process.env;
+const {
+  busOperatorAuthorities,
+} = require("../../../utils/constants/constants");
 
 
 // Register Admin
 const addAdmins = catchAsyncError(async (req, res, next) => {
+  console.log("hitting admin")
   const { email, userName, password, phoneNumber, branch, role, permissions } =
     req.body;
   const { _id } = req.user;
+console.log(_id)
 
   const isRoleValid = ["Admin", "SubAdmin"].includes(role);
 
@@ -183,6 +188,7 @@ a
 // ======================|| LOGIN USER ||========================
 const loginAdmin = catchAsyncError(async (req, res, next) => {
   const { username, password } = req.body;
+  console.log(req.body)
 
   if (!username?.trim() || !password?.trim()) {
     throw new ApiError(
