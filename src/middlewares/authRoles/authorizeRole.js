@@ -1,6 +1,9 @@
 const statusCode = require("../../utils/constants/statusCode");
 const logger = require("../../utils/logger/logger");
 const ApiError = require("../../utils/response/ApiError");
+const {
+  busOperatorAuthorities,
+} = require("../../utils/constants/constants");
 
 const authorizeRole = (roles) => (req, res, next) => {
   
