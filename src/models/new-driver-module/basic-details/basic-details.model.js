@@ -3,6 +3,7 @@ const {
   DriverBasicStatus,
   GenderEnum,
 } = require("../../../utils/constants/ENUM");
+const AdminModel = require("../../../models/admin-module/admin/admin.model")
 
 const driverBasicDetailSchema = new mongoose.Schema({
   driverId: {
@@ -29,6 +30,11 @@ const driverBasicDetailSchema = new mongoose.Schema({
   },
   isActive: { type: Boolean, default: true },
   createdBy: { type: String, enum: ["user", "admin"], default: "user" },
-});
+   createdById: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+   updatedAtById: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+
+ }, { timestamps: true },
+   );
+
 
 module.exports = mongoose.model("DriverBasicDetails", driverBasicDetailSchema);

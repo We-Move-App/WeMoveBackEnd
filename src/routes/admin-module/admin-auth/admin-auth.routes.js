@@ -3,6 +3,7 @@ const { isAdminAuthenticated } = require("../../../middlewares/authAdmins");
 const {
   
   addAdmins,
+  addSubAdmins,
   loginAdmin,
   removeDeviceTokens,
   saveDeviceTokens,
@@ -22,11 +23,18 @@ const {
   uploadDocuments,
   uploadAvatar,
 } = require("../../../utils/uploadFiles/multer");
+const { Admin } = require("mongodb");
 const adminAuthRoutes = express.Router();
 
 adminAuthRoutes
   .route("/add-admin")
   .post(isAdminAuthenticated, authorizeRole(["SuperAdmin"]), addAdmins);
+
+
+  adminAuthRoutes
+  .route("/add-Subadmin")
+  .post(isAdminAuthenticated, authorizeRole(["SuperAdmin","Admin"]),addSubAdmins);
+
 
 adminAuthRoutes.route("/login").post(loginAdmin);
 
