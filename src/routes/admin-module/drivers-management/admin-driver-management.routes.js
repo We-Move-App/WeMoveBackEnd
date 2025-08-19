@@ -76,7 +76,7 @@ adminDriverManagementRoutes
   .route("/bookingDetails/:bookingId")
   .get(
     isAdminAuthenticated,
-    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+    authorizeRole(["superAdmin", "Admin", "subAdmin"]),
     getBookingDetailsById
   );
 

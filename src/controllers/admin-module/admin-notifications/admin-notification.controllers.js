@@ -68,7 +68,7 @@ const markAllAsRead = catchAsyncError(async (req, res) => {
   return res.status(statusCode.OK).json(response);
 });
 
-// 📌 6. Delete a Single Notification
+
 const deleteNotification = catchAsyncError(async (req, res) => {
   const response = await deleteSingleNotification(req);
 
