@@ -28,6 +28,7 @@ const {
   PaymentStatusEnum,
   TransactionTypeEnum,
 } = require("../../../utils/constants/ENUM");
+const UserRecentSearchModel = require("../../../models/user-module/user-recent-search/user-recent-search.model");
 
 //-------------------- create booking --------------------
 const createBooking = catchAsyncError(async (req, res) => {
@@ -515,6 +516,40 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       ? "No room found"
       : "Hotels retrieved successfully.";
 
+
+      // // Save recent search only if hotels were found
+// Save recent search only if hotels were found
+if (filteredHotels.length > 0) {
+  // Get the first hotel's name if available
+  const firstHotelName =
+    filteredHotels[0]?.hotel?.hotelName || null;
+
+  try {
+    await UserRecentSearchModel.create({
+      user: req.user._id, // logged-in user
+      category: "hotel",
+      searchDetails: {
+        hotel: {
+          location: {
+            hotelName: firstHotelName,
+            address: townCity,
+          },
+          checkInDate: new Date(checkInDate),
+          checkOutDate: new Date(checkOutDate),
+          requiredRooms: parseInt(requiredRooms),
+        },
+      },
+      searchTime: new Date(),
+    });
+
+    console.log("Recent hotel search saved successfully");
+  } catch (err) {
+    console.error("Error saving recent search:", err);
+  }
+}
+
+
+
   return res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
@@ -523,6 +558,7 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
         page: pageNum,
         limit: limitNum,
         hotelRoomTypeLayout: filteredHotels,
+
       },
       responseMessage
     )

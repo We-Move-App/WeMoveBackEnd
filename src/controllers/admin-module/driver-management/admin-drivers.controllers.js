@@ -172,6 +172,15 @@ const getdriverDetailsById = catchAsyncError(async (req, res) => {
         }
       : null;
   };
+   const findDocs = (type) => {
+    const docs = allDocs.filter((d) => d.documentType === type);
+    return docs.map((doc) => ({
+      documentType: doc.documentType,
+      fileName: doc.fileName,
+      fileUrl: doc.fileUrl,
+      status: doc.status,
+    }));
+  };
 
   const response = {
     success: true,
@@ -196,7 +205,7 @@ const getdriverDetailsById = catchAsyncError(async (req, res) => {
         passbook: findDoc(DriverDocEnum.PASSBOOK),
         insurance: findDoc(DriverDocEnum.INSURANCE),
         registrationCertificate: findDoc(DriverDocEnum.REGISTRATION),
-        vehicleBikePhotos: findDoc(DriverDocEnum.VEHICLEPHOTO),
+        vehicleBikePhotos: findDocs(DriverDocEnum.VEHICLEPHOTO),
         avatarPhotos: findDoc(DriverDocEnum.AVATAR),
       },
       bikeDetails: vehicleDetails
@@ -307,131 +316,6 @@ const verifyUserProfile = catchAsyncError(async (req, res) => {
 
   return res.status(statusCode.OK).json(response);
 });
-// const createDriverFromAdmin = catchAsyncError(async (req, res) => {
-//   const { basicDriverDetails, bankDetails, vehicleDetails, documents = [] } = req.body;
-
-
-//   const authHeader = req.headers.authorization;
-//   if (!authHeader?.startsWith("Bearer "))
-//     throw new ApiError(statusCode.UNAUTHORIZED, "Access token is missing or invalid");
-
-//   const accessToken = authHeader.split(" ")[1];
-//   const decoded = decodeAccessToken(accessToken);
-//   const adminId = decoded?._id;
-//   if (!adminId) throw new ApiError(statusCode.UNAUTHORIZED, "Invalid admin token");
-
-
-//   const existingDriver = await DriverBasicDetails.findOne({
-//     $or: [{ phoneNo: basicDriverDetails.phoneNo }, { email: basicDriverDetails.email }],
-//   });
-
-//   if (existingDriver) {
-//     throw new ApiError(statusCode.BAD_REQUEST, "Phone number or email already exists");
-//   }
-
-
-//   const existingVehicle = await VehicleDetail.findOne({
-//     registrationNo: vehicleDetails.registrationNo,
-//   });
-//   if (existingVehicle) {
-//     throw new ApiError(statusCode.BAD_REQUEST, "Vehicle registration number already exists");
-//   }
-
-
-//   const driverId = await generateCustomId("driver", "D");
-
-//   // 5️⃣ Save driver basic details (auto-approved)
-//   const savedDriver = await DriverBasicDetails.create({
-//     ...basicDriverDetails,
-//     driverId,
-//     createdBy: "admin",
-//     createdById: adminId,
-//     status: DriverBasicStatus.APPROVED,
-//     emailVerified: true,
-//     isActive: true,
-//     createdAt: new Date(),
-//     updatedAt: new Date(),
-//   });
-
-//   // 6️⃣ Save bank details (auto-approved)
-//   await DriverBankDetail.updateOne(
-//     { driverId },
-//     { $set: { ...bankDetails, updatedAt: new Date() } },
-//     { upsert: true }
-//   );
-
-//   // 7️⃣ Save vehicle details (auto-approved)
-//   await VehicleDetail.updateOne(
-//     { driverId },
-//     { $set: { ...vehicleDetails, updatedAt: new Date() } },
-//     { upsert: true }
-//   );
-
-//   // 8️⃣ Merge all documents and auto-approve
-//   const allDocuments = {};
-
-//   // Personal documents (id_card, license)
-//   documents.forEach((doc) => {
-//     if (doc.documentType === "id_card") allDocuments.idCard = { ...doc, status: "approved" };
-//     if (doc.documentType === "license") allDocuments.license = { ...doc, status: "approved" };
-//   });
-
-//   // Bank passbook
-//   if (bankDetails.document) {
-//     allDocuments.passbook = { ...bankDetails.document, status: "approved" };
-//   }
-
-//   // Vehicle documents
-//   ["insurance", "registrationCertificate", "vehiclePhotos", "avatarPhotos"].forEach((key) => {
-//     if (vehicleDetails[key]) vehicleDetails[key].status = "approved";
-//   });
-
-//   // Save documents in DB
-//   await DriverDocDetails.create({
-//     driverId,
-//     documents: [
-//       ...(documents || []),
-//       bankDetails.document,
-//       vehicleDetails.insurance,
-//       vehicleDetails.registrationCertificate,
-//       vehicleDetails.vehiclePhotos,
-//       vehicleDetails.avatarPhotos,
-//     ].filter(Boolean),
-//   });
-
-//   // 9️⃣ Generate driver token
-//   const driverToken =  await  generateTokens({ driverId });
-
-
-//   // 🔟 Response in required format
-//   return res.status(statusCode.CREATED).json(
-//     new ApiResponse(
-//       statusCode.CREATED,
-//       {
-//         driverBasicDetails: {
-//           driverId:savedDriver.driverId,
-//           name: savedDriver.fullName,
-//           age: savedDriver.age,
-//           mobile: savedDriver.phoneNo,
-//           email: savedDriver.email,
-//           address: savedDriver.address,
-//           status: savedDriver.status,
-//           experience: savedDriver.experience,
-//         },
-//         documents: allDocuments,
-//         vehicleDetails: vehicleDetails,
-//         bankDetails: bankDetails,
-//         isOnline: false,
-//         token: driverToken
-//       },
-
-//       "Driver fully onboarded successfully by admin",
-
-
-//     )
-//   );
-// });
-
 const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
   const {
     basicDriverDetails = {},
@@ -587,7 +471,6 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
     )
   );
 });
-
 const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
   const { driverId } = req.params;
    const { vehicleType } = req.query
@@ -867,7 +750,6 @@ const createTaxiDriverFromAdmin = catchAsyncError(async (req, res) => {
     )
   );
 });
-
 const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
   const { driverId } = req.params;
    const { vehicleType } = req.query
@@ -1091,8 +973,6 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
 
   return res.status(statusCode.OK).json(response);
 });
-
-
 const getAllBikeBookings = catchAsyncError(async (req, res) => {
   const {
     status,
@@ -1209,8 +1089,6 @@ const getAllBikeBookings = catchAsyncError(async (req, res) => {
   });
 });
 
-
-
 const getBookingDetailsById = catchAsyncError(async (req, res) => {
   const { bookingId } = req.params;
 
@@ -1294,6 +1172,8 @@ const getBookingDetailsById = catchAsyncError(async (req, res) => {
     },
   });
 });
+
+
 
 
 

@@ -111,9 +111,13 @@ const ChangeSecurePin = catchAsyncError(async (req, res, next) => {
     oldSecurePin,
     securePinData.securePin
   );
-  if (!isOldPinMatch) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Old secure PIN is incorrect.");
-  }
+ if (!isOldPinMatch) {
+  throw new ApiError(
+    statusCode.BAD_REQUEST,
+    "Old secure PIN is incorrect."
+  );
+}
+
 
   // Update the secure PIN in the database
   securePinData.securePin = newSecurePin;
