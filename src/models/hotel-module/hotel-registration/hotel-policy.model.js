@@ -36,11 +36,15 @@ const hotelPolicySchema = new mongoose.Schema(
       },
     ],
     uploadDocuments: [
-      {
-        name: { type: String, required: true },
-        fileUrl: { type: String, required: true },
-      }
-    ], 
+  {
+    name: { type: String, required: false },
+    fileUrl: { type: String, required: true },
+    public_id: { type: String },
+    fileName: { type: String },
+    fileType: { type: String }
+  }
+]
+
   },
   { timestamps: true }
 );

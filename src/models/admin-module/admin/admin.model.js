@@ -17,6 +17,8 @@ const defaultPermissions = {
   reportsAnalytics: { type: Boolean, default: false },
   notifications: { type: Boolean, default: false },
   roleManagement: { type: Boolean, default: false },
+  commissionManagement: { type: Boolean, default: false },
+  couponManagement: { type: Boolean, default: false },
 };
 
 // Admin Schema
@@ -98,6 +100,8 @@ AdminSchema.pre("save", function (next) {
       reportsAnalytics: true,
       notifications: true,
       roleManagement: true,
+      commissionManagement: true,
+      couponManagement: true
     };
   }
   next();

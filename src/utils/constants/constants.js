@@ -38,6 +38,7 @@ const busOperatorAuthorities = [
   "driverManagement",
   "ticketManagement",
   "walletManagement",
+
 ];
 const adminAuthorities = [
   "userManagement",
@@ -47,7 +48,9 @@ const adminAuthorities = [
   "walletManagement",
   "reportsAnalytics",
   "notifications",
-  "roleManagement"
+  "roleManagement",
+  "commissionManagement",  
+  "couponManagement"
 ];
 
 const busOperatorAuthoritiesFields = {
@@ -57,6 +60,7 @@ const busOperatorAuthoritiesFields = {
   DRIVER_MANAGEMENT: "driverManagement",
   TICKET_MANAGEMENT: "ticketManagement",
   WALLET_MANAGEMENT: "walletManagement",
+
 };
 
 const RideStatus = {
@@ -74,15 +78,15 @@ const PaymentStatus = {
   REFUND_REQUESTED: "REFUND_REQUESTED",
   REFUND_PROCESSING: "REFUND_PROCESSING",
   REFUNDED: "REFUNDED",
-  PAID:'PAID',
+  PAID: 'PAID',
 };
 
-const TypeOfUser={
-    USER: "user",
-    DRIVER:"driver",
-    BUSOPERATOR:'busOperator',
-    HOTELMANAGER:'hotelManager',
-    ADMIN:'admin'
+const TypeOfUser = {
+  USER: "user",
+  DRIVER: "driver",
+  BUSOPERATOR: 'busOperator',
+  HOTELMANAGER: 'hotelManager',
+  ADMIN: 'admin'
 }
 
 module.exports = {
