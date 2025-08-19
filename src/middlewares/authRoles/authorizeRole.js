@@ -15,7 +15,7 @@ const authorizeRole = (roles) => (req, res, next) => {
     logger.warn("Unauthorized access attempt - No user found");
     throw new ApiError(statusCode.UNAUTHORIZED, "Authentication required");
   }
-  const isAuthorized = roles.includes(req.user.role);
+  const isAuthorized = roles.map(r => r.toLowerCase()).includes(req.user.role.toLowerCase());
   if (!isAuthorized) {
     logger.warn(`Access denied - User Role: ${req.user.role}`);
     throw new ApiError(

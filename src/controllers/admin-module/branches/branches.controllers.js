@@ -12,6 +12,7 @@ const {
 const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
+const {logActivity} = require("../../../utils/ActivityLog/ActivityLog")
 
 // ADD BRANCH
 const addBranch = catchAsyncError(async (req, res, next) => {
@@ -58,11 +59,14 @@ const addBranch = catchAsyncError(async (req, res, next) => {
   if (assignedAdmin) {
     await AdminModel.findByIdAndUpdate(assignedAdmin, { branch: branch._id });
   }
-
-  return res
+  const activityLog = await logActivity(
+    req.user._id,
+    `Created a new branch: ${name}`
+  );
+ return res
     .status(statusCode.CREATED)
     .json(
-      new ApiResponse(statusCode.OK, branch, "Branch created successfully")
+      new ApiResponse(statusCode.OK, { branch, UserActivity: activityLog }, "Branch created successfully")
     );
 });
 
@@ -120,22 +124,29 @@ const getBranchById = catchAsyncError(async (req, res, next) => {
     .status(statusCode.OK)
     .json(new ApiResponse(statusCode.OK, branch, "Branch Found Successfully"));
 });
-
 const deleteBranchById = catchAsyncError(async (req, res, next) => {
   const { branchId } = req.params;
 
   const deletedBranch = await BranchModel.findByIdAndDelete(branchId);
 
   if (!deletedBranch) {
-    throw new ApiError(statusCode.NOT_FOUND, "Not Found");
+    throw new ApiError(statusCode.NOT_FOUND, "Branch not found");
   }
 
-  return res
-    .status()
-    .json(new ApiResponse(statusCode.OK, {}, "Deleted Successfully"));
+  // Log activity
+  const activityLog = await logActivity(
+    req.user._id,
+    `Deleted branch: ${deletedBranch.name}`
+  );
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      { branch: deletedBranch, UserActivity: activityLog },
+      "Branch deleted successfully"
+    )
+  );
 });
-
-
 const updateBranchById = catchAsyncError(async (req, res, next) => {
   const { branchId } = req.params;
   const { name, location, latitude, longitude, adminId } = req.body;
@@ -160,13 +171,19 @@ const updateBranchById = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.NOT_FOUND, "Not found");
   }
 
-  return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(statusCode.OK, updatedBranch, "Updated Successfully")
-    );
-});
+ const activityLog = await logActivity(
+    req.user._id,
+    `Updated branch: ${updatedBranch.name}`
+  );
 
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      { branch: updatedBranch, UserActivity: activityLog },
+      "Branch updated successfully"
+    )
+  );
+});
 module.exports = {
   addBranch,
   getAllBranches,
