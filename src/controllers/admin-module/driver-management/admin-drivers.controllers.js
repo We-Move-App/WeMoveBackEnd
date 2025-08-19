@@ -316,131 +316,6 @@ const verifyUserProfile = catchAsyncError(async (req, res) => {
 
   return res.status(statusCode.OK).json(response);
 });
-// const createDriverFromAdmin = catchAsyncError(async (req, res) => {
-//   const { basicDriverDetails, bankDetails, vehicleDetails, documents = [] } = req.body;
-
-
-//   const authHeader = req.headers.authorization;
-//   if (!authHeader?.startsWith("Bearer "))
-//     throw new ApiError(statusCode.UNAUTHORIZED, "Access token is missing or invalid");
-
-//   const accessToken = authHeader.split(" ")[1];
-//   const decoded = decodeAccessToken(accessToken);
-//   const adminId = decoded?._id;
-//   if (!adminId) throw new ApiError(statusCode.UNAUTHORIZED, "Invalid admin token");
-
-
-//   const existingDriver = await DriverBasicDetails.findOne({
-//     $or: [{ phoneNo: basicDriverDetails.phoneNo }, { email: basicDriverDetails.email }],
-//   });
-
-//   if (existingDriver) {
-//     throw new ApiError(statusCode.BAD_REQUEST, "Phone number or email already exists");
-//   }
-
-
-//   const existingVehicle = await VehicleDetail.findOne({
-//     registrationNo: vehicleDetails.registrationNo,
-//   });
-//   if (existingVehicle) {
-//     throw new ApiError(statusCode.BAD_REQUEST, "Vehicle registration number already exists");
-//   }
-
-
-//   const driverId = await generateCustomId("driver", "D");
-
-//   // 5️⃣ Save driver basic details (auto-approved)
-//   const savedDriver = await DriverBasicDetails.create({
-//     ...basicDriverDetails,
-//     driverId,
-//     createdBy: "admin",
-//     createdById: adminId,
-//     status: DriverBasicStatus.APPROVED,
-//     emailVerified: true,
-//     isActive: true,
-//     createdAt: new Date(),
-//     updatedAt: new Date(),
-//   });
-
-//   // 6️⃣ Save bank details (auto-approved)
-//   await DriverBankDetail.updateOne(
-//     { driverId },
-//     { $set: { ...bankDetails, updatedAt: new Date() } },
-//     { upsert: true }
-//   );
-
-//   // 7️⃣ Save vehicle details (auto-approved)
-//   await VehicleDetail.updateOne(
-//     { driverId },
-//     { $set: { ...vehicleDetails, updatedAt: new Date() } },
-//     { upsert: true }
-//   );
-
-//   // 8️⃣ Merge all documents and auto-approve
-//   const allDocuments = {};
-
-//   // Personal documents (id_card, license)
-//   documents.forEach((doc) => {
-//     if (doc.documentType === "id_card") allDocuments.idCard = { ...doc, status: "approved" };
-//     if (doc.documentType === "license") allDocuments.license = { ...doc, status: "approved" };
-//   });
-
-//   // Bank passbook
-//   if (bankDetails.document) {
-//     allDocuments.passbook = { ...bankDetails.document, status: "approved" };
-//   }
-
-//   // Vehicle documents
-//   ["insurance", "registrationCertificate", "vehiclePhotos", "avatarPhotos"].forEach((key) => {
-//     if (vehicleDetails[key]) vehicleDetails[key].status = "approved";
-//   });
-
-//   // Save documents in DB
-//   await DriverDocDetails.create({
-//     driverId,
-//     documents: [
-//       ...(documents || []),
-//       bankDetails.document,
-//       vehicleDetails.insurance,
-//       vehicleDetails.registrationCertificate,
-//       vehicleDetails.vehiclePhotos,
-//       vehicleDetails.avatarPhotos,
-//     ].filter(Boolean),
-//   });
-
-//   // 9️⃣ Generate driver token
-//   const driverToken =  await  generateTokens({ driverId });
-
-
-//   // 🔟 Response in required format
-//   return res.status(statusCode.CREATED).json(
-//     new ApiResponse(
-//       statusCode.CREATED,
-//       {
-//         driverBasicDetails: {
-//           driverId:savedDriver.driverId,
-//           name: savedDriver.fullName,
-//           age: savedDriver.age,
-//           mobile: savedDriver.phoneNo,
-//           email: savedDriver.email,
-//           address: savedDriver.address,
-//           status: savedDriver.status,
-//           experience: savedDriver.experience,
-//         },
-//         documents: allDocuments,
-//         vehicleDetails: vehicleDetails,
-//         bankDetails: bankDetails,
-//         isOnline: false,
-//         token: driverToken
-//       },
-
-//       "Driver fully onboarded successfully by admin",
-
-
-//     )
-//   );
-// });
-
 const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
   const {
     basicDriverDetails = {},
@@ -596,130 +471,130 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
     )
   );
 });
-// const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
-//   const { driverId } = req.params;
-//    const { vehicleType } = req.query
-//   const { basicDriverDetails = {}, bankDetails = {}, vehicleDetails = {}, documents = [] } = req.body;
+const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
+  const { driverId } = req.params;
+   const { vehicleType } = req.query
+  const { basicDriverDetails = {}, bankDetails = {}, vehicleDetails = {}, documents = [] } = req.body;
 
-//  if (!driverId ||!vehicleType) {
-//     throw new ApiError(statusCode.BAD_REQUEST, "Driver ID  and vehileType is required");
-//   }
-//    if (vehicleType?.toLowerCase() !== "bike") {
-//     throw new ApiError(statusCode.BAD_REQUEST, "vehicleType must be 'bike'");
+ if (!driverId ||!vehicleType) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Driver ID  and vehileType is required");
+  }
+   if (vehicleType?.toLowerCase() !== "bike") {
+    throw new ApiError(statusCode.BAD_REQUEST, "vehicleType must be 'bike'");
   
-//   }
-//   const authHeader = req.headers.authorization;
-//   if (!authHeader?.startsWith("Bearer ")) {
-//     throw new ApiError(statusCode.UNAUTHORIZED, "Access token is missing or invalid");
-//   }
+  }
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Access token is missing or invalid");
+  }
 
-//   const accessToken = authHeader.split(" ")[1];
-//   const decoded = decodeAccessToken(accessToken);
-//   const adminId = decoded?._id;
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const adminId = decoded?._id;
 
-//   // 1️⃣ Check if driver exists
-//   const savedDriver = await DriverBasicDetails.findOne({ driverId });
-//   if (!savedDriver) throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+  // 1️⃣ Check if driver exists
+  const savedDriver = await DriverBasicDetails.findOne({ driverId });
+  if (!savedDriver) throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
 
-//   // 2️⃣ Update driver basic details
-//   await DriverBasicDetails.updateOne(
-//     { driverId },
-//     {
-//       ...basicDriverDetails,
-//       updatedAt: new Date(),
-//       updatedAtById: adminId,
-//     }
-//   );
+  // 2️⃣ Update driver basic details
+  await DriverBasicDetails.updateOne(
+    { driverId },
+    {
+      ...basicDriverDetails,
+      updatedAt: new Date(),
+      updatedAtById: adminId,
+    }
+  );
 
-//   // 3️⃣ Update bank details
-//   await DriverBankDetail.updateOne(
-//     { driverId },
-//     { ...bankDetails, updatedAt: new Date() },
-//     { upsert: true }
-//   );
+  // 3️⃣ Update bank details
+  await DriverBankDetail.updateOne(
+    { driverId },
+    { ...bankDetails, updatedAt: new Date() },
+    { upsert: true }
+  );
 
-//   // 4️⃣ Update vehicle details
-//   await VehicleDetail.updateOne(
-//     { driverId },
-//     { ...vehicleDetails, updatedAt: new Date() },
-//     { upsert: true }
-//   );
+  // 4️⃣ Update vehicle details
+  await VehicleDetail.updateOne(
+    { driverId },
+    { ...vehicleDetails, updatedAt: new Date() },
+    { upsert: true }
+  );
 
-//   // 5️⃣ Collect & normalize all documents
-//   const normalizeDoc = (doc, type) => {
-//     if (!doc) return null;
-//     return {
-//       documentType: type,
-//       fileUrl: doc.fileUrl || doc.url,
-//       fileName: doc.fileName,
-//       status: DriverDocStatusEnum.APPROVED,
-//     };
-//   };
+  // 5️⃣ Collect & normalize all documents
+  const normalizeDoc = (doc, type) => {
+    if (!doc) return null;
+    return {
+      documentType: type,
+      fileUrl: doc.fileUrl || doc.url,
+      fileName: doc.fileName,
+      status: DriverDocStatusEnum.APPROVED,
+    };
+  };
 
-//   const allDocuments = [
-//     ...documents.map(doc => normalizeDoc(doc, doc.documentType)),
-//     normalizeDoc(bankDetails.document, DriverDocEnum.PASSBOOK),
-//     normalizeDoc(vehicleDetails.insurance, DriverDocEnum.INSURANCE),
-//     normalizeDoc(vehicleDetails.registrationCertificate, DriverDocEnum.REGISTRATION),
-//     normalizeDoc(vehicleDetails.vehiclePhotos, DriverDocEnum.VEHICLEPHOTO),
-//     normalizeDoc(vehicleDetails.avatarPhotos, DriverDocEnum.AVATAR)
-//   ].filter(Boolean);
+  const allDocuments = [
+    ...documents.map(doc => normalizeDoc(doc, doc.documentType)),
+    normalizeDoc(bankDetails.document, DriverDocEnum.PASSBOOK),
+    normalizeDoc(vehicleDetails.insurance, DriverDocEnum.INSURANCE),
+    normalizeDoc(vehicleDetails.registrationCertificate, DriverDocEnum.REGISTRATION),
+    normalizeDoc(vehicleDetails.vehiclePhotos, DriverDocEnum.VEHICLEPHOTO),
+    normalizeDoc(vehicleDetails.avatarPhotos, DriverDocEnum.AVATAR)
+  ].filter(Boolean);
 
-//   if (allDocuments.length > 0) {
-//     await DriverDocDetails.findOneAndUpdate(
-//       { driverId },
-//       { documents: allDocuments },
-//       { upsert: true }
-//     );
-//   }
+  if (allDocuments.length > 0) {
+    await DriverDocDetails.findOneAndUpdate(
+      { driverId },
+      { documents: allDocuments },
+      { upsert: true }
+    );
+  }
 
-//   // 6️⃣ Generate token
-//   const driverToken = await generateTokens({ driverId });
-//   const updatedDriver = await DriverBasicDetails.findOne({ driverId })
-//     .populate("updatedAtById", "name email role");
+  // 6️⃣ Generate token
+  const driverToken = await generateTokens({ driverId });
+  const updatedDriver = await DriverBasicDetails.findOne({ driverId })
+    .populate("updatedAtById", "name email role");
 
-//   // 7️⃣ Prepare documents in clean response format
-//   const docResponse = {};
-//   allDocuments.forEach(doc => {
-//     if (doc.documentType === DriverDocEnum.IDCARD) docResponse.idCard = doc;
-//     if (doc.documentType === DriverDocEnum.LICENSE) docResponse.license = doc;
-//     if (doc.documentType === DriverDocEnum.PASSBOOK) docResponse.passbook = doc;
-//     if (doc.documentType === DriverDocEnum.INSURANCE) docResponse.insurance = doc;
-//     if (doc.documentType === DriverDocEnum.REGISTRATION) docResponse.registrationCertificate = doc;
-//     if (doc.documentType === DriverDocEnum.VEHICLEPHOTO) docResponse.vehicleBikePhotos = doc;
-//     if (doc.documentType === DriverDocEnum.AVATAR) docResponse.avatarPhotos = doc;
-//   });
+  // 7️⃣ Prepare documents in clean response format
+  const docResponse = {};
+  allDocuments.forEach(doc => {
+    if (doc.documentType === DriverDocEnum.IDCARD) docResponse.idCard = doc;
+    if (doc.documentType === DriverDocEnum.LICENSE) docResponse.license = doc;
+    if (doc.documentType === DriverDocEnum.PASSBOOK) docResponse.passbook = doc;
+    if (doc.documentType === DriverDocEnum.INSURANCE) docResponse.insurance = doc;
+    if (doc.documentType === DriverDocEnum.REGISTRATION) docResponse.registrationCertificate = doc;
+    if (doc.documentType === DriverDocEnum.VEHICLEPHOTO) docResponse.vehicleBikePhotos = doc;
+    if (doc.documentType === DriverDocEnum.AVATAR) docResponse.avatarPhotos = doc;
+  });
 
-//   // 🚨 Clean bikeDetails (remove embedded docs)
-//   const { insurance, registrationCertificate, vehiclePhotos, avatarPhotos, ...cleanBikeDetails } = vehicleDetails;
+  // 🚨 Clean bikeDetails (remove embedded docs)
+  const { insurance, registrationCertificate, vehiclePhotos, avatarPhotos, ...cleanBikeDetails } = vehicleDetails;
 
-//   // ✅ Final Response
-//   return res.status(statusCode.OK).json(
-//     new ApiResponse(
-//       statusCode.OK,
-//       {
-//         BikeDriverDetails: {
-//           driverId: savedDriver.driverId,
-//           name: basicDriverDetails.fullName || savedDriver.fullName,
-//           age: basicDriverDetails.age || savedDriver.age,
-//           mobile: basicDriverDetails.phoneNo || savedDriver.phoneNo,
-//           email: basicDriverDetails.email || savedDriver.email,
-//           address: basicDriverDetails.address || savedDriver.address,
-//           status: basicDriverDetails.status || savedDriver.status,
-//           experience: basicDriverDetails.experience || savedDriver.experience,
-//           createdById: savedDriver.createdById,
-//           updatedBy: updatedDriver.updatedAtById
-//         },
-//         documents: docResponse,
-//         bikeDetails: cleanBikeDetails,
-//         bankDetails,
-//         isOnline: false,
-//         token: driverToken
-//       },
-//       "Bike driver updated successfully by admin"
-//     )
-//   );
-// });
+  // ✅ Final Response
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        BikeDriverDetails: {
+          driverId: savedDriver.driverId,
+          name: basicDriverDetails.fullName || savedDriver.fullName,
+          age: basicDriverDetails.age || savedDriver.age,
+          mobile: basicDriverDetails.phoneNo || savedDriver.phoneNo,
+          email: basicDriverDetails.email || savedDriver.email,
+          address: basicDriverDetails.address || savedDriver.address,
+          status: basicDriverDetails.status || savedDriver.status,
+          experience: basicDriverDetails.experience || savedDriver.experience,
+          createdById: savedDriver.createdById,
+          updatedBy: updatedDriver.updatedAtById
+        },
+        documents: docResponse,
+        bikeDetails: cleanBikeDetails,
+        bankDetails,
+        isOnline: false,
+        token: driverToken
+      },
+      "Bike driver updated successfully by admin"
+    )
+  );
+});
 const createTaxiDriverFromAdmin = catchAsyncError(async (req, res) => {
   const {
     basicDriverDetails = {},
@@ -875,7 +750,6 @@ const createTaxiDriverFromAdmin = catchAsyncError(async (req, res) => {
     )
   );
 });
-
 const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
   const { driverId } = req.params;
    const { vehicleType } = req.query
@@ -1099,7 +973,6 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
 
   return res.status(statusCode.OK).json(response);
 });
-
 const getAllBikeBookings = catchAsyncError(async (req, res) => {
   const {
     status,
@@ -1299,178 +1172,7 @@ const getBookingDetailsById = catchAsyncError(async (req, res) => {
     },
   });
 });
-const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
-  const { driverId } = req.params;
-  const { vehicleType } = req.query;
-  const { basicDriverDetails = {}, bankDetails = {}, vehicleDetails = {}, documents = [] } = req.body;
 
-  if (!driverId || !vehicleType) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Driver ID and vehicleType are required");
-  }
-
-  if (vehicleType?.toLowerCase() !== "bike") {
-    throw new ApiError(statusCode.BAD_REQUEST, "vehicleType must be 'bike'");
-  }
-
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Access token is missing or invalid");
-  }
-
-  const accessToken = authHeader.split(" ")[1];
-  const decoded = decodeAccessToken(accessToken);
-  const adminId = decoded?._id;
-
-  // 1️⃣ Check if driver exists
-  const savedDriver = await DriverBasicDetails.findOne({ driverId });
-  if (!savedDriver) throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
-
-  // 2️⃣ Update driver basic details
-  await DriverBasicDetails.updateOne(
-    { driverId },
-    {
-      ...basicDriverDetails,
-      updatedAt: new Date(),
-      updatedAtById: adminId,
-    }
-  );
-
-  // 3️⃣ Update bank details
-  await DriverBankDetail.updateOne(
-    { driverId },
-    { ...bankDetails, updatedAt: new Date() },
-    { upsert: true }
-  );
-
-  // 4️⃣ Update vehicle details
-  await VehicleDetail.updateOne(
-    { driverId },
-    { ...vehicleDetails, updatedAt: new Date() },
-    { upsert: true }
-  );
-
-  // 5️⃣ Collect & normalize documents
-  const normalizeDoc = (doc, type) => {
-    if (!doc) return null;
-    return {
-      documentType: type,
-      fileUrl: doc.fileUrl || doc.url,
-      fileName: doc.fileName,
-      status: doc.status || DriverDocStatusEnum.APPROVED,
-    };
-  };
-
-  // handle vehicle photos array
-  const vehiclePhotosArray = Array.isArray(vehicleDetails.vehiclePhotos)
-    ? vehicleDetails.vehiclePhotos.map(photo => normalizeDoc(photo, DriverDocEnum.VEHICLEPHOTO))
-    : [normalizeDoc(vehicleDetails.vehiclePhotos, DriverDocEnum.VEHICLEPHOTO)].filter(Boolean);
-
-  const newDocuments = [
-    ...documents.map(doc => normalizeDoc(doc, doc.documentType)),
-    normalizeDoc(bankDetails.document, DriverDocEnum.PASSBOOK),
-    normalizeDoc(vehicleDetails.insurance, DriverDocEnum.INSURANCE),
-    normalizeDoc(vehicleDetails.registrationCertificate, DriverDocEnum.REGISTRATION),
-    ...vehiclePhotosArray,
-    normalizeDoc(vehicleDetails.avatarPhotos, DriverDocEnum.AVATAR)
-  ].filter(Boolean);
-
-  if (newDocuments.length > 0) {
-    // Fetch old docs for merging
-    const existing = await DriverDocDetails.findOne({ driverId });
-    let mergedDocs = newDocuments;
-
-    if (existing && existing.documents) {
-      let oldDocs = existing.documents;
-
-      // Handle vehicle photos partial update
-      if (vehiclePhotosArray.length > 0) {
-        const oldVehiclePhotos = oldDocs.filter(d => d.documentType === DriverDocEnum.VEHICLEPHOTO);
-
-        vehiclePhotosArray.forEach(newPhoto => {
-          const index = oldVehiclePhotos.findIndex(old => old.fileUrl === newPhoto.fileUrl);
-          if (index !== -1) {
-            // replace existing
-            oldVehiclePhotos[index] = { ...oldVehiclePhotos[index], ...newPhoto };
-          } else {
-            // add new
-            oldVehiclePhotos.push(newPhoto);
-          }
-        });
-
-        oldDocs = [
-          ...oldDocs.filter(d => d.documentType !== DriverDocEnum.VEHICLEPHOTO),
-          ...oldVehiclePhotos
-        ];
-      }
-
-      // Merge non-vehicle docs (overwrite by type)
-      newDocuments.forEach(newDoc => {
-        if (newDoc.documentType === DriverDocEnum.VEHICLEPHOTO) return; // skip, already handled
-
-        oldDocs = oldDocs.filter(d => d.documentType !== newDoc.documentType);
-        oldDocs.push(newDoc);
-      });
-
-      mergedDocs = oldDocs;
-    }
-
-    // Save final merged docs
-    await DriverDocDetails.findOneAndUpdate(
-      { driverId },
-      { documents: mergedDocs },
-      { upsert: true }
-    );
-  }
-
-  // 6️⃣ Generate token
-  const driverToken = await generateTokens({ driverId });
-  const updatedDriver = await DriverBasicDetails.findOne({ driverId })
-    .populate("updatedAtById", "name email role");
-
-  // 7️⃣ Prepare documents in response
-  const docResponse = { vehicleBikePhotos: [] };
-  const finalDocs = await DriverDocDetails.findOne({ driverId });
-
-  finalDocs?.documents.forEach(doc => {
-    if (doc.documentType === DriverDocEnum.IDCARD) docResponse.idCard = doc;
-    if (doc.documentType === DriverDocEnum.LICENSE) docResponse.license = doc;
-    if (doc.documentType === DriverDocEnum.PASSBOOK) docResponse.passbook = doc;
-    if (doc.documentType === DriverDocEnum.INSURANCE) docResponse.insurance = doc;
-    if (doc.documentType === DriverDocEnum.REGISTRATION) docResponse.registrationCertificate = doc;
-    if (doc.documentType === DriverDocEnum.VEHICLEPHOTO) docResponse.vehicleBikePhotos.push(doc);
-    if (doc.documentType === DriverDocEnum.AVATAR) docResponse.avatarPhotos = doc;
-  });
-
-  // 🚨 Clean bikeDetails
-  const { insurance, registrationCertificate, vehiclePhotos, avatarPhotos, ...cleanBikeDetails } = vehicleDetails;
-
-  // ✅ Final Response
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      {
-        BikeDriverDetails: {
-          driverId: savedDriver.driverId,
-          name: basicDriverDetails.fullName || savedDriver.fullName,
-          age: basicDriverDetails.age || savedDriver.age,
-          mobile: basicDriverDetails.phoneNo || savedDriver.phoneNo,
-          email: basicDriverDetails.email || savedDriver.email,
-          address: basicDriverDetails.address || savedDriver.address,
-          status: basicDriverDetails.status || savedDriver.status,
-          experience: basicDriverDetails.experience || savedDriver.experience,
-          createdById: savedDriver.createdById,
-          updatedBy: updatedDriver.updatedAtById
-        },
-        documents: docResponse,
-        bikeDetails: cleanBikeDetails,
-        bankDetails,
-        isOnline: false,
-        token: driverToken
-      },
-      "Bike driver updated successfully by admin"
-    )
-  );
-});
 
 
 
