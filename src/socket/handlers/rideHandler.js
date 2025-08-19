@@ -18,6 +18,29 @@ const DriverLocation = require("../../models/new-driver-module/location/driver-l
 /**
  * Assigns ride sequentially to nearby drivers
  */
+// Keep one timer/listener per booking
+// bookingId -> { timeoutId, acceptEvent, acceptHandler }
+const assignmentGuards = new Map();
+
+const stopAssigning = (io, bookingId) => {
+  const guard = assignmentGuards.get(bookingId);
+  if (!guard) return;
+
+  if (guard.timeoutId) clearTimeout(guard.timeoutId);
+  if (guard.acceptEvent && guard.acceptHandler) {
+    io.off(guard.acceptEvent, guard.acceptHandler);
+  }
+  assignmentGuards.delete(bookingId);
+};
+
+const isAlreadyAssigned = async (bookingId) => {
+  const doc = await RideBookingDetail.findOne(
+    { bookingId },
+    { rideStatus: 1 }
+  );
+  return doc?.rideStatus === RideBookStatusEnum.ACCEPTED;
+};
+
 const assignRideToDrivers = async (
   io,
   bookingId,
@@ -25,20 +48,34 @@ const assignRideToDrivers = async (
   booking,
   vehicle,
   otp,
-  index = 0
+  batchIndex = 0,
+  batchSize = 5
 ) => {
   console.log("bookingId", bookingId);
 
-  if (activeAssignTimers.has(bookingId)) {
-    console.log(`⚠️ Skipping duplicate assignment loop for ${bookingId}`);
+  // 🚦 Hard stop if ride already accepted
+  if (await isAlreadyAssigned(bookingId)) {
+    console.log(`⚠️ Ride ${bookingId} already assigned — aborting batch ${batchIndex + 1}`);
+    stopAssigning(io, bookingId);
     return;
   }
 
-  if (index >= drivers.length) {
+  // ---- Batch slicing
+  const start = batchIndex * batchSize;
+  const end = Math.min(start + batchSize, drivers.length);
+  const currentBatch = drivers.slice(start, end);
+
+  if (currentBatch.length === 0) {
+    // Double-check before cancelling
+    if (await isAlreadyAssigned(bookingId)) {
+      console.log(`ℹ️ Ride ${bookingId} became ACCEPTED just before cancel check — skip cancel`);
+      stopAssigning(io, bookingId);
+      return;
+    }
+
     console.log("🚫 No more drivers to assign - cancelling ride");
-    activeAssignTimers.delete(bookingId);
     await RideBookingDetail.findOneAndUpdate(
-      { bookingId },
+      { bookingId, rideStatus: { $ne: RideBookStatusEnum.ACCEPTED } }, // don't overwrite if accepted
       {
         rideStatus: RideBookStatusEnum.CANCELLED,
         cancelledBy: BookCancelledByEnum.SYSTEM,
@@ -46,22 +83,23 @@ const assignRideToDrivers = async (
         "timestamps.cancelledAt": new Date(),
       }
     );
-    io.to(booking.userId.toString()).emit("ride:cancelled", {
-      bookingId,
+    io.to(booking.userId.toString()).emit("ride:noDriver", {
+      rideId:bookingId,
       reason: "No drivers accepted",
     });
+    stopAssigning(io, bookingId);
     return;
   }
 
-  const driver = drivers[index];
   console.log(
-    `🔄 Attempting to assign ride ${bookingId} to driver ${driver.driverId} (${index + 1}/${drivers.length})`
+    `📦 Assigning ride ${bookingId} to drivers batch ${batchIndex + 1} (${start + 1}–${end})`
   );
 
-  try {
-    // Distance calculation
+  // ---- Send ride:incoming to all drivers in this batch
+  for (const driver of currentBatch) {
     const driverLoc = driver.location?.coordinates;
     const pickupLoc = booking.pickupLocation?.location?.coordinates;
+
     let distanceToPickup = null;
     let timeToPickup = null;
 
@@ -81,7 +119,6 @@ const assignRideToDrivers = async (
       }
     }
 
-    // 📌 Do NOT set driverId here, only emit request
     console.log(`📢 Emitting 'ride:incoming' to driver ${driver.driverId}`);
     io.to(driver.driverId).emit("ride:incoming", {
       rideId: bookingId,
@@ -100,71 +137,106 @@ const assignRideToDrivers = async (
       distanceToPickup,
       timeToPickup,
     });
-
-    console.log(`✅ Emission successful to driver ${driver.driverId}`);
-
-    // Wait for 8 seconds
-    const timeoutId = setTimeout(async () => {
-      console.log(
-        `⏰ 8s timeout for driver ${driver.driverId} on ride ${bookingId}`
-      );
-      activeAssignTimers.delete(bookingId);
-
-      const current = await RideBookingDetail.findOne({ bookingId });
-
-      if (current?.rideStatus === RideBookStatusEnum.REQUESTED) {
-        console.log(
-          `🚫 Driver ${driver.driverId} ignored ride, adding to cancelled list`
-        );
-
-        await RideBookingDetail.findOneAndUpdate(
-          { bookingId },
-          {
-            $push: {
-              cancelledByDrivers: {
-                driverId: driver.driverId,
-                cancelledAt: new Date(),
-              },
-            },
-          }
-        );
-
-        console.log(`🔄 Moving to next driver for ride ${bookingId}`);
-        assignRideToDrivers(
-          io,
-          bookingId,
-          drivers,
-          booking,
-          vehicle,
-          otp,
-          index + 1
-        );
-      }
-    }, 8000); // 8 seconds
-
-    activeAssignTimers.set(bookingId, timeoutId);
-
-    const cleanup = () => {
-      console.log(`🧹 Cleaning up timeout for ride ${bookingId}`);
-      clearTimeout(timeoutId);
-      activeAssignTimers.delete(bookingId);
-    };
-
-    // When driver accepts, cleanup
-    io.once(`ride:accepted:${bookingId}`, cleanup);
-  } catch (error) {
-    console.error(`❌ Error assigning to driver ${driver.driverId}:`, error);
-    activeAssignTimers.delete(bookingId);
-    assignRideToDrivers(
-      io,
-      bookingId,
-      drivers,
-      booking,
-      vehicle,
-      otp,
-      index + 1
-    );
   }
+
+  // ---- Accept handler (atomic DB winner)
+  const acceptEvent = `ride:accepted:${bookingId}`;
+  const acceptHandler = async (data) => {
+    // Only process if driver is from this batch
+    if (!currentBatch.some((d) => d.driverId === data.driverId)) return;
+
+    // Atomic update: only first one wins
+    const updated = await RideBookingDetail.findOneAndUpdate(
+      {
+        bookingId,
+        rideStatus: RideBookStatusEnum.PENDING, // only if still pending
+      },
+      {
+        rideStatus: RideBookStatusEnum.ACCEPTED,
+        driverId: data.driverId,
+        otp,
+        "timestamps.acceptedAt": new Date(),
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      // Someone else already accepted
+      return;
+    }
+
+    console.log(`✅ Driver ${data.driverId} accepted ride ${bookingId}`);
+
+    // Stop timers + listeners
+    stopAssigning(io, bookingId);
+
+    // Notify user
+    io.to(booking.userId.toString()).emit("ride:accepted", {
+      bookingId,
+      driverId: data.driverId,
+    });
+
+    // Optionally notify other drivers in this batch
+    for (const d of currentBatch) {
+      if (d.driverId !== data.driverId) {
+        io.to(d.driverId).emit("ride:expired", { rideId: bookingId });
+      }
+    }
+  };
+
+  // ---- Cleanup old handler if exists, then register new one
+  const existing = assignmentGuards.get(bookingId);
+  if (existing?.acceptHandler) {
+    io.off(existing.acceptEvent, existing.acceptHandler);
+    if (existing.timeoutId) clearTimeout(existing.timeoutId);
+  }
+
+  io.on(acceptEvent, acceptHandler);
+
+  // ---- Timeout after 8s
+  const timeoutId = setTimeout(async () => {
+    if (await isAlreadyAssigned(bookingId)) {
+      console.log(`⏳ Timeout fired but ${bookingId} already ACCEPTED — stopping`);
+      stopAssigning(io, bookingId);
+      return;
+    }
+
+    console.log(
+      `⏰ 8s timeout - none of the drivers in batch ${batchIndex + 1} accepted ride ${bookingId}`
+    );
+    io.off(acceptEvent, acceptHandler);
+
+    // Mark this batch as ignored
+    await RideBookingDetail.findOneAndUpdate(
+      { bookingId, rideStatus: RideBookStatusEnum.PENDING },
+      {
+        $push: {
+          cancelledByDrivers: currentBatch.map((d) => ({
+            driverId: d.driverId,
+            cancelledAt: new Date(),
+          })),
+        },
+      }
+    );
+
+    // Try next batch if still pending
+    if (!(await isAlreadyAssigned(bookingId))) {
+      assignRideToDrivers(
+        io,
+        bookingId,
+        drivers,
+        booking,
+        vehicle,
+        otp,
+        batchIndex + 1,
+        batchSize
+      );
+    } else {
+      stopAssigning(io, bookingId);
+    }
+  }, 8000);
+
+  assignmentGuards.set(bookingId, { timeoutId, acceptEvent, acceptHandler });
 };
 
 /**

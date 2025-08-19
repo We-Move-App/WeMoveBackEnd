@@ -27,7 +27,7 @@ const setupUserNamespace = (userNamespace, io) => {
   userNamespace.on("connection", (socket) => {
     console.log("socket.data.userId",socket.data.userId);
     
-    const { userId } = socket.data.userId;   
+    const userId = socket.data.userId;   
     if (!userId) {
       socket.disconnect(true);
       return;
