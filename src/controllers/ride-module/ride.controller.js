@@ -18,6 +18,7 @@ const {
   DriverDocEnum,
   PaymentStatusEnum,
   BookCancelledByEnum,
+  VehicleTypeEnum,
 } = require("../../utils/constants/ENUM");
 const WalletModel = require("../../models/wallet-module/wallets.model");
 const generateCustomId = require("../../utils/customId/generateCustomId");
@@ -196,7 +197,7 @@ const requestRide = async (req, res, next) => {
     });
 
     const responseData = {
-      _id:newBooking.bookingId,
+      _id: newBooking.bookingId,
       user: newBooking.userId,
       driver: newBooking.driverId || null,
       vehicleType: newBooking.vehicleType,
@@ -557,17 +558,17 @@ const completeRide = catchAsyncError(async (req, res, next) => {
         },
         {
           transactionId: uuidv4(),
-          userId: booking.driverId,
+          driverId: booking.driverId,
           bookingId: booking.bookingId,
           type: "CREDIT",
           status: PaymentStatusEnum.SUCCESS,
           amount: driverShare,
           currency: process.env.MOMO_CURRENCY,
-          description: "Driver earnings from completed ride",
+          description: `Ride fare from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
         },
         {
           transactionId: uuidv4(),
-          userId: "ADM001",
+          adminId: "ADM001",
           bookingId: booking.bookingId,
           type: "CREDIT",
           status: PaymentStatusEnum.SUCCESS,
@@ -638,7 +639,10 @@ const rideCancelledByUser = catchAsyncError(async (req, res, next) => {
   const { reason } = req.body || {};
 
   if (!reason) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Cancellation reason is required");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Cancellation reason is required"
+    );
   }
 
   const booking = await RideBookingDetail.findOne({ bookingId: rideId });
@@ -646,8 +650,15 @@ const rideCancelledByUser = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
   }
 
-  if ([RideBookStatusEnum.COMPLETED, RideBookStatusEnum.CANCELLED].includes(booking.rideStatus)) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Ride cannot be cancelled at this stage");
+  if (
+    [RideBookStatusEnum.COMPLETED, RideBookStatusEnum.CANCELLED].includes(
+      booking.rideStatus
+    )
+  ) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Ride cannot be cancelled at this stage"
+    );
   }
 
   booking.rideStatus = RideBookStatusEnum.CANCELLED;
@@ -715,7 +726,10 @@ const rideCancelledByDriver = catchAsyncError(async (req, res, next) => {
 
   // 🔹 Validation
   if (!reason) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Cancellation reason is required");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Cancellation reason is required"
+    );
   }
 
   // 🔹 Find booking
@@ -739,7 +753,9 @@ const rideCancelledByDriver = catchAsyncError(async (req, res, next) => {
   const cancelledDriverId = booking.driverId;
 
   // ✅ Record cancellation with unique driver (avoid duplicates in array)
-  if (!booking.cancelledByDrivers.some((d) => d.driverId === cancelledDriverId)) {
+  if (
+    !booking.cancelledByDrivers.some((d) => d.driverId === cancelledDriverId)
+  ) {
     booking.cancelledByDrivers.push({
       driverId: cancelledDriverId,
       cancelledAt: new Date(),
@@ -1085,6 +1101,377 @@ const getDriverAnalytics = catchAsyncError(async (req, res, next) => {
     );
 });
 
+const getTripHistory = catchAsyncError(async (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+
+  // Entity is mandatory, no default
+  const entity = req.query.entity;
+  if (!entity || !["driver", "user"].includes(entity)) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Entity parameter is required and must be 'driver' or 'user'"
+    );
+  }
+
+  // Get vehicle type filter (optional)
+  const vehicleType = req.query.vehicle;
+  if (
+    vehicleType &&
+    vehicleType !== VehicleTypeEnum.TAXI &&
+    vehicleType !== VehicleTypeEnum.BIKE
+  ) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      `Vehicle type must be one of: ['${VehicleTypeEnum.TAXI}', '${VehicleTypeEnum.BIKE}']`
+    );
+  }
+
+  let entityId;
+  if (entity === "driver") {
+    entityId = decoded?.driverId;
+    if (!entityId) {
+      throw new ApiError(statusCode.UNAUTHORIZED, "Invalid driver token");
+    }
+  } else {
+    entityId = decoded?._id; // Use _id for users
+    if (!entityId) {
+      throw new ApiError(statusCode.UNAUTHORIZED, "Invalid user token");
+    }
+  }
+
+  // Get pagination parameters with defaults
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
+
+  let allTrips,
+    totalTrips,
+    nameMap = {};
+
+  // Build base query conditions
+  let baseConditions = {};
+  if (entity === "driver") {
+    baseConditions = {
+      $or: [
+        { driverId: entityId, rideStatus: RideBookStatusEnum.COMPLETED },
+        { "cancelledByDrivers.driverId": entityId },
+      ],
+    };
+  } else {
+    baseConditions = {
+      userId: entityId,
+      $or: [
+        { rideStatus: RideBookStatusEnum.COMPLETED },
+        { rideStatus: RideBookStatusEnum.CANCELLED },
+      ],
+    };
+  }
+
+  // Add vehicle type filter if provided
+  if (vehicleType) {
+    baseConditions.vehicleType = vehicleType;
+  }
+
+  if (entity === "driver") {
+    // DRIVER FLOW
+    const driverExists = await DriverBasicDetails.exists({
+      driverId: entityId,
+    });
+    if (!driverExists) {
+      throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+    }
+
+    // Get trips with vehicle filter
+    [allTrips, totalTrips] = await Promise.all([
+      RideBookingDetail.find(baseConditions)
+        .sort({ "timestamps.completedAt": -1, "timestamps.cancelledAt": -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      RideBookingDetail.countDocuments(baseConditions),
+    ]);
+
+    // Get user IDs from all trips
+    const userIds = allTrips.map((trip) => trip.userId).filter((id) => id);
+
+    // Fetch user details for all trips
+    const users = await UserModel.find(
+      { _id: { $in: userIds } },
+      { _id: 1, fullName: 1 }
+    ).lean();
+
+    users.forEach((user) => {
+      nameMap[user._id.toString()] = user.fullName;
+    });
+  } else {
+    // USER FLOW
+    const userExists = await UserModel.exists({ _id: entityId });
+    if (!userExists) {
+      throw new ApiError(statusCode.NOT_FOUND, "User not found");
+    }
+
+    // Get trips with vehicle filter
+    [allTrips, totalTrips] = await Promise.all([
+      RideBookingDetail.find(baseConditions)
+        .sort({ "timestamps.completedAt": -1, "timestamps.cancelledAt": -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      RideBookingDetail.countDocuments(baseConditions),
+    ]);
+
+    // Get driver IDs from all trips
+    const driverIds = allTrips.map((trip) => trip.driverId).filter((id) => id);
+
+    // Fetch driver details for all trips
+    const drivers = await DriverBasicDetails.find(
+      { driverId: { $in: driverIds } },
+      { driverId: 1, fullName: 1 }
+    ).lean();
+
+    drivers.forEach((driver) => {
+      nameMap[driver.driverId] = driver.fullName;
+    });
+  }
+
+  // Process all trips into a single array
+  const tripHistory = allTrips.map((trip) => {
+    const baseData = {
+      rideId: trip.bookingId,
+      from: trip.pickupLocation?.address,
+      to: trip.dropLocation?.address,
+      requestedAt: trip.timestamps?.requestedAt,
+      vehicleType: trip.vehicleType, // Include vehicle type in response
+    };
+
+    if (entity === "driver") {
+      // DRIVER RESPONSE
+      baseData.userName = nameMap[trip.userId?.toString()] || "Unknown User";
+
+      // Check if it's a completed trip
+      if (
+        trip.rideStatus === RideBookStatusEnum.COMPLETED &&
+        trip.driverId === entityId
+      ) {
+        return {
+          ...baseData,
+          status: "completed",
+          pickupAt: trip.timestamps?.pickupAt,
+          completedAt: trip.timestamps?.completedAt,
+          timestamp: trip.timestamps?.completedAt,
+        };
+      }
+
+      // Check if it's a cancelled trip by this driver
+      const cancelledRecord = trip.cancelledByDrivers?.find(
+        (c) => c.driverId === entityId
+      );
+      if (cancelledRecord) {
+        return {
+          ...baseData,
+          status: "cancelled",
+          cancelledAt:
+            cancelledRecord.cancelledAt || trip.timestamps?.cancelledAt,
+          timestamp:
+            cancelledRecord.cancelledAt || trip.timestamps?.cancelledAt,
+        };
+      }
+    } else {
+      // USER RESPONSE - Both completed and cancelled trips
+      baseData.driverName = nameMap[trip.driverId] || "Unknown Driver";
+
+      // Check if it's a completed trip
+      if (trip.rideStatus === RideBookStatusEnum.COMPLETED) {
+        return {
+          ...baseData,
+          status: "completed",
+          pickupAt: trip.timestamps?.pickupAt,
+          completedAt: trip.timestamps?.completedAt,
+          timestamp: trip.timestamps?.completedAt,
+        };
+      }
+
+      // Check if it's a cancelled trip
+      if (trip.rideStatus === RideBookStatusEnum.CANCELLED) {
+        return {
+          ...baseData,
+          status: "cancelled",
+          cancelledAt: trip.timestamps?.cancelledAt,
+          timestamp: trip.timestamps?.cancelledAt,
+        };
+      }
+    }
+
+    // Fallback (shouldn't happen based on our queries)
+    return {
+      ...baseData,
+      status: "unknown",
+      timestamp: trip.timestamps?.requestedAt,
+    };
+  });
+
+  // Sort by timestamp (most recent first)
+  tripHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  // Calculate pagination metadata
+  const pagination = {
+    page,
+    limit,
+    total: totalTrips,
+    totalPages: Math.ceil(totalTrips / limit),
+  };
+
+  const data = {
+    [entity === "driver" ? "driverId" : "userId"]: entityId,
+    rides: tripHistory,
+    pagination: pagination,
+    ...(vehicleType && { vehicleFilter: vehicleType }), // Include filter info in response
+  };
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(statusCode.OK, data, "Trip history fetched successfully")
+    );
+});
+
+const giveRatings = catchAsyncError(async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const userId = decoded?._id;
+
+  if (!userId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  const { rideId, rating, feedback } = req.body;
+
+  // Validate required fields
+  if (!rideId || !rating) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Ride ID and rating are required"
+    );
+  }
+
+  // Validate rating range
+  if (rating < 1 || rating > 5) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Rating must be between 1 and 5"
+    );
+  }
+
+  // Find the ride
+  const ride = await RideBookingDetail.findOne({
+    bookingId: rideId,
+    userId: userId,
+  });
+
+  if (!ride) {
+    throw new ApiError(statusCode.NOT_FOUND, "Ride not found");
+  }
+
+  // Check if ride is completed
+  if (ride.rideStatus !== RideBookStatusEnum.COMPLETED) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "You can only rate completed rides"
+    );
+  }
+
+  // Update ride with rating and feedback
+  const updateData = {
+    tripRating: rating,
+    ...(feedback && { feedbackFromUser: feedback }),
+  };
+
+  const updatedRide = await RideBookingDetail.findOneAndUpdate(
+    { bookingId: rideId, userId: userId },
+    { $set: updateData },
+    { new: true, runValidators: true }
+  );
+
+  if (!updatedRide) {
+    throw new ApiError(
+      statusCode.INTERNAL_SERVER_ERROR,
+      "Failed to update rating"
+    );
+  }
+
+  // Update driver's average rating
+  if (ride.driverId) {
+    // Get all completed rides for this driver with ratings
+    const driverRides = await RideBookingDetail.find({
+      driverId: ride.driverId,
+      rideStatus: RideBookStatusEnum.COMPLETED,
+      tripRating: { $exists: true, $gte: 1, $lte: 5 },
+    });
+
+    // Calculate new average rating
+    const totalRatings = driverRides.length;
+    const sumOfRatings = driverRides.reduce(
+      (sum, ride) => sum + ride.tripRating,
+      0
+    );
+    const averageRating =
+      totalRatings > 0 ? sumOfRatings / totalRatings : rating;
+
+    // Update or create driver rating with upsert
+    await DriverBasicDetails.findOneAndUpdate(
+      { driverId: ride.driverId },
+      {
+        $set: {
+          ratings: parseFloat(averageRating.toFixed(1)),
+          totalRatings: totalRatings,
+        },
+        $setOnInsert: {
+          driverId: ride.driverId,
+          rating: parseFloat(averageRating.toFixed(1)),
+          totalRatings: totalRatings,
+        },
+      },
+      {
+        upsert: true,
+        runValidators: true,
+      }
+    );
+  }
+
+  const response = {
+    rideId: updatedRide.bookingId,
+    rating: updatedRide.tripRating,
+    feedback: updatedRide.feedbackFromUser,
+    status: updatedRide.rideStatus,
+    message: "Rating submitted successfully",
+  };
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(statusCode.OK, response, "Rating submitted successfully")
+    );
+});
+
 module.exports = {
   estimateRide,
   requestRide,
@@ -1098,4 +1485,6 @@ module.exports = {
   getUserActiveRide,
   getDriverActiveRide,
   getDriverAnalytics,
+  getTripHistory,
+  giveRatings,
 };

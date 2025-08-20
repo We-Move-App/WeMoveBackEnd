@@ -13,7 +13,7 @@
   "description": "",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.758.0",
-    "@sendgrid/mail": "^8.1.4",
+    "@sendgrid/mail": "^8.1.5",
     "argon2": "^0.41.1",
     "axios": "^1.11.0",
     "base-64": "^1.0.0",

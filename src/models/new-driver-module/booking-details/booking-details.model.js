@@ -32,7 +32,7 @@ const bookingDetailsSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
-    vehicleType:{type:String,enum:VehicleTypeEnum},
+    vehicleType: { type: String, enum: VehicleTypeEnum },
     pickupLocation: { type: locationSchema, required: true },
     dropLocation: { type: locationSchema, required: true },
     routePolyline: { type: String },

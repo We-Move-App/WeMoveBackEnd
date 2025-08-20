@@ -12,6 +12,7 @@ const transactionSchema = new mongoose.Schema(
     userId: { type: String, index: true, default: null },
     busOperatorId: { type: String, index: true, default: null },
     hotelManagerId: { type: String, index: true, default: null },
+    driverId: { type: String, index: true, default: null },
     adminId: { type: String, index: true, default: null },
     bookingId: { type: String, index: true, required: false },
 
