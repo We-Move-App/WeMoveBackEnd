@@ -6,29 +6,38 @@ const catchAsyncError = require("../../../utils/response/catchAsyncError");
 
 const getRecentSearch = catchAsyncError(async (req, res, next) => {
   const { _id } = req.user;
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 5;
-  const startIndex = (page - 1) * limit;
-  const { type } = req.query;
 
-  const query = type ? { user: _id, category: type } : { user: _id };
+  // Pagination
+  const page = Math.max(parseInt(req.query.page) || 1, 1);
+  const limit = Math.max(parseInt(req.query.limit) || 5, 1);
+  const skip = (page - 1) * limit;
 
-  const recentSearch = await UserRecentSearchModel.find(query)
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .skip(startIndex);
-
-  if (recentSearch?.length === 0) {
-    throw new ApiError(statusCode.NOT_FOUND, `Data not found`);
+  // Normalize enum query
+  const validTypes = ["vehicle", "bus", "hotel"];
+  let typeQuery = null;
+  if (req.query.type) {
+    const lowerType = req.query.type.toLowerCase();
+    typeQuery = validTypes.includes(lowerType) ? lowerType : null;
   }
 
-  return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(statusCode.OK, recentSearch, `Data found Successfully`)
-    );
-});
+  // Build query
+  const query = typeQuery ? { user: _id, category: typeQuery } : { user: _id };
 
+  // Fetch recent searches
+  const recentSearch = await UserRecentSearchModel.find(query)
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  // Response
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      recentSearch,
+      recentSearch.length ? "Data found successfully" : "No recent searches found"
+    )
+  );
+});
 const deleteRecentSearches = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
   const { _id } = req.user;

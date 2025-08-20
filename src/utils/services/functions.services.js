@@ -986,9 +986,10 @@ const updateAvatarFunc = async ({ req, res, reqModel }) => {
     user.verificationStatus = "processing";
   }
   await user.save();
-
+ 
   return new ApiResponse(
     statusCode.OK,
+  
     uploadImage,
     "Your profile picture has been updated successfully"
   );
