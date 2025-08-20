@@ -234,7 +234,7 @@ const assignRideToDrivers = async (
     } else {
       stopAssigning(io, bookingId);
     }
-  }, 8000);
+  }, 10000);
 
   assignmentGuards.set(bookingId, { timeoutId, acceptEvent, acceptHandler });
 };
