@@ -24,6 +24,7 @@ const {
   PaymentStatusEnum,
   TransactionTypeEnum,
 } = require("../../../utils/constants/ENUM");
+const Commission = require("../../../models/admin-module/commission-management/commission.model");
 
 const getUserBusBookings = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
@@ -249,8 +250,28 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     await userWallet.save({ session });
 
     // Step 6: Commission split
-    const platformFee = parseFloat((price * 0.1).toFixed(2)); // 10% commission
-    const operatorShare = parseFloat((price - platformFee).toFixed(2));
+    const commission = await Commission.findOne({ serviceType: "bus" }).lean();
+
+    let platformFee = 0;
+    let operatorShare = price;
+
+    if (commission && commission.status === "active") {
+      if (commission.commissionType === "fixed" && commission.commissionRate) {
+        platformFee = commission.commissionRate;
+        operatorShare = price - platformFee;
+      } else if (
+        commission.commissionType === "percentage" &&
+        commission.commissionPercentage
+      ) {
+        platformFee = parseFloat(
+          ((price * commission.commissionPercentage) / 100).toFixed(2)
+        );
+        operatorShare = price - platformFee;
+      }
+    }
+
+    // Prevent negative operator share
+    if (operatorShare < 0) operatorShare = 0;
 
     await WalletModel.findOneAndUpdate(
       { userId: ownerId },

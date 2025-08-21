@@ -33,6 +33,7 @@ const {
 const { getIO } = require("../../socket/index");
 const DriverBasicDetails = require("../../models/new-driver-module/basic-details/basic-details.model");
 const DriverVehicleDetails = require("../../models/new-driver-module/vehicle-details/vehicle-details.model");
+const Commission = require("../../models/admin-module/commission-management/commission.model");
 
 function calculateFare(type, distanceInKm, durationInMin) {
   const config = vehicleConfig[type];
@@ -529,8 +530,30 @@ const completeRide = catchAsyncError(async (req, res, next) => {
     await userWallet.save({ session });
 
     // --- Step 2: Commission split ---
-    const platformFee = parseFloat((booking.fare * 0.1).toFixed(2));
-    const driverShare = parseFloat((booking.fare - platformFee).toFixed(2));
+    let platformFee = 0;
+    let driverShare = booking.fare;
+
+    console.log("booking.fare", booking.fare);
+
+    // 🔍 Find commission for this vehicleType
+    const commission = await Commission.findOne({
+      serviceType: booking.vehicleType,
+      status: "active", // only active commissions
+    });
+
+    if (commission) {
+      if (commission.commissionType === "percentage") {
+        platformFee = parseFloat(
+          ((booking.fare * commission.commissionPercentage) / 100).toFixed(2)
+        );
+      } else if (commission.commissionType === "flat") {
+        platformFee = commission.commissionRate || 0;
+      }
+      driverShare = parseFloat((booking.fare - platformFee).toFixed(2));
+    }
+
+    console.log("platformFee", platformFee);
+    console.log("driverShare", driverShare);
 
     await WalletModel.findOneAndUpdate(
       { userId: booking.driverId },
@@ -1253,6 +1276,8 @@ const getTripHistory = catchAsyncError(async (req, res) => {
       to: trip.dropLocation?.address,
       requestedAt: trip.timestamps?.requestedAt,
       vehicleType: trip.vehicleType, // Include vehicle type in response
+      price: trip.fare,
+      currency: process.env.MOMO_CURRENCY || "EUR",
     };
 
     if (entity === "driver") {

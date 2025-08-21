@@ -27,8 +27,10 @@ const HotelRoomImagesModel = require("../../../models/hotel-module/hotel-room-im
 const {
   PaymentStatusEnum,
   TransactionTypeEnum,
+  CommissionServiceTypeEnum,
 } = require("../../../utils/constants/ENUM");
 const UserRecentSearchModel = require("../../../models/user-module/user-recent-search/user-recent-search.model");
+const Commission = require("../../../models/admin-module/commission-management/commission.model");
 
 //-------------------- create booking --------------------
 const createBooking = catchAsyncError(async (req, res) => {
@@ -180,9 +182,37 @@ const createBooking = catchAsyncError(async (req, res) => {
     userWallet.balance -= totalAmount;
     await userWallet.save({ session });
 
+    console.log("totalAmount", totalAmount);
+
     // Step 4: Commission split
-    const platformFee = parseFloat((totalAmount * 0.1).toFixed(2)); // 10%
-    const operatorShare = parseFloat((totalAmount - platformFee).toFixed(2));
+    const commission = await Commission.findOne({
+      serviceType: "hotel",
+      status: 'active',
+    }).session(session);
+
+    let platformFee = 0;
+    let operatorShare = totalAmount;
+
+    if (commission) {
+      if (
+        commission.commissionType === "percentage" &&
+        commission.commissionPercentage
+      ) {
+        platformFee = parseFloat(
+          ((totalAmount * commission.commissionPercentage) / 100).toFixed(2)
+        );
+      } else if (
+        commission.commissionType === "fixed" &&
+        commission.commissionRate
+      ) {
+        platformFee = parseFloat(commission.commissionRate.toFixed(2));
+      }
+
+      operatorShare = parseFloat((totalAmount - platformFee).toFixed(2));
+    }
+
+    console.log("platformFee", platformFee);
+    console.log("operatorShare", operatorShare);
 
     await WalletModel.findOneAndUpdate(
       { userId: hotelManagerId },
@@ -516,39 +546,35 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       ? "No room found"
       : "Hotels retrieved successfully.";
 
+  // // Save recent search only if hotels were found
+  // Save recent search only if hotels were found
+  if (filteredHotels.length > 0) {
+    // Get the first hotel's name if available
+    const firstHotelName = filteredHotels[0]?.hotel?.hotelName || null;
 
-      // // Save recent search only if hotels were found
-// Save recent search only if hotels were found
-if (filteredHotels.length > 0) {
-  // Get the first hotel's name if available
-  const firstHotelName =
-    filteredHotels[0]?.hotel?.hotelName || null;
-
-  try {
-    await UserRecentSearchModel.create({
-      user: req.user._id, // logged-in user
-      category: "hotel",
-      searchDetails: {
-        hotel: {
-          location: {
-            hotelName: firstHotelName,
-            address: townCity,
+    try {
+      await UserRecentSearchModel.create({
+        user: req.user._id, // logged-in user
+        category: "hotel",
+        searchDetails: {
+          hotel: {
+            location: {
+              hotelName: firstHotelName,
+              address: townCity,
+            },
+            checkInDate: new Date(checkInDate),
+            checkOutDate: new Date(checkOutDate),
+            requiredRooms: parseInt(requiredRooms),
           },
-          checkInDate: new Date(checkInDate),
-          checkOutDate: new Date(checkOutDate),
-          requiredRooms: parseInt(requiredRooms),
         },
-      },
-      searchTime: new Date(),
-    });
+        searchTime: new Date(),
+      });
 
-    console.log("Recent hotel search saved successfully");
-  } catch (err) {
-    console.error("Error saving recent search:", err);
+      console.log("Recent hotel search saved successfully");
+    } catch (err) {
+      console.error("Error saving recent search:", err);
+    }
   }
-}
-
-
 
   return res.status(statusCode.OK).json(
     new ApiResponse(
@@ -558,7 +584,6 @@ if (filteredHotels.length > 0) {
         page: pageNum,
         limit: limitNum,
         hotelRoomTypeLayout: filteredHotels,
-
       },
       responseMessage
     )
