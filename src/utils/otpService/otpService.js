@@ -1,7 +1,7 @@
 const OtpModel = require("../../models/otp-module/otp.model");
 const sgMail = require("@sendgrid/mail");
 
-sgMail.setApiKey(process.env.SENDGRID_API_KEY);
+// sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 const getOtp = () => {
   // return Math.floor(1000 + Math.random() * 9000).toString();

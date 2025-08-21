@@ -239,8 +239,9 @@ const requestRide = async (req, res, next) => {
 
         console.log(`Total online drivers: ${onlineDrivers.length}`);
         onlineDrivers.forEach((driver) => {
+          // console.log(driver)
           console.log(
-            `Driver ${driver._id} Location:`,
+            `Driver ${driver.driverId} Location:`,
             driver.location?.coordinates || "N/A"
           );
         });
@@ -255,7 +256,7 @@ const requestRide = async (req, res, next) => {
         console.log(`Available nearby drivers: ${nearbyDrivers.length}`);
         nearbyDrivers.forEach((driver) => {
           console.log(
-            `Available Driver ${driver._id} Location:`,
+            `Available Driver ${driver.driverId} Location:`,
             driver.location?.coordinates || "N/A"
           );
         });
@@ -272,7 +273,7 @@ const requestRide = async (req, res, next) => {
             vehicle,
             otp, // OTP
             0, // start batch index
-            2 // batch size
+            3 // batch size
           );
         } else {
           await RideBookingDetail.findOneAndUpdate(

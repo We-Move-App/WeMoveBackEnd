@@ -86,6 +86,24 @@ const WalletCurrencyEnum = {
   INR: "INR",
 };
 
+const CommissionServiceTypeEnum={
+  PLATFORM:'platform',
+  BUS:'bus',
+  HOTEL:'hotel',
+  TAXI:'taxi',
+  BIKE:'bike'
+}
+
+const CommissionTypeEnum={
+  PERCENTAGE:'percentage',
+  FIXED:'fixed'
+}
+
+const CommissionStatusEnum={
+  ACTIVE:'active',
+  INACTIVE:'in_active'
+}
+
 module.exports = {
   DriverBasicStatus,
   EntityCodeEnum,
@@ -100,4 +118,7 @@ module.exports = {
   BookCancelledByEnum,
   TransactionTypeEnum,
   WalletCurrencyEnum,
+  CommissionServiceTypeEnum,
+  CommissionTypeEnum,
+  CommissionStatusEnum
 };

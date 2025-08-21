@@ -41,6 +41,8 @@ const isAlreadyAssigned = async (bookingId) => {
   return doc?.rideStatus === RideBookStatusEnum.ACCEPTED;
 };
 
+// TODO : https://chatgpt.com/share/68a6d364-ce78-8008-b503-4a27eb385b45 (reassignment)
+
 const assignRideToDrivers = async (
   io,
   bookingId,
