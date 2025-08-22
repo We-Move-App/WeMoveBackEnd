@@ -29,6 +29,8 @@ const driverBasicDetailSchema = new mongoose.Schema(
       enum: DriverBasicStatus,
       default: DriverBasicStatus.PENDING,
     },
+    pin: { type: String, default: null },
+    isPinExist: { type: Boolean, default: false },
     isActive: { type: Boolean, default: true },
     createdBy: { type: String, enum: ["user", "admin"], default: "user" },
     createdById: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },

@@ -662,18 +662,22 @@ const getWallet = catchAsyncError(async (req, res) => {
 
   const jwtToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(jwtToken);
-  const userId = decoded?._id;
+
+  // take entity from query (default is "user")
+  const { entity = "user" } = req.query;
+
+  let userId;
+  if (entity === "driver") {
+    userId = decoded?.driverId;
+  } else {
+    userId = decoded?._id;
+  }
 
   if (!userId) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
 
-  // const userExists = await UserModel.findById(userId);
-  // if (!userExists) {
-  //   throw new ApiError(statusCode.NOT_FOUND, "User not found");
-  // }
-
-  const wallet = await Wallet.findOne({ userId: userId });
+  const wallet = await Wallet.findOne({ userId });
   if (!wallet) {
     throw new ApiError(statusCode.NOT_FOUND, "Wallet not found");
   }

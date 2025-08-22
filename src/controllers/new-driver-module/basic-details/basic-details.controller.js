@@ -1,4 +1,5 @@
 const statusCode = require("../../../utils/constants/statusCode");
+const bcrypt = require("bcryptjs");
 const {
   decodeAccessToken,
 } = require("../../../utils/jwtToken/customTokenService");
@@ -13,7 +14,7 @@ const DriverBasicDetails = require("../../../models/new-driver-module/basic-deta
 const DriverDocDetails = require("../../../models/new-driver-module/documents/driver-documents.model");
 const DriverBankDetails = require("../../../models/new-driver-module/bank-details/bank-details.model");
 const VehicleDetails = require("../../../models/new-driver-module/vehicle-details/vehicle-details.model");
-const DriverLocations=require('../../../models/new-driver-module/location/driver-location.model')
+const DriverLocations = require("../../../models/new-driver-module/location/driver-location.model");
 const {
   DriverDocStatusEnum,
   DriverDocEnum,
@@ -233,8 +234,121 @@ const getDriverProfileDetails = catchAsyncError(async (req, res) => {
   return res.status(statusCode.OK).json(response);
 });
 
+const addPin = catchAsyncError(async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const driverId = decoded?.driverId;
+
+  if (!driverId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  const driver = await DriverBasicDetails.findOne({ driverId });
+  if (!driver) {
+    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+  }
+
+  const { pin, confirmPin } = req.body;
+  if (!pin || !confirmPin) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Pin and confirmPin are required"
+    );
+  }
+
+  if (pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Pin must be a 4-digit number");
+  }
+
+  if (pin !== confirmPin) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Pin and confirmPin do not match"
+    );
+  }
+
+  const salt = await bcrypt.genSalt(10);
+  const hashedPin = await bcrypt.hash(pin, salt);
+
+  driver.pin = hashedPin;
+  driver.isPinExist = true;
+  await driver.save();
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        driverId: driver.driverId,
+        isPinExist: driver.isPinExist,
+      },
+      "Pin set successfully"
+    )
+  );
+});
+
+const verifyPin = catchAsyncError(async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const driverId = decoded?.driverId;
+
+  if (!driverId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  const driver = await DriverBasicDetails.findOne({ driverId });
+  if (!driver) {
+    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+  }
+
+  if (!driver.isPinExist || !driver.pin) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Pin not set for this driver");
+  }
+
+  const { pin } = req.body;
+  if (!pin) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Pin is required");
+  }
+
+  if (pin.length !== 4 || !/^\d{4}$/.test(pin)) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Pin must be a 4-digit number");
+  }
+
+  const isMatch = await bcrypt.compare(pin, driver.pin);
+  if (!isMatch) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid pin");
+  }
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { driverId: driver.driverId },
+        "Pin verified successfully"
+      )
+    );
+});
+
 module.exports = {
   addDriverBasicDetails,
   getDriverBasicDetails,
   getDriverProfileDetails,
+  addPin,
+  verifyPin,
 };
