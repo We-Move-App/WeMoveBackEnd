@@ -1,4 +1,6 @@
 const { rideHandler } = require("../handlers/rideHandler");
+const {chatHandler}=require('../handlers/chatHandler')
+
 const jwt = require('jsonwebtoken');
 
 const setupUserNamespace = (userNamespace, io) => {
@@ -38,6 +40,7 @@ const setupUserNamespace = (userNamespace, io) => {
     // put the socket in a room so we can target messages to this user
     socket.join(userId);
 
+    chatHandler(socket, io);
     rideHandler(socket, io, "user");
 
     socket.on("disconnect", () => {

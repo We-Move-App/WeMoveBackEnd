@@ -34,10 +34,7 @@ const stopAssigning = (io, bookingId) => {
 };
 
 const isAlreadyAssigned = async (bookingId) => {
-  const doc = await RideBookingDetail.findOne(
-    { bookingId },
-    { rideStatus: 1 }
-  );
+  const doc = await RideBookingDetail.findOne({ bookingId }, { rideStatus: 1 });
   return doc?.rideStatus === RideBookStatusEnum.ACCEPTED;
 };
 
@@ -57,7 +54,9 @@ const assignRideToDrivers = async (
 
   // 🚦 Hard stop if ride already accepted
   if (await isAlreadyAssigned(bookingId)) {
-    console.log(`⚠️ Ride ${bookingId} already assigned — aborting batch ${batchIndex + 1}`);
+    console.log(
+      `⚠️ Ride ${bookingId} already assigned — aborting batch ${batchIndex + 1}`
+    );
     stopAssigning(io, bookingId);
     return;
   }
@@ -70,7 +69,9 @@ const assignRideToDrivers = async (
   if (currentBatch.length === 0) {
     // Double-check before cancelling
     if (await isAlreadyAssigned(bookingId)) {
-      console.log(`ℹ️ Ride ${bookingId} became ACCEPTED just before cancel check — skip cancel`);
+      console.log(
+        `ℹ️ Ride ${bookingId} became ACCEPTED just before cancel check — skip cancel`
+      );
       stopAssigning(io, bookingId);
       return;
     }
@@ -86,7 +87,7 @@ const assignRideToDrivers = async (
       }
     );
     io.to(booking.userId.toString()).emit("ride:noDriver", {
-      rideId:bookingId,
+      rideId: bookingId,
       reason: "No drivers accepted",
     });
     stopAssigning(io, bookingId);
@@ -198,7 +199,9 @@ const assignRideToDrivers = async (
   // ---- Timeout after 8s
   const timeoutId = setTimeout(async () => {
     if (await isAlreadyAssigned(bookingId)) {
-      console.log(`⏳ Timeout fired but ${bookingId} already ACCEPTED — stopping`);
+      console.log(
+        `⏳ Timeout fired but ${bookingId} already ACCEPTED — stopping`
+      );
       stopAssigning(io, bookingId);
       return;
     }
@@ -283,6 +286,17 @@ const rideHandler = (socket, io, role) => {
 
         // Emit cleanup signal
         io.emit(`ride:accepted:${data.bookingId}`);
+
+        // Driver joins chat room = rideId
+        socket.join(data.bookingId);
+
+        // Put the user into the same room (rideId)
+        const userSocket = [...io.sockets.sockets.values()].find(
+          (s) => s.data?.userId?.toString() === updated.userId.toString()
+        );
+        if (userSocket) {
+          userSocket.join(data.bookingId);
+        }
 
         // Rest of your existing code remains unchanged...
 

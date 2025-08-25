@@ -2,6 +2,7 @@
 const jwt = require("jsonwebtoken");
 const { driverLocationHandler } = require("./handlers/locationHandler");
 const { rideHandler } = require("./handlers/rideHandler");
+const { chatHandler } = require("./handlers/chatHandler");
 
 let ioInstance = null;
 
@@ -25,12 +26,14 @@ const initializeSocket = (io) => {
         socket.join(socket.data.driverId);
         driverLocationHandler(socket, io);
         rideHandler(socket, io, "driver");
+        chatHandler(socket, io);
 
         console.log(`🚕 Driver connected: ${socket.data.driverId}`);
       } else if (decoded.role === "user") {
         socket.data.userId = decoded.userId || decoded._id;
         socket.join(socket.data.userId);
         rideHandler(socket, io, "user");
+        chatHandler(socket, io);
 
         console.log(`👤 User connected: ${socket.data.userId}`);
       }
