@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "name": "Bus",
+    "key": "bus_booking",
+    "enabled": true
+  },
+  {
+    "id": 2,
+    "name": "Hotel",
+    "key": "hotel_booking",
+    "enabled": true
+  },
+  {
+    "id": 3,
+    "name": "Taxi",
+    "key": "taxi_booking",
+    "enabled": true
+  },
+  {
+    "id": 4,
+    "name": "Bike",
+    "key": "bike_booking",
+    "enabled": true
+  }
+]

@@ -16,6 +16,7 @@ const {
 const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
+const availableModule = require("../../../utils/config/availableModuleConfig.json");
 const {
   getUserProfileFunc,
   getAvatarFunc,
@@ -222,6 +223,18 @@ const getBeneficiary = catchAsyncError(async (req, res, next) => {
     );
 });
 
+const getAvailableModules = catchAsyncError(async (req, res, next) => {
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { features: availableModule },
+        "Available modules"
+      )
+    );
+});
+
 module.exports = {
   getProfile,
   getAvatar,
@@ -233,4 +246,5 @@ module.exports = {
   assignBranch,
   resetPassword2,
   getBeneficiary,
+  getAvailableModules,
 };
