@@ -294,6 +294,94 @@ const addPin = catchAsyncError(async (req, res) => {
   );
 });
 
+const updatePin = catchAsyncError(async (req, res) => {
+  // ----------------- Step 1: Token Validation -----------------
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const driverId = decoded?.driverId;
+
+  if (!driverId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  // ----------------- Step 2: Fetch Driver -----------------
+  const driver = await DriverBasicDetails.findOne({ driverId });
+  if (!driver) {
+    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+  }
+
+  if (!driver.isPinExist || !driver.pin) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "No existing pin found. Please create a pin first."
+    );
+  }
+
+  // ----------------- Step 3: Extract Body -----------------
+  const { oldPin, newPin, confirmPin } = req.body;
+  if (!oldPin || !newPin || !confirmPin) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "oldPin, newPin and confirmPin are required"
+    );
+  }
+
+  // ----------------- Step 4: Verify Old Pin -----------------
+  const isMatch = await bcrypt.compare(oldPin, driver.pin);
+  if (!isMatch) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Old pin is incorrect");
+  }
+
+  // ----------------- Step 5: Validate New Pin -----------------
+  if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "New pin must be a 4-digit number"
+    );
+  }
+
+  if (newPin !== confirmPin) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "New pin and confirm pin do not match"
+    );
+  }
+
+  if (oldPin === newPin) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "New pin cannot be same as old pin"
+    );
+  }
+
+  // ----------------- Step 6: Hash and Save New Pin -----------------
+  const salt = await bcrypt.genSalt(10);
+  const hashedPin = await bcrypt.hash(newPin, salt);
+
+  driver.pin = hashedPin;
+  await driver.save();
+
+  // ----------------- Step 7: Response -----------------
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        driverId: driver.driverId,
+        isPinExist: driver.isPinExist,
+      },
+      "Pin updated successfully"
+    )
+  );
+});
+
 const verifyPin = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
@@ -351,4 +439,5 @@ module.exports = {
   getDriverProfileDetails,
   addPin,
   verifyPin,
+  updatePin
 };
