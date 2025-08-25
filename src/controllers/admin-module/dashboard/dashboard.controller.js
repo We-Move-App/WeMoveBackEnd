@@ -156,6 +156,7 @@ async function validateToken(accessToken) {
 // TODO : permissions based res
 
 const getTopAnalytics = catchAsyncError(async (req, res) => {
+  // ----------------- Step 1: Token Validation -----------------
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
     throw new ApiError(
@@ -165,17 +166,39 @@ const getTopAnalytics = catchAsyncError(async (req, res) => {
   }
 
   const accessToken = authHeader.split(" ")[1];
+  const decoded = await validateToken(accessToken);
 
-  const value = await validateToken(accessToken);
+  const { permissions } = decoded;
 
-  const hotelData = await rideBookings("ADM001", "weekly");
+  // ----------------- Step 2: Fetch Data Based on Permissions -----------------
+  const analyticsData = {};
+  const adminId="ADM001" // TODO need to change
 
+  if (permissions?.hotelManagement) {
+    analyticsData.hotel = await hotelBookings(adminId, "weekly");
+  }
+
+  if (permissions?.busManagement) {
+    analyticsData.bus = await busBookings(adminId, "weekly");
+  }
+
+  if (permissions?.taxiManagement || permissions?.bikeManagement) {
+    // rideBookings already splits by bike/taxi inside
+    const rideData = await rideBookings(adminId, "weekly");
+
+    if (permissions?.bikeManagement) {
+      analyticsData.bike = rideData.bike;
+    }
+    if (permissions?.taxiManagement) {
+      analyticsData.taxi = rideData.taxi;
+    }
+  }
+
+  // ----------------- Step 3: Response -----------------
   return res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
-      {
-        hotelData,
-      },
+      analyticsData,
       "Data fetched successfully"
     )
   );
