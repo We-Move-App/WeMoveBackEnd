@@ -1,5 +1,7 @@
 const { driverLocationHandler } = require("../handlers/locationHandler");
 const { rideHandler } = require("../handlers/rideHandler");
+const {chatHandler}=require('../handlers/chatHandler')
+
 const jwt = require('jsonwebtoken');
 
 const setupDriverNamespace = (driverNamespace, io) => {
@@ -34,6 +36,7 @@ const setupDriverNamespace = (driverNamespace, io) => {
     console.log("🚗 Driver connected:", driverId);
 
     driverLocationHandler(socket, io);
+    chatHandler(socket, io);
     rideHandler(socket, io, "Driver");
 
     socket.on("disconnect", () => {

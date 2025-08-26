@@ -27,9 +27,11 @@ const HotelRoomImagesModel = require("../../../models/hotel-module/hotel-room-im
 const {
   PaymentStatusEnum,
   TransactionTypeEnum,
+  CommissionServiceTypeEnum,
 } = require("../../../utils/constants/ENUM");
 const UserRecentSearchModel = require("../../../models/user-module/user-recent-search/user-recent-search.model");
 const { CouponModel } = require("../../../models/admin-module/Admin-coupon/adminCouponModel")
+const Commission = require("../../../models/admin-module/commission-management/commission.model");
 
 //-------------------- create booking --------------------
 const createBooking = catchAsyncError(async (req, res) => {
@@ -234,9 +236,37 @@ const createBooking = catchAsyncError(async (req, res) => {
     userWallet.balance -= finalAmount;
     await userWallet.save({ session });
 
+    console.log("totalAmount", totalAmount);
+
     // Step 4: Commission split
-    const platformFee = parseFloat((finalAmount * 0.1).toFixed(2)); // 10%
-    const operatorShare = parseFloat((finalAmount - platformFee).toFixed(2));
+    const commission = await Commission.findOne({
+      serviceType: "hotel",
+      status: 'active',
+    }).session(session);
+
+    let platformFee = 0;
+    let operatorShare = totalAmount;
+
+    if (commission) {
+      if (
+        commission.commissionType === "percentage" &&
+        commission.commissionPercentage
+      ) {
+        platformFee = parseFloat(
+          ((totalAmount * commission.commissionPercentage) / 100).toFixed(2)
+        );
+      } else if (
+        commission.commissionType === "fixed" &&
+        commission.commissionRate
+      ) {
+        platformFee = parseFloat(commission.commissionRate.toFixed(2));
+      }
+
+      operatorShare = parseFloat((totalAmount - platformFee).toFixed(2));
+    }
+
+    console.log("platformFee", platformFee);
+    console.log("operatorShare", operatorShare);
 
     await WalletModel.findOneAndUpdate(
       { userId: hotelManagerId },
@@ -628,7 +658,6 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
         page: pageNum,
         limit: limitNum,
         hotelRoomTypeLayout: filteredHotels,
-
       },
       responseMessage
     )

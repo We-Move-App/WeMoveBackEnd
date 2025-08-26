@@ -18,6 +18,7 @@ const {
   DriverDocEnum,
   PaymentStatusEnum,
   BookCancelledByEnum,
+  VehicleTypeEnum,
 } = require("../../utils/constants/ENUM");
 const WalletModel = require("../../models/wallet-module/wallets.model");
 const generateCustomId = require("../../utils/customId/generateCustomId");
@@ -32,6 +33,7 @@ const {
 const { getIO } = require("../../socket/index");
 const DriverBasicDetails = require("../../models/new-driver-module/basic-details/basic-details.model");
 const DriverVehicleDetails = require("../../models/new-driver-module/vehicle-details/vehicle-details.model");
+const Commission = require("../../models/admin-module/commission-management/commission.model");
 
 function calculateFare(type, distanceInKm, durationInMin) {
   const config = vehicleConfig[type];
@@ -195,13 +197,35 @@ const requestRide = async (req, res, next) => {
       timestamps: { requestedAt: new Date() },
     });
 
+    const responseData = {
+      _id: newBooking.bookingId,
+      user: newBooking.userId,
+      driver: newBooking.driverId || null,
+      vehicleType: newBooking.vehicleType,
+      pickupLocation: {
+        address: newBooking.pickupLocation.address,
+        coordinates: [
+          ...(newBooking.pickupLocation?.location?.coordinates ?? []),
+        ].reverse(),
+      },
+      dropLocation: {
+        address: newBooking.dropLocation.address,
+        coordinates: [
+          ...(newBooking.dropLocation?.location?.coordinates ?? []),
+        ].reverse(),
+      },
+      estimatedFare: newBooking.fare,
+      otp: newBooking.expectedOtp,
+      otpVerified: newBooking.otpVerified,
+    };
+
     // ----------------- Step 5: Respond Immediately -----------------
     res
       .status(statusCode.CREATED)
       .json(
         new ApiResponse(
           statusCode.CREATED,
-          { _id: bookingId, otp },
+          responseData,
           "Ride requested successfully"
         )
       );
@@ -216,8 +240,9 @@ const requestRide = async (req, res, next) => {
 
         console.log(`Total online drivers: ${onlineDrivers.length}`);
         onlineDrivers.forEach((driver) => {
+          // console.log(driver)
           console.log(
-            `Driver ${driver._id} Location:`,
+            `Driver ${driver.driverId} Location:`,
             driver.location?.coordinates || "N/A"
           );
         });
@@ -232,12 +257,13 @@ const requestRide = async (req, res, next) => {
         console.log(`Available nearby drivers: ${nearbyDrivers.length}`);
         nearbyDrivers.forEach((driver) => {
           console.log(
-            `Available Driver ${driver._id} Location:`,
+            `Available Driver ${driver.driverId} Location:`,
             driver.location?.coordinates || "N/A"
           );
         });
 
         // Step 6.3: Assign or cancel
+        // inside requestRide background process:
         if (nearbyDrivers.length > 0) {
           const io = getIO();
           assignRideToDrivers(
@@ -246,7 +272,9 @@ const requestRide = async (req, res, next) => {
             nearbyDrivers,
             newBooking,
             vehicle,
-            otp
+            otp, // OTP
+            0, // start batch index
+            3 // batch size
           );
         } else {
           await RideBookingDetail.findOneAndUpdate(
@@ -502,8 +530,30 @@ const completeRide = catchAsyncError(async (req, res, next) => {
     await userWallet.save({ session });
 
     // --- Step 2: Commission split ---
-    const platformFee = parseFloat((booking.fare * 0.1).toFixed(2));
-    const driverShare = parseFloat((booking.fare - platformFee).toFixed(2));
+    let platformFee = 0;
+    let driverShare = booking.fare;
+
+    console.log("booking.fare", booking.fare);
+
+    // 🔍 Find commission for this vehicleType
+    const commission = await Commission.findOne({
+      serviceType: booking.vehicleType,
+      status: "active", // only active commissions
+    });
+
+    if (commission) {
+      if (commission.commissionType === "percentage") {
+        platformFee = parseFloat(
+          ((booking.fare * commission.commissionPercentage) / 100).toFixed(2)
+        );
+      } else if (commission.commissionType === "flat") {
+        platformFee = commission.commissionRate || 0;
+      }
+      driverShare = parseFloat((booking.fare - platformFee).toFixed(2));
+    }
+
+    console.log("platformFee", platformFee);
+    console.log("driverShare", driverShare);
 
     await WalletModel.findOneAndUpdate(
       { userId: booking.driverId },
@@ -532,17 +582,17 @@ const completeRide = catchAsyncError(async (req, res, next) => {
         },
         {
           transactionId: uuidv4(),
-          userId: booking.driverId,
+          driverId: booking.driverId,
           bookingId: booking.bookingId,
           type: "CREDIT",
           status: PaymentStatusEnum.SUCCESS,
           amount: driverShare,
           currency: process.env.MOMO_CURRENCY,
-          description: "Driver earnings from completed ride",
+          description: `Ride fare from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
         },
         {
           transactionId: uuidv4(),
-          userId: "ADM001",
+          adminId: "ADM001",
           bookingId: booking.bookingId,
           type: "CREDIT",
           status: PaymentStatusEnum.SUCCESS,
@@ -625,8 +675,9 @@ const rideCancelledByUser = catchAsyncError(async (req, res, next) => {
   }
 
   if (
-    booking.rideStatus === RideBookStatusEnum.COMPLETED ||
-    booking.rideStatus === RideBookStatusEnum.CANCELLED
+    [RideBookStatusEnum.COMPLETED, RideBookStatusEnum.CANCELLED].includes(
+      booking.rideStatus
+    )
   ) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -635,10 +686,19 @@ const rideCancelledByUser = catchAsyncError(async (req, res, next) => {
   }
 
   booking.rideStatus = RideBookStatusEnum.CANCELLED;
-  booking.timestamps.cancelledAt = Date.now();
+  booking.timestamps.cancelledAt = new Date();
   booking.cancelledBy = BookCancelledByEnum.USER;
   booking.reasonToCancel = reason;
   await booking.save();
+
+  // Free driver if assigned
+  if (booking.driverId) {
+    await DriverLocation.findOneAndUpdate(
+      { driverId: booking.driverId },
+      { status: LocationStatusEnum.ONLINE }
+    );
+  }
+
   const response = {
     rideId: booking.bookingId,
     by: booking.cancelledBy,
@@ -688,6 +748,7 @@ const rideCancelledByDriver = catchAsyncError(async (req, res, next) => {
   const rideId = req.params.rideId;
   const { reason } = req.body || {};
 
+  // 🔹 Validation
   if (!reason) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -695,11 +756,13 @@ const rideCancelledByDriver = catchAsyncError(async (req, res, next) => {
     );
   }
 
+  // 🔹 Find booking
   const booking = await RideBookingDetail.findOne({ bookingId: rideId });
   if (!booking) {
     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
   }
 
+  // 🔹 Prevent cancelling if already completed/cancelled
   if (
     [RideBookStatusEnum.COMPLETED, RideBookStatusEnum.CANCELLED].includes(
       booking.rideStatus
@@ -711,41 +774,48 @@ const rideCancelledByDriver = catchAsyncError(async (req, res, next) => {
     );
   }
 
-  const cancelledDriverId = booking.driverId; // store before nulling
+  const cancelledDriverId = booking.driverId;
 
-  booking.cancelledByDrivers.push({
-    driverId: cancelledDriverId,
-    cancelledAt: new Date(),
-  });
+  // ✅ Record cancellation with unique driver (avoid duplicates in array)
+  if (
+    !booking.cancelledByDrivers.some((d) => d.driverId === cancelledDriverId)
+  ) {
+    booking.cancelledByDrivers.push({
+      driverId: cancelledDriverId,
+      cancelledAt: new Date(),
+    });
+  }
 
+  // 🔹 Update cancellation details
   booking.reasonToCancel = reason;
   booking.cancelledBy = BookCancelledByEnum.DRIVER;
+
+  // ✅ Reset ride for reassignment
   booking.driverId = null;
+  booking.rideStatus = RideBookStatusEnum.REQUESTED;
   await booking.save();
 
+  // ✅ Free driver location
   await DriverLocation.findOneAndUpdate(
-    { driverId: booking.driverId },
+    { driverId: cancelledDriverId },
     { status: LocationStatusEnum.ONLINE }
   );
 
   const io = req.io || getIO();
-  if (io) {
-    io.to(cancelledDriverId.toString()).emit("ride:cancelled", {
-      rideId: booking.bookingId,
-      by: booking.cancelledBy,
-      reason: booking.reasonToCancel,
-      cancelled: true,
-    });
 
-    io.to(booking.userId.toString()).emit("ride:driver_cancelled", {
-      rideId: booking.bookingId,
-      message: "Driver cancelled, finding another driver...",
-    });
-  }
+  // 🔔 Notify driver
+  io.to(cancelledDriverId.toString()).emit("ride:cancelled", {
+    rideId: booking.bookingId,
+    by: booking.cancelledBy,
+    reason: booking.reasonToCancel,
+    cancelled: true,
+  });
 
+  // 🔎 Find other drivers excluding cancelled ones
+  const excludeDriverIds = booking.cancelledByDrivers.map((d) => d.driverId);
   const availableDrivers = await getNearbyDriversExcluding(
     booking.pickupLocation,
-    booking.cancelledByDrivers.map((d) => d.driverId),
+    excludeDriverIds, // 👈 ensures same driver not reassigned
     booking.vehicleType
   );
 
@@ -753,11 +823,7 @@ const rideCancelledByDriver = catchAsyncError(async (req, res, next) => {
     const vehicle = await VehicleDetail.findOne({
       driverId: availableDrivers[0]?.driverId,
     });
-    if (!vehicle) {
-      console.warn(
-        `⚠️ No vehicle found for driver ${availableDrivers[0]?.driverId}`
-      );
-    }
+
     assignRideToDrivers(
       io,
       booking.bookingId,
@@ -766,21 +832,34 @@ const rideCancelledByDriver = catchAsyncError(async (req, res, next) => {
       vehicle,
       generateOtp()
     );
-  } else {
-    booking.rideStatus = RideBookStatusEnum.CANCELLED;
-    booking.reasonToCancel = "No more drivers available";
-    booking.cancelledBy = BookCancelledByEnum.SYSTEM;
-    booking.timestamps.cancelledAt = new Date();
-    await booking.save();
-    io.to(booking.userId.toString()).emit("ride:cancelled", {
-      rideId: booking.bookingId,
-      reason: "No drivers available",
+
+    return res.status(statusCode.OK).json({
+      success: true,
+      reassigned: true,
+      excludedDrivers: excludeDriverIds,
     });
   }
 
-  return res
-    .status(statusCode.OK)
-    .json({ reassigned: !!availableDrivers.length });
+  // ❌ No drivers left → mark final cancelled
+  booking.rideStatus = RideBookStatusEnum.CANCELLED;
+  booking.reasonToCancel = "No more drivers available";
+  booking.cancelledBy = BookCancelledByEnum.DRIVER;
+  booking.timestamps.cancelledAt = new Date();
+  await booking.save();
+
+  // 🔔 Notify user
+  io.to(booking.userId.toString()).emit("ride:cancelled", {
+    rideId: booking.bookingId,
+    by: booking.cancelledBy,
+    reason: "Driver cancelled the ride",
+    cancelled: true,
+  });
+
+  return res.status(statusCode.OK).json({
+    success: true,
+    reassigned: false,
+    message: "No drivers available, ride cancelled",
+  });
 });
 
 const getUserActiveRide = catchAsyncError(async (req, res, next) => {
@@ -882,7 +961,9 @@ const getDriverActiveRide = catchAsyncError(async (req, res, next) => {
     rideStatus: {
       $nin: [RideBookStatusEnum.COMPLETED, RideBookStatusEnum.CANCELLED],
     },
-  }).sort({ createdAt: -1 });
+  })
+    .sort({ createdAt: -1 })
+    .lean(); // <-- use lean so we can mutate safely
 
   if (!activeRide) {
     return res.status(statusCode.OK).json({
@@ -892,14 +973,528 @@ const getDriverActiveRide = catchAsyncError(async (req, res, next) => {
     });
   }
 
+  // transform pickupLocation & dropLocation
+  const transformLocation = (loc) => {
+    if (!loc) return null;
+    return {
+      address: loc.address,
+      coordinates: loc.location?.coordinates
+        ? [loc.location.coordinates[1], loc.location.coordinates[0]] // reverse lat/lng
+        : [],
+    };
+  };
+
+  const responseRide = {
+    ...activeRide,
+    pickupLocation: transformLocation(activeRide.pickupLocation),
+    dropLocation: transformLocation(activeRide.dropLocation),
+  };
+
   return res
     .status(statusCode.OK)
     .json(
       new ApiResponse(
         statusCode.OK,
-        activeRide,
-        "Bus Operator, bank details, and documents created successfully"
+        responseRide,
+        "Active ride fetched successfully"
       )
+    );
+});
+
+const getDriverAnalytics = catchAsyncError(async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const driverId = decoded?.driverId;
+
+  if (!driverId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  // Query params
+  const entity = (req.query.entity || "completed").toLowerCase(); // completed / cancelled
+  const filter = (req.query.filter || "daily").toLowerCase(); // daily / weekly / monthly
+
+  // Date filter logic
+  let startDate = new Date();
+  let endDate = new Date();
+
+  if (filter === "daily") {
+    startDate.setHours(0, 0, 0, 0);
+    endDate.setHours(23, 59, 59, 999);
+  } else if (filter === "weekly") {
+    const day = startDate.getDay();
+    const diff = startDate.getDate() - day + (day === 0 ? -6 : 1);
+    startDate = new Date(startDate.setDate(diff));
+    startDate.setHours(0, 0, 0, 0);
+    endDate = new Date(startDate);
+    endDate.setDate(startDate.getDate() + 6);
+    endDate.setHours(23, 59, 59, 999);
+  } else if (filter === "monthly") {
+    startDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    endDate = new Date(
+      startDate.getFullYear(),
+      startDate.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999
+    );
+  }
+
+  let matchQuery = {};
+
+  if (entity === "completed") {
+    matchQuery = {
+      driverId,
+      rideStatus: RideBookStatusEnum.COMPLETED,
+      "timestamps.completedAt": { $gte: startDate, $lte: endDate },
+    };
+  } else if (entity === "cancelled") {
+    matchQuery = {
+      rideStatus: RideBookStatusEnum.CANCELLED,
+      "cancelledByDrivers.driverId": driverId,
+      "timestamps.cancelledAt": { $gte: startDate, $lte: endDate },
+    };
+  }
+
+  // Fetch rides
+  const rides = await RideBookingDetail.find(matchQuery).sort({
+    createdAt: -1,
+  });
+
+  if (!rides.length) {
+    return res.status(statusCode.OK).json({
+      success: true,
+      message: `No ${entity} rides found for this ${filter} period`,
+      data: null,
+    });
+  }
+
+  // Calculate totalEarnings / totalLoss (90% to driver)
+  const totalFare = rides.reduce((sum, ride) => sum + ride.fare * 0.9, 0);
+
+  // Transform location format
+  const formattedRides = rides.map((r) => ({
+    bookingId: r.bookingId,
+    pickupLocation: {
+      address: r.pickupLocation.address,
+      coordinates: [
+        r.pickupLocation.location.coordinates[1],
+        r.pickupLocation.location.coordinates[0],
+      ], // reverse [lng, lat] to [lat, lng]
+    },
+    dropLocation: {
+      address: r.dropLocation.address,
+      coordinates: [
+        r.dropLocation.location.coordinates[1],
+        r.dropLocation.location.coordinates[0],
+      ],
+    },
+    distanceInKm: r.distanceInKm,
+    durationInMin: r.durationInMin,
+    fare: r.fare * 0.9,
+    rideStatus: r.rideStatus,
+    completedAt: r.timestamps.completedAt,
+    cancelledAt: r.timestamps.cancelledAt,
+  }));
+
+  const response = {
+    driverId,
+    [entity === "completed" ? "totalEarnings" : "totalLoss"]: totalFare,
+    rides: formattedRides,
+  };
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        response,
+        `${entity} rides analytics fetched successfully`
+      )
+    );
+});
+
+const getTripHistory = catchAsyncError(async (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+
+  // Entity is mandatory, no default
+  const entity = req.query.entity;
+  if (!entity || !["driver", "user"].includes(entity)) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Entity parameter is required and must be 'driver' or 'user'"
+    );
+  }
+
+  // Get vehicle type filter (optional)
+  const vehicleType = req.query.vehicle;
+  if (
+    vehicleType &&
+    vehicleType !== VehicleTypeEnum.TAXI &&
+    vehicleType !== VehicleTypeEnum.BIKE
+  ) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      `Vehicle type must be one of: ['${VehicleTypeEnum.TAXI}', '${VehicleTypeEnum.BIKE}']`
+    );
+  }
+
+  let entityId;
+  if (entity === "driver") {
+    entityId = decoded?.driverId;
+    if (!entityId) {
+      throw new ApiError(statusCode.UNAUTHORIZED, "Invalid driver token");
+    }
+  } else {
+    entityId = decoded?._id; // Use _id for users
+    if (!entityId) {
+      throw new ApiError(statusCode.UNAUTHORIZED, "Invalid user token");
+    }
+  }
+
+  // Get pagination parameters with defaults
+  const page = parseInt(req.query.page) || 1;
+  const limit = parseInt(req.query.limit) || 10;
+  const skip = (page - 1) * limit;
+
+  let allTrips,
+    totalTrips,
+    nameMap = {};
+
+  // Build base query conditions
+  let baseConditions = {};
+  if (entity === "driver") {
+    baseConditions = {
+      $or: [
+        { driverId: entityId, rideStatus: RideBookStatusEnum.COMPLETED },
+        { "cancelledByDrivers.driverId": entityId },
+      ],
+    };
+  } else {
+    baseConditions = {
+      userId: entityId,
+      $or: [
+        { rideStatus: RideBookStatusEnum.COMPLETED },
+        { rideStatus: RideBookStatusEnum.CANCELLED },
+      ],
+    };
+  }
+
+  // Add vehicle type filter if provided
+  if (vehicleType) {
+    baseConditions.vehicleType = vehicleType;
+  }
+
+  if (entity === "driver") {
+    // DRIVER FLOW
+    const driverExists = await DriverBasicDetails.exists({
+      driverId: entityId,
+    });
+    if (!driverExists) {
+      throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+    }
+
+    // Get trips with vehicle filter
+    [allTrips, totalTrips] = await Promise.all([
+      RideBookingDetail.find(baseConditions)
+        .sort({ "timestamps.completedAt": -1, "timestamps.cancelledAt": -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      RideBookingDetail.countDocuments(baseConditions),
+    ]);
+
+    // Get user IDs from all trips
+    const userIds = allTrips.map((trip) => trip.userId).filter((id) => id);
+
+    // Fetch user details for all trips
+    const users = await UserModel.find(
+      { _id: { $in: userIds } },
+      { _id: 1, fullName: 1 }
+    ).lean();
+
+    users.forEach((user) => {
+      nameMap[user._id.toString()] = user.fullName;
+    });
+  } else {
+    // USER FLOW
+    const userExists = await UserModel.exists({ _id: entityId });
+    if (!userExists) {
+      throw new ApiError(statusCode.NOT_FOUND, "User not found");
+    }
+
+    // Get trips with vehicle filter
+    [allTrips, totalTrips] = await Promise.all([
+      RideBookingDetail.find(baseConditions)
+        .sort({ "timestamps.completedAt": -1, "timestamps.cancelledAt": -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      RideBookingDetail.countDocuments(baseConditions),
+    ]);
+
+    // Get driver IDs from all trips
+    const driverIds = allTrips.map((trip) => trip.driverId).filter((id) => id);
+
+    // Fetch driver details for all trips
+    const drivers = await DriverBasicDetails.find(
+      { driverId: { $in: driverIds } },
+      { driverId: 1, fullName: 1 }
+    ).lean();
+
+    drivers.forEach((driver) => {
+      nameMap[driver.driverId] = driver.fullName;
+    });
+  }
+
+  // Process all trips into a single array
+  const tripHistory = allTrips.map((trip) => {
+    const baseData = {
+      rideId: trip.bookingId,
+      from: trip.pickupLocation?.address,
+      to: trip.dropLocation?.address,
+      requestedAt: trip.timestamps?.requestedAt,
+      vehicleType: trip.vehicleType, // Include vehicle type in response
+      price: trip.fare,
+      currency: process.env.MOMO_CURRENCY || "EUR",
+    };
+
+    if (entity === "driver") {
+      // DRIVER RESPONSE
+      baseData.userName = nameMap[trip.userId?.toString()] || "Unknown User";
+
+      // Check if it's a completed trip
+      if (
+        trip.rideStatus === RideBookStatusEnum.COMPLETED &&
+        trip.driverId === entityId
+      ) {
+        return {
+          ...baseData,
+          status: "completed",
+          pickupAt: trip.timestamps?.pickupAt,
+          completedAt: trip.timestamps?.completedAt,
+          timestamp: trip.timestamps?.completedAt,
+        };
+      }
+
+      // Check if it's a cancelled trip by this driver
+      const cancelledRecord = trip.cancelledByDrivers?.find(
+        (c) => c.driverId === entityId
+      );
+      if (cancelledRecord) {
+        return {
+          ...baseData,
+          status: "cancelled",
+          cancelledAt:
+            cancelledRecord.cancelledAt || trip.timestamps?.cancelledAt,
+          timestamp:
+            cancelledRecord.cancelledAt || trip.timestamps?.cancelledAt,
+        };
+      }
+    } else {
+      // USER RESPONSE - Both completed and cancelled trips
+      baseData.driverName = nameMap[trip.driverId] || "Unknown Driver";
+
+      // Check if it's a completed trip
+      if (trip.rideStatus === RideBookStatusEnum.COMPLETED) {
+        return {
+          ...baseData,
+          status: "completed",
+          pickupAt: trip.timestamps?.pickupAt,
+          completedAt: trip.timestamps?.completedAt,
+          timestamp: trip.timestamps?.completedAt,
+        };
+      }
+
+      // Check if it's a cancelled trip
+      if (trip.rideStatus === RideBookStatusEnum.CANCELLED) {
+        return {
+          ...baseData,
+          status: "cancelled",
+          cancelledAt: trip.timestamps?.cancelledAt,
+          timestamp: trip.timestamps?.cancelledAt,
+        };
+      }
+    }
+
+    // Fallback (shouldn't happen based on our queries)
+    return {
+      ...baseData,
+      status: "unknown",
+      timestamp: trip.timestamps?.requestedAt,
+    };
+  });
+
+  // Sort by timestamp (most recent first)
+  tripHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+  // Calculate pagination metadata
+  const pagination = {
+    page,
+    limit,
+    total: totalTrips,
+    totalPages: Math.ceil(totalTrips / limit),
+  };
+
+  const data = {
+    [entity === "driver" ? "driverId" : "userId"]: entityId,
+    rides: tripHistory,
+    pagination: pagination,
+    ...(vehicleType && { vehicleFilter: vehicleType }), // Include filter info in response
+  };
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(statusCode.OK, data, "Trip history fetched successfully")
+    );
+});
+
+const giveRatings = catchAsyncError(async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const userId = decoded?._id;
+
+  if (!userId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  const { rideId, rating, feedback } = req.body;
+
+  // Validate required fields
+  if (!rideId || !rating) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Ride ID and rating are required"
+    );
+  }
+
+  // Validate rating range
+  if (rating < 1 || rating > 5) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Rating must be between 1 and 5"
+    );
+  }
+
+  // Find the ride
+  const ride = await RideBookingDetail.findOne({
+    bookingId: rideId,
+    userId: userId,
+  });
+
+  if (!ride) {
+    throw new ApiError(statusCode.NOT_FOUND, "Ride not found");
+  }
+
+  // Check if ride is completed
+  if (ride.rideStatus !== RideBookStatusEnum.COMPLETED) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "You can only rate completed rides"
+    );
+  }
+
+  // Update ride with rating and feedback
+  const updateData = {
+    tripRating: rating,
+    ...(feedback && { feedbackFromUser: feedback }),
+  };
+
+  const updatedRide = await RideBookingDetail.findOneAndUpdate(
+    { bookingId: rideId, userId: userId },
+    { $set: updateData },
+    { new: true, runValidators: true }
+  );
+
+  if (!updatedRide) {
+    throw new ApiError(
+      statusCode.INTERNAL_SERVER_ERROR,
+      "Failed to update rating"
+    );
+  }
+
+  // Update driver's average rating
+  if (ride.driverId) {
+    // Get all completed rides for this driver with ratings
+    const driverRides = await RideBookingDetail.find({
+      driverId: ride.driverId,
+      rideStatus: RideBookStatusEnum.COMPLETED,
+      tripRating: { $exists: true, $gte: 1, $lte: 5 },
+    });
+
+    // Calculate new average rating
+    const totalRatings = driverRides.length;
+    const sumOfRatings = driverRides.reduce(
+      (sum, ride) => sum + ride.tripRating,
+      0
+    );
+    const averageRating =
+      totalRatings > 0 ? sumOfRatings / totalRatings : rating;
+
+    // Update or create driver rating with upsert
+    await DriverBasicDetails.findOneAndUpdate(
+      { driverId: ride.driverId },
+      {
+        $set: {
+          ratings: parseFloat(averageRating.toFixed(1)),
+          totalRatings: totalRatings,
+        },
+        $setOnInsert: {
+          driverId: ride.driverId,
+          rating: parseFloat(averageRating.toFixed(1)),
+          totalRatings: totalRatings,
+        },
+      },
+      {
+        upsert: true,
+        runValidators: true,
+      }
+    );
+  }
+
+  const response = {
+    rideId: updatedRide.bookingId,
+    rating: updatedRide.tripRating,
+    feedback: updatedRide.feedbackFromUser,
+    status: updatedRide.rideStatus,
+    message: "Rating submitted successfully",
+  };
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(statusCode.OK, response, "Rating submitted successfully")
     );
 });
 
@@ -915,4 +1510,7 @@ module.exports = {
   rideCancelledByDriver,
   getUserActiveRide,
   getDriverActiveRide,
+  getDriverAnalytics,
+  getTripHistory,
+  giveRatings,
 };

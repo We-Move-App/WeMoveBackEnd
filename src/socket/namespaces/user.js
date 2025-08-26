@@ -1,4 +1,6 @@
 const { rideHandler } = require("../handlers/rideHandler");
+const {chatHandler}=require('../handlers/chatHandler')
+
 const jwt = require('jsonwebtoken');
 
 const setupUserNamespace = (userNamespace, io) => {
@@ -27,7 +29,7 @@ const setupUserNamespace = (userNamespace, io) => {
   userNamespace.on("connection", (socket) => {
     console.log("socket.data.userId",socket.data.userId);
     
-    const { userId } = socket.data.userId;   
+    const userId = socket.data.userId;   
     if (!userId) {
       socket.disconnect(true);
       return;
@@ -38,6 +40,7 @@ const setupUserNamespace = (userNamespace, io) => {
     // put the socket in a room so we can target messages to this user
     socket.join(userId);
 
+    chatHandler(socket, io);
     rideHandler(socket, io, "user");
 
     socket.on("disconnect", () => {

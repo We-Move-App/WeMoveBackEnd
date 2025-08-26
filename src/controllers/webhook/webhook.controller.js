@@ -7,6 +7,10 @@ const Wallet = require("../../models/wallet-module/wallets.model");
 const { PaymentStatusEnum } = require("../../utils/constants/ENUM");
 const { getIO } = require("../../socket/index");
 
+function roundToTwo(num) {
+  return Math.round(num * 100) / 100;
+}
+
 const momoStatus = catchAsyncError(async (req, res) => {
   const { referenceId, status } = req.body;
 
@@ -25,7 +29,8 @@ const momoStatus = catchAsyncError(async (req, res) => {
     const wallet = await Wallet.findOne({ userId: transaction.userId });
     if (!wallet) throw new ApiError(statusCode.NOT_FOUND, "Wallet not found");
 
-    wallet.balance += transaction.amount;
+    const roundedAmount = roundToTwo(transaction.amount);
+    wallet.balance = roundToTwo(wallet.balance + roundedAmount);
     await wallet.save();
   }
 
@@ -96,4 +101,4 @@ const momoWithdrawStatus = catchAsyncError(async (req, res) => {
     );
 });
 
-module.exports = { momoStatus, momoWithdrawStatus };
+module.exports = { momoStatus, momoWithdrawStatus, roundToTwo };

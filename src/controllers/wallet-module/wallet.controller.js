@@ -260,11 +260,6 @@ const getTransactions = catchAsyncError(async (req, res) => {
 
   const jwtToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(jwtToken);
-  const userId = decoded?._id;
-
-  if (!userId) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
-  }
 
   const {
     entity,
@@ -273,7 +268,18 @@ const getTransactions = catchAsyncError(async (req, res) => {
     id: transactionId,
   } = req.query;
 
-  // Handle single transaction request
+  let userId = decoded?._id;
+  let driverIdFromToken = decoded?.driverId;
+
+  if (entity === "driver" && !driverIdFromToken) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid driver token");
+  }
+
+  if (entity !== "driver" && !userId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  // ---------------- Single Transaction ----------------
   if (transactionId) {
     const transaction = await Transaction.findOne({
       transactionId: transactionId,
@@ -283,54 +289,55 @@ const getTransactions = catchAsyncError(async (req, res) => {
       throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
     }
 
-    return res
-      .status(statusCode.OK)
-      .json(
-        new ApiResponse(
-          statusCode.OK,
-          transaction,
-          "Transaction details fetched successfully"
-        )
-      );
+    return res.status(statusCode.OK).json(
+      new ApiResponse(
+        statusCode.OK,
+        transaction,
+        "Transaction details fetched successfully"
+      )
+    );
   }
 
-  // Handle paginated transactions list
-  const page = Math.max(parseInt(pageQuery) || 1, 1); // Minimum page is 1
-  const limit = Math.min(Math.max(parseInt(limitQuery) || 10, 1), 100); // Default 10, min 1, max 100
+  // ---------------- Paginated Transactions ----------------
+  const page = Math.max(parseInt(pageQuery) || 1, 1); // min 1
+  const limit = Math.min(Math.max(parseInt(limitQuery) || 10, 1), 100); // default 10, max 100
 
   let Model;
   let txFilter = {};
+  let entityExists;
 
   switch (entity) {
     case "busoperator":
       Model = BusOperatorModel;
+      entityExists = await Model.findById(userId);
+      if (!entityExists)
+        throw new ApiError(statusCode.NOT_FOUND, "Bus Operator not found");
+      txFilter.busOperatorId = entityExists._id;
       break;
+
     case "hotelManager":
       Model = HotelManagerModel;
+      entityExists = await Model.findById(userId);
+      if (!entityExists)
+        throw new ApiError(statusCode.NOT_FOUND, "Hotel Manager not found");
+      txFilter.hotelManagerId = entityExists._id;
       break;
+
     case "driver":
       Model = DriverDetails;
+      entityExists = await Model.findOne({ driverId: driverIdFromToken });
+      if (!entityExists)
+        throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+      txFilter.driverId = driverIdFromToken;
       break;
+
     default:
       Model = UserModel;
+      entityExists = await Model.findById(userId);
+      if (!entityExists) throw new ApiError(statusCode.NOT_FOUND, "User not found");
+      txFilter.userId = userId;
   }
 
-  const entityExists = await Model.findById(userId);
-  if (!entityExists) {
-    throw new ApiError(statusCode.NOT_FOUND, `${entity || "User"} not found`);
-  }
-
-  if (entity === "driver") {
-    txFilter.driverId = entityExists.driverId;
-  } else if (entity === "busoperator") {
-    txFilter.busOperatorId = entityExists._id;
-  } else if (entity === "hotelManager") {
-    txFilter.hotelManagerId = entityExists._id;
-  } else {
-    txFilter.userId = userId;
-  }
-
-  // Pagination
   const transactions = await Transaction.find(txFilter)
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
@@ -655,18 +662,22 @@ const getWallet = catchAsyncError(async (req, res) => {
 
   const jwtToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(jwtToken);
-  const userId = decoded?._id;
+
+  // take entity from query (default is "user")
+  const { entity = "user" } = req.query;
+
+  let userId;
+  if (entity === "driver") {
+    userId = decoded?.driverId;
+  } else {
+    userId = decoded?._id;
+  }
 
   if (!userId) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
 
-  // const userExists = await UserModel.findById(userId);
-  // if (!userExists) {
-  //   throw new ApiError(statusCode.NOT_FOUND, "User not found");
-  // }
-
-  const wallet = await Wallet.findOne({ userId: userId });
+  const wallet = await Wallet.findOne({ userId });
   if (!wallet) {
     throw new ApiError(statusCode.NOT_FOUND, "Wallet not found");
   }

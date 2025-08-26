@@ -18,6 +18,7 @@ const ApiResponse = require("../../utils/response/ApiResponse");
 const UserModel = require("../../models/user-module/users/user.model");
 const BusOperatorModel = require("../../models/bus-module/bus-operator/bus-operator.model");
 const HotelManagerModel = require("../../models/hotel-module/hotel-manager/hotel-manager.model");
+const DriverBasicDetails = require("../../models/new-driver-module/basic-details/basic-details.model");
 const Wallet = require("../../models/wallet-module/wallets.model");
 const { getIO } = require("../../socket");
 
@@ -169,31 +170,57 @@ const requestTopay = catchAsyncError(async (req, res) => {
 });
 
 const withdrawFunds = catchAsyncError(async (req, res) => {
-  // Authentication and validation (same as before)
+  // ----------------- Step 1: Token Validation -----------------
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Access token is missing or invalid");
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
   }
 
   const jwtToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(jwtToken);
-  const userId = decoded?._id;
-  const phoneNumber = decoded?.phoneNumber;
+
+  const { entity, amount, description } = req.body;
+  const currency = process.env.MOMO_CURRENCY;
+
+  if (!entity || !["busOperator", "hotelManager", "driver"].includes(entity)) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid entity");
+  }
+
+  // ----------------- Step 2: Resolve entity-specific details -----------------
+  let userId;
+  let Model;
+  let phoneNumber;
+
+  if (entity === "driver") {
+    userId = decoded?.driverId;
+    Model = DriverBasicDetails;
+    phoneNumber = decoded?.phoneNo; 
+  } else if (entity === "busOperator") {
+    userId = decoded?._id;
+    Model = BusOperatorModel;
+    phoneNumber = decoded?.phoneNumber;
+  } else if (entity === "hotelManager") {
+    userId = decoded?._id;
+    Model = HotelManagerModel;
+    phoneNumber = decoded?.phoneNumber;
+  }
 
   if (!userId || !phoneNumber) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
 
-  const { entity, amount, description } = req.body;
-  const currency = process.env.MOMO_CURRENCY;
+  // ----------------- Step 3: Validate entity & wallet -----------------
+  let entityExists;
 
-  if (!entity || !["busOperator", "hotelManager"].includes(entity)) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Invalid entity");
+  if (entity === "driver") {
+    entityExists = await DriverBasicDetails.findOne({ driverId: userId });
+  } else {
+    entityExists = await Model.findById(userId);
   }
 
-  // Validate entity and wallet
-  const Model = entity === "busOperator" ? BusOperatorModel : HotelManagerModel;
-  const entityExists = await Model.findById(userId);
   if (!entityExists) {
     throw new ApiError(statusCode.NOT_FOUND, `${entity} not found`);
   }
@@ -201,13 +228,16 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
   const wallet = await Wallet.findOne({ userId });
   if (!wallet) throw new ApiError(statusCode.NOT_FOUND, "Wallet not found");
 
-  // Check minimum balance
+  // Minimum balance check
   if (wallet.balance - amount < 1000) {
-    throw new ApiError(statusCode.BAD_REQUEST, "You must keep a minimum balance of 1000");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "You must keep a minimum balance of 1000"
+    );
   }
 
-  // 1. First make the MTN MoMo API call
-  const referenceId = uuidv4(); // Generate our own reference first
+  // ----------------- Step 4: MTN MoMo Transfer -----------------
+  const referenceId = uuidv4();
   const accessToken = await getMomoToken({
     subscriptionKey: process.env.MOMO_DISBURSEMENT_SUBSCRIPTION_KEY,
     apiUser: process.env.MOMO_DISBURSEMENT_API_USER,
@@ -216,7 +246,6 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
   });
 
   try {
-    // Make the API call and wait for response
     const momoResponse = await axios.post(
       `${process.env.MOMO_BASE_URL}/disbursement/v1_0/transfer`,
       {
@@ -232,17 +261,21 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
           Authorization: `Bearer ${accessToken}`,
           "X-Reference-Id": referenceId,
           "X-Target-Environment": process.env.MOMO_TARGET_ENVIRONMENT,
-          "Ocp-Apim-Subscription-Key": process.env.MOMO_DISBURSEMENT_SUBSCRIPTION_KEY,
+          "Ocp-Apim-Subscription-Key":
+            process.env.MOMO_DISBURSEMENT_SUBSCRIPTION_KEY,
           "Content-Type": "application/json",
         },
       }
     );
 
-    // 2. Only proceed if API call was successful
-    if (momoResponse.status === 202) { // 202 Accepted is the success status for MoMo
-      // 3. Create transaction record
+    if (momoResponse.status === 202) {
+      // ----------------- Step 5: Record transaction -----------------
       const transaction = await Transaction.create({
-        [entity === "busOperator" ? "busOperatorId" : "hotelManagerId"]: userId,
+        [entity === "busOperator"
+          ? "busOperatorId"
+          : entity === "hotelManager"
+            ? "hotelManagerId"
+            : "driverId"]: userId,
         transactionId: uuidv4(),
         momoRefId: referenceId,
         type: TransactionTypeEnum.DEBIT,
@@ -253,7 +286,7 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
         withdraw: true,
       });
 
-      // 4. Update wallet balance
+      // Update wallet
       wallet.balance -= amount;
       await wallet.save();
 
@@ -270,7 +303,10 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
         )
       );
     } else {
-      throw new ApiError(statusCode.BAD_GATEWAY, "Failed to initiate withdrawal with MoMo");
+      throw new ApiError(
+        statusCode.BAD_GATEWAY,
+        "Failed to initiate withdrawal with MoMo"
+      );
     }
   } catch (error) {
     console.error("MoMo API Error:", error.response?.data || error.message);
@@ -279,6 +315,6 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
       error.response?.data?.message || "Failed to process withdrawal with MoMo"
     );
   }
-})
+});
 
 module.exports = { requestTopay, withdrawFunds };

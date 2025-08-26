@@ -79,7 +79,7 @@ const addMoney = async (amount, phoneNumber) => {
 // Withdraw money from wallet // Transfer money : refunds
 const transferMoney = async (amount, phoneNumber) => {
   const accessToken = await getAccessToken("disbursements");
-  const referenceId = uuidv4();
+  const referenceId = uuidv4();  
 
   await axios.post(
     `${BASE_URL}/disbursement/v1_0/transfer`,

@@ -99,6 +99,8 @@ const webhookRouter = require("./routes/web-hook/webhook.routes");
 const walletRouter = require("./routes/wallet-module/wallet.routes");
 const invoiceRouter = require("./routes/invoice-module/invoice-routes");
 const userCouponsRoutes = require("./routes/user-module/userCoupons/userCoupons.routes")
+const commissionRouter = require("./routes/admin-module/commission-management/commission-route");
+const dashBoardRouter = require("./routes/admin-module/dashboard/dashboard.routes");
 
 if (node_env !== "production") {
   require("dotenv").config();
@@ -264,6 +266,8 @@ app.use("/api/v1/admin/notifications", adminNotificationRoutes);
 app.use("/api/v1/admin/price-breakdown", adminPriceBreakRoutes);
 app.use("/api/v1/admin/vehicle-fares", adminVehicleFareRoutes);
 app.use("/api/v1/admin/branch", adminBranchesRoutes);
+app.use('/api/v1/admin/commission-management',commissionRouter)
+app.use('/api/v1/admin/dashboard',dashBoardRouter)
 
 // Global Routes
 app.use("/api/v1/google-search", googleSearchRoutes);
