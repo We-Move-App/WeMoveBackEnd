@@ -337,7 +337,7 @@ const updatePin = catchAsyncError(async (req, res) => {
   // ----------------- Step 4: Verify Old Pin -----------------
   const isMatch = await bcrypt.compare(oldPin, driver.pin);
   if (!isMatch) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Old pin is incorrect");
+    throw new ApiError(statusCode.BAD_REQUEST, "Old pin is incorrect");
   }
 
   // ----------------- Step 5: Validate New Pin -----------------
@@ -439,5 +439,5 @@ module.exports = {
   getDriverProfileDetails,
   addPin,
   verifyPin,
-  updatePin
+  updatePin,
 };
