@@ -16,8 +16,7 @@ const message = {
 const isAdminAuthenticated = catchAsyncError(async (req, res, next) => {
   logger.info("Hitting isAuthenticated middleware");
 
-  const token =
-    req?.cookies?.accessToken || req?.headers["authorization"]?.split(" ")[1];
+  const token = req?.headers["authorization"]?.split(" ")[1];
 
   if (!token) {
     throw new ApiError(
@@ -44,7 +43,7 @@ const isAdminAuthenticated = catchAsyncError(async (req, res, next) => {
   const user = await AdminModel.findOne({
     _id: decodedToken?._id,
   }).select("_id email role verificationStatus authorities parentUserId") ||
-  (await AdminModel.findOne({ _id: decodedToken?._id }));
+    (await AdminModel.findOne({ _id: decodedToken?._id }));
 
   if (!user) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Admin not found");
@@ -52,13 +51,15 @@ const isAdminAuthenticated = catchAsyncError(async (req, res, next) => {
 
   if (["approved"].includes(user?.verificationStatus)) {
     req.user = user;
+   
+
     return next();
   }
 
   throw new ApiError(
     statusCode.FORBIDDEN,
     message[user?.verificationStatus] ||
-      "Your account is awaiting admin approval."
+    "Your account is awaiting admin approval."
   );
 });
 

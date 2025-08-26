@@ -41,6 +41,13 @@ const HotelBookingSchema = new mongoose.Schema(
     checkInTime: { type: Date, required: true },
     checkOutTime: { type: Date, required: true },
     totalAmount: { type: Number, required: true },
+     finalAmount: { type: Number, required: true },
+
+     couponUsed: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Coupon", // link to Coupon
+      default: null,
+    },
    
     paymentStatus: {
       type: String,

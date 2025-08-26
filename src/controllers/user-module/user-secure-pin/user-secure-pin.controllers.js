@@ -73,31 +73,57 @@ const CreateSecurePin = catchAsyncError(async (req, res, next) => {
 
 const ChangeSecurePin = catchAsyncError(async (req, res, next) => {
   const { _id } = req.user;
-  const { oldSecurePin, newSecurePin } = req.body;
+  const { oldSecurePin, newSecurePin, confirmSecurePin } = req.body;
 
-  if (!oldSecurePin || !newSecurePin) {
+  // Validate required fields
+  if (!oldSecurePin || !newSecurePin || !confirmSecurePin) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Please enter your old and new pin"
-    );
-  }
-  if (oldSecurePin?.length !== 4 || newSecurePin?.length !== 4) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Both old and new secure PINs must be exactly 4 digits long."
+      "Please enter old, new and confirm secure pin"
     );
   }
 
+  // Validate length
+  if (
+    oldSecurePin?.length !== 4 ||
+    newSecurePin?.length !== 4 ||
+    confirmSecurePin?.length !== 4
+  ) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "All secure PINs must be exactly 4 digits long."
+    );
+  }
+
+  // Ensure new pins match
+  if (newSecurePin !== confirmSecurePin) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "New Secure Pin and Confirm Secure Pin do not match"
+    );
+  }
+
+  // Prevent same pin reuse
   if (oldSecurePin === newSecurePin) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Both pin are same. Please enter a different PIN to proceed"
+      "New Secure Pin cannot be same as Old Secure Pin"
     );
   }
 
-  if (!securePinValidator(oldSecurePin) || !securePinValidator(newSecurePin)) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Enter valid OTP (only number)");
+  // Validate number-only format
+  if (
+    !securePinValidator(oldSecurePin) ||
+    !securePinValidator(newSecurePin) ||
+    !securePinValidator(confirmSecurePin)
+  ) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Enter valid Secure Pin (only numbers allowed)"
+    );
   }
+
+  // Fetch user's current pin
   const securePinData = await SecurePinModel.findOne({ userId: _id });
 
   if (!securePinData) {
@@ -107,26 +133,27 @@ const ChangeSecurePin = catchAsyncError(async (req, res, next) => {
     );
   }
 
+  // Verify old pin
   const isOldPinMatch = await bcrypt.compare(
     oldSecurePin,
     securePinData.securePin
   );
- if (!isOldPinMatch) {
-  throw new ApiError(
-    statusCode.BAD_REQUEST,
-    "Old secure PIN is incorrect."
-  );
-}
 
+  if (!isOldPinMatch) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Old Secure Pin is incorrect."
+    );
+  }
 
-  // Update the secure PIN in the database
+  // Save new pin (hashing handled by pre-save hook)
   securePinData.securePin = newSecurePin;
   await securePinData.save();
 
   return res
     .status(statusCode.OK)
     .json(
-      new ApiResponse(statusCode.OK, {}, `Secure Pin updated Successfully`)
+      new ApiResponse(statusCode.OK, {}, `Secure Pin updated successfully`)
     );
 });
 

@@ -29,6 +29,7 @@ const {
   TransactionTypeEnum,
 } = require("../../../utils/constants/ENUM");
 const UserRecentSearchModel = require("../../../models/user-module/user-recent-search/user-recent-search.model");
+const { CouponModel } = require("../../../models/admin-module/Admin-coupon/adminCouponModel")
 
 //-------------------- create booking --------------------
 const createBooking = catchAsyncError(async (req, res) => {
@@ -36,6 +37,7 @@ const createBooking = catchAsyncError(async (req, res) => {
   const {
     hotelId,
     roomTypeId,
+    couponCode,
     checkInDate,
     checkOutDate,
     checkInTime,
@@ -126,12 +128,62 @@ const createBooking = catchAsyncError(async (req, res) => {
   session.startTransaction();
 
   try {
+
+    let finalAmount = totalAmount;
+    let appliedCoupon = null;
+
+    if (req.body.couponCode) {
+      const currentDate = new Date();
+
+      // ✅ Find valid coupon
+      const coupon = await CouponModel.findOne({
+        couponCode: req.body.couponCode,
+        status: "Active",
+        serviceType: { $in: ["Hotel", "All Services"] },
+        startDate: { $lte: currentDate },
+        expiryDate: { $gte: currentDate },
+        $expr: { $lt: ["$usedCount", "$maxUsage"] }
+      });
+
+      if (!coupon) {
+        throw new ApiError(statusCode.BAD_REQUEST, "Invalid or expired coupon.");
+      }
+
+      // ✅ Check if user already used this coupon
+      const alreadyUsed = coupon.usageHistory.some(
+        (u) => u.userId.toString() === bookedBy.toString()
+      );
+      if (alreadyUsed) {
+        throw new ApiError(statusCode.BAD_REQUEST, "You have already used this coupon.");
+      }
+
+      // ✅ Check min order amount
+      if (totalAmount < coupon.minOrderAmount) {
+        throw new ApiError(
+          statusCode.BAD_REQUEST,
+          `Coupon valid only on orders above ₹${coupon.minOrderAmount}`
+        );
+      }
+
+      // ✅ Calculate discount
+      if (coupon.discountType === "Percentage") {
+        finalAmount = totalAmount - (totalAmount * coupon.discountPercentage) / 100;
+      } else if (coupon.discountType === "Fixed Amount") {
+        finalAmount = totalAmount - coupon.discountAmount;
+      }
+
+      if (finalAmount < 0) finalAmount = 0;
+        
+
+      appliedCoupon = coupon;
+    }
+
     // Step 1: Check wallet balance
     const userWallet = await WalletModel.findOne({ userId: bookedBy }).session(
       session
     );
 
-    if (!userWallet || userWallet.balance < totalAmount) {
+    if (!userWallet || userWallet.balance < finalAmount) {
       await TransactionModel.create(
         [
           {
@@ -140,7 +192,7 @@ const createBooking = catchAsyncError(async (req, res) => {
             bookingId: null,
             type: "DEBIT",
             status: PaymentStatusEnum.FAILED,
-            amount: totalAmount,
+            amount: finalAmount,
             currency: process.env.MOMO_CURRENCY,
             description: "Hotel booking failed - insufficient balance",
           },
@@ -164,6 +216,8 @@ const createBooking = catchAsyncError(async (req, res) => {
           checkInTime: checkInDateTime,
           checkOutTime: checkOutDateTime,
           totalAmount,
+          finalAmount,
+          couponUsed: appliedCoupon ? appliedCoupon._id : null,
           paymentStatus: "PAID",
           noOfAdults,
           noOfKids,
@@ -177,12 +231,12 @@ const createBooking = catchAsyncError(async (req, res) => {
     const newBooking = booking[0];
 
     // Step 3: Deduct from user wallet
-    userWallet.balance -= totalAmount;
+    userWallet.balance -= finalAmount;
     await userWallet.save({ session });
 
     // Step 4: Commission split
-    const platformFee = parseFloat((totalAmount * 0.1).toFixed(2)); // 10%
-    const operatorShare = parseFloat((totalAmount - platformFee).toFixed(2));
+    const platformFee = parseFloat((finalAmount * 0.1).toFixed(2)); // 10%
+    const operatorShare = parseFloat((finalAmount - platformFee).toFixed(2));
 
     await WalletModel.findOneAndUpdate(
       { userId: hotelManagerId },
@@ -205,7 +259,7 @@ const createBooking = catchAsyncError(async (req, res) => {
           bookingId: newBooking._id,
           type: "DEBIT",
           status: PaymentStatusEnum.SUCCESS,
-          amount: totalAmount,
+          amount: finalAmount,
           currency: process.env.MOMO_CURRENCY,
           description: `Hotel booking ${hotelExists.hotelName}`,
         },
@@ -231,9 +285,16 @@ const createBooking = catchAsyncError(async (req, res) => {
           description: "Commission from hotel booking",
           platformFee,
         },
+
+
       ],
       { session }
     );
+    if (appliedCoupon) {
+      appliedCoupon.usedCount += 1;
+      appliedCoupon.usageHistory.push({ userId: bookedBy, status: "Used" });
+      await appliedCoupon.save({ session });
+    }
 
     await session.commitTransaction();
     session.endSession();
@@ -517,36 +578,45 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       : "Hotels retrieved successfully.";
 
 
-      // // Save recent search only if hotels were found
-// Save recent search only if hotels were found
-if (filteredHotels.length > 0) {
-  // Get the first hotel's name if available
-  const firstHotelName =
-    filteredHotels[0]?.hotel?.hotelName || null;
 
-  try {
-    await UserRecentSearchModel.create({
-      user: req.user._id, // logged-in user
+  if (filteredHotels.length > 0) {
+    const firstHotelName = filteredHotels[0]?.hotel?.hotelName || null;
+
+    // Check if a recent search for this user and townCity already exists
+    const existingSearch = await UserRecentSearchModel.findOne({
+      user: req.user._id,
       category: "hotel",
-      searchDetails: {
-        hotel: {
-          location: {
-            hotelName: firstHotelName,
-            address: townCity,
-          },
-          checkInDate: new Date(checkInDate),
-          checkOutDate: new Date(checkOutDate),
-          requiredRooms: parseInt(requiredRooms),
-        },
-      },
-      searchTime: new Date(),
+      "searchDetails.hotel.location.address": townCity, // match city
     });
 
-    console.log("Recent hotel search saved successfully");
-  } catch (err) {
-    console.error("Error saving recent search:", err);
+    if (!existingSearch) {
+      try {
+        await UserRecentSearchModel.create({
+          user: req.user._id,
+          category: "hotel",
+          searchDetails: {
+            hotel: {
+              location: {
+                hotelName: firstHotelName,
+                address: townCity,
+              },
+              checkInDate: new Date(checkInDate),
+              checkOutDate: new Date(checkOutDate),
+              requiredRooms: parseInt(requiredRooms),
+            },
+          },
+          searchTime: new Date(),
+        });
+
+        console.log("Recent hotel search saved successfully");
+      } catch (err) {
+        console.error("Error saving recent search:", err);
+      }
+    } else {
+      console.log("Search for this location already exists. Skipping save.");
+    }
   }
-}
+
 
 
 
@@ -709,11 +779,11 @@ const getHotelById = catchAsyncError(async (req, res) => {
         roomTypes: roomTypesWithAvailability,
         ...(checkIn && checkOut
           ? {
-              dateFilter: {
-                checkInDate: checkIn.toISOString(),
-                checkOutDate: checkOut.toISOString(),
-              },
-            }
+            dateFilter: {
+              checkInDate: checkIn.toISOString(),
+              checkOutDate: checkOut.toISOString(),
+            },
+          }
           : {}),
       },
       "Hotel details fetched successfully."

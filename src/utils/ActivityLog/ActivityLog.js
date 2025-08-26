@@ -1,34 +1,51 @@
 const { UserActivityModel } = require("../../models/admin-module/ActivityModel/ActivityModel");
-const { format, differenceInCalendarDays } = require("date-fns");
+const { format, differenceInCalendarDays, formatDistanceToNowStrict } = require("date-fns");
 
-const logActivity = async (userId, activity) => {
-  if (!userId || !activity) return;
+const logActivity = async ({ userId, activity, performedBy, type = "update" }) => {
+  if (!userId || !activity || !performedBy) return null;
 
   try {
-    // Fetch the most recent previous activity
-    const lastActivity = await UserActivityModel.findOne({ userId })
-      .sort({ createdAt: -1 });
+    const lastActivity = await UserActivityModel.findOne({ userId, type })
+      .sort({ createdAt: -1 })
+      .populate("performedBy", "name email role"); // ✅ get admin details
 
-    // Create new activity
-    const currentActivity = await UserActivityModel.create({ userId, activity });
+    const currentActivity = await UserActivityModel.create({
+      userId,
+      activity,
+      performedBy,
+      type,
+    });
 
-    // Format the time
-    const formatActivity = (date) => {
+    const populatedCurrent = await UserActivityModel.findById(currentActivity._id).populate(
+      "performedBy",
+      "name email role"
+    );
+
+    // Format time
+    const formatActivityTime = (date) => {
       if (!date) return null;
       const now = new Date();
       const daysDiff = differenceInCalendarDays(now, date);
-      if (daysDiff === 0) return `Today, ${format(date, "hh:mm a")}`;
-      if (daysDiff === 1) return `Yesterday, ${format(date, "hh:mm a")}`;
-      return `${format(date, "dd MMM, hh:mm a")}`;
+
+      if (daysDiff === 0)
+        return `Today, ${format(date, "hh:mm a")} (${formatDistanceToNowStrict(date)} ago)`;
+      if (daysDiff === 1)
+        return `Yesterday, ${format(date, "hh:mm a")} (${formatDistanceToNowStrict(date)} ago)`;
+      return `${format(date, "eee, dd MMM, hh:mm a")} (${formatDistanceToNowStrict(date)} ago)`;
     };
 
     return {
       lastActivity: lastActivity
-        ? { activity: lastActivity.activity, time: formatActivity(lastActivity.createdAt) }
+        ? {
+            activity: lastActivity.activity,
+            time: formatActivityTime(lastActivity.createdAt),
+            performedBy: lastActivity.performedBy,
+          }
         : null,
-      currentActivity: {
-        activity: currentActivity.activity,
-        time: formatActivity(currentActivity.createdAt),
+      recentActivity: {
+        activity: populatedCurrent.activity,
+        time: formatActivityTime(populatedCurrent.createdAt),
+        performedBy: populatedCurrent.performedBy,
       },
     };
   } catch (err) {

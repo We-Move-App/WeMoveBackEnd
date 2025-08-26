@@ -12,6 +12,7 @@ const defaultPermissions = {
   userManagement: { type: Boolean, default: false },
   busManagement: { type: Boolean, default: false },
   taxiManagement: { type: Boolean, default: false },
+  bikeManagement: { type: Boolean, default: false },
   hotelManagement: { type: Boolean, default: false },
   walletManagement: { type: Boolean, default: false },
   reportsAnalytics: { type: Boolean, default: false },
@@ -58,6 +59,8 @@ const AdminSchema = new mongoose.Schema(
       enum: ["SuperAdmin", "Admin", "SubAdmin"],
       required: true,
     },
+   reportingManager: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
+
     branch: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Branch",
@@ -65,6 +68,9 @@ const AdminSchema = new mongoose.Schema(
         return this.role !== "SuperAdmin";
       },
     },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+
     permissions: defaultPermissions,
     verificationStatus: {
       type: String,
@@ -95,6 +101,7 @@ AdminSchema.pre("save", function (next) {
       userManagement: true,
       busManagement: true,
       taxiManagement: true,
+      bikeManagement: true,
       hotelManagement: true,
       walletManagement: true,
       reportsAnalytics: true,
@@ -131,4 +138,4 @@ AdminSchema.methods.comparePassword = async function (candidatePassword) {
 
 const AdminModel = mongoose.model("Admin", AdminSchema);
 
-module.exports = { AdminModel };
+module.exports = { AdminModel, defaultPermissions };

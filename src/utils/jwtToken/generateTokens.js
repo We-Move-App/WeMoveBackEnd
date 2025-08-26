@@ -29,7 +29,9 @@ const generateTokens = async (user, userType) => {
     isVerfilled: user?.isVerfilled,
     userType: userType,
     phoneNumber: user?.phoneNumber,
-    verificationStatus: user?.verificationStatus
+    verificationStatus: user?.verificationStatus,
+    permissions: user.permissions || {}, 
+
   };
 
   const refreshTokenPayload = {
