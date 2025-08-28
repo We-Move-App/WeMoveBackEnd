@@ -27,10 +27,6 @@ const {
 const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 
-
-
-
-
 const sendOtpToBusDriver = catchAsyncError(async (req, res) => {
   const { phoneNo } = req.body;
 
@@ -50,7 +46,6 @@ const sendOtpToBusDriver = catchAsyncError(async (req, res) => {
     .status(statusCode.OK)
     .json(new ApiResponse(statusCode.OK, null, "OTP sent successfully"));
 });
-
 
 const verifyOtpBusDriverLogin = catchAsyncError(async (req, res) => {
   const { phoneNo, otp } = req.body;
@@ -98,7 +93,6 @@ const verifyOtpBusDriverLogin = catchAsyncError(async (req, res) => {
           assignedBus: driver.assignedBus,
           status: driver.status,
           isActive: driver.isActive,
-         
         },
       },
       "Login successful"
@@ -107,15 +101,16 @@ const verifyOtpBusDriverLogin = catchAsyncError(async (req, res) => {
 });
 
 const getBusDriverProfile = catchAsyncError(async (req, res) => {
-
   const driverId = req.user_id; // Step 1: Get driver ID from request
 
   // Step 3: Ensure only drivers can access this route
   if (!driverId) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Only drivers are authorized to access this route");
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Only drivers are authorized to access this route"
+    );
   }
 
- 
   const driverExists = await BusDriverModel.exists({ _id: driverId });
   if (!driverExists) {
     throw new ApiError(statusCode.NOT_FOUND, "Bus driver not found");
@@ -131,7 +126,6 @@ const getBusDriverProfile = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.NOT_FOUND, "Bus driver not found");
   }
 
-  
   return res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
@@ -153,7 +147,6 @@ const getBusDriverProfile = catchAsyncError(async (req, res) => {
     )
   );
 });
-
 
 module.exports = {
   sendOtpToBusDriver,
