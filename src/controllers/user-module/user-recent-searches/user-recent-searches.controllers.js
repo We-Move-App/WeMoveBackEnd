@@ -7,37 +7,40 @@ const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const getRecentSearch = catchAsyncError(async (req, res, next) => {
   const { _id } = req.user;
 
+  const validTypes = ["vehicle", "bus", "hotel"];
+  const type = req.query.type?.toLowerCase();
+
+  // Check if type is provided and valid
+  if (!type || !validTypes.includes(type)) {
+    return res.status(statusCode.BAD_REQUEST).json(
+      new ApiResponse(statusCode.BAD_REQUEST, null, "Valid 'type' query parameter is required")
+    );
+  }
+
   // Pagination
   const page = Math.max(parseInt(req.query.page) || 1, 1);
   const limit = Math.max(parseInt(req.query.limit) || 5, 1);
   const skip = (page - 1) * limit;
 
-  // Normalize enum query
-  const validTypes = ["vehicle", "bus", "hotel"];
-  let typeQuery = null;
-  if (req.query.type) {
-    const lowerType = req.query.type.toLowerCase();
-    typeQuery = validTypes.includes(lowerType) ? lowerType : null;
-  }
-
-  // Build query
-  const query = typeQuery ? { user: _id, category: typeQuery } : { user: _id };
-
-  // Fetch recent searches
-  const recentSearch = await UserRecentSearchModel.find(query)
+  // Fetch recent searches for the user with the given type
+  const recentSearch = await UserRecentSearchModel.find({ user: _id, category: type })
     .sort({ createdAt: -1 })
     .skip(skip)
     .limit(limit);
 
-  // Response
+ if (!recentSearch.length) {
   return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      recentSearch,
-      recentSearch.length ? "Data found successfully" : "No recent searches found"
-    )
+    new ApiResponse(statusCode.OK, [], "No recent searches found")
+  );
+}
+
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(statusCode.OK, recentSearch, "Data found successfully")
   );
 });
+
+
 const deleteRecentSearches = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
   const { _id } = req.user;
@@ -60,3 +63,5 @@ const deleteRecentSearches = catchAsyncError(async (req, res, next) => {
 });
 
 module.exports = { getRecentSearch, deleteRecentSearches };
+
+

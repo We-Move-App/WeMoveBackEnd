@@ -832,7 +832,7 @@ const setPasswordFieldFunc = async ({ req, res, reqModel }) => {
   return new ApiResponse(statusCode.OK, {}, `Password updated Successfully`);
 };
 
-const resetPasswordFunc = async ({ req, res, reqModel }) => {
+const  resetPasswordFunc = async ({ req, res, reqModel }) => {
   const { emailOrPhone, otp, newPassword } = req.body;
   const { _id } = req.user;
 

@@ -13,7 +13,17 @@ const {
   updateAvatar,
   changePassword,
   resetPassword,
-  createSuperAdmin
+  createSuperAdmin,
+  updateAdmin,
+  updateSubAdmin,
+  getUserActivities,
+   createCoupon,
+    getCouponById ,
+  updateCoupon,
+  updateCouponStatus ,
+  getAllCoupons, getSubAdminsByBranch
+  ,getTransactionHistory 
+
 } = require("../../../controllers/admin-module/admin-auth/admin-auth.controllers");
 const {
   authorizeRole,
@@ -30,7 +40,6 @@ adminAuthRoutes
   .route("/add-admin")
   .post(isAdminAuthenticated, authorizeRole(["SuperAdmin"]), addAdmins);
 
-
   adminAuthRoutes
   .route("/add-Subadmin")
   .post(isAdminAuthenticated, authorizeRole(["SuperAdmin","Admin"]),addSubAdmins);
@@ -41,6 +50,11 @@ adminAuthRoutes.route("/login").post(loginAdmin);
 adminAuthRoutes
   .route("/all-admins")
   .get(isAdminAuthenticated, authorizeRole(["SuperAdmin"]), getAllAdmins);
+
+
+  adminAuthRoutes
+  .route("/all-Subadmins")
+  .get(isAdminAuthenticated, authorizeRole(["Admin"]),  getSubAdminsByBranch );
 
 adminAuthRoutes
   .route("/details/:id")
@@ -86,10 +100,46 @@ adminAuthRoutes
 adminAuthRoutes
   .route("/delete-device-token")
   .put(isAdminAuthenticated, removeDeviceTokens);
+
+
   adminAuthRoutes
   .route("/")
-  .post(
-   createSuperAdmin );
+  .post(createSuperAdmin );
+
+   adminAuthRoutes
+   .route("/updateAdmin/:adminId")
+   .put(isAdminAuthenticated,authorizeRole(["SuperAdmin "]),updateAdmin)
+   
+   adminAuthRoutes
+   .route("/updateSubAdmin/:adminId")
+   .put(isAdminAuthenticated,authorizeRole(["  SuperAdmin", "Admin"]),updateSubAdmin)
+     adminAuthRoutes
+   .route("/activity/:userId")
+   .get(isAdminAuthenticated,authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),getUserActivities)
+    adminAuthRoutes
+   .route("/create-coupon")
+   .post(isAdminAuthenticated,authorizeRole(["SuperAdmin", "Admin"]),createCoupon)
+
+    adminAuthRoutes
+   .route("/update-coupon/:couponId")
+   .put(isAdminAuthenticated,authorizeRole(["SuperAdmin", "Admin"]),updateCoupon)
+
+     adminAuthRoutes
+   .route("/update-couponStatus/:couponId")
+   .put(isAdminAuthenticated,authorizeRole(["SuperAdmin", "Admin"]),updateCouponStatus )
+
+
+   adminAuthRoutes
+   .route("/get-coupon/:d")
+   .get(isAdminAuthenticated,authorizeRole(["SuperAdmin", "Admin"]),getCouponById)
+
+   adminAuthRoutes
+  .route("/all-coupons")
+  .get(isAdminAuthenticated, authorizeRole(["SuperAdmin" ,"Admin"]), getAllCoupons);
+
+  adminAuthRoutes
+  .route("/getAlltransactions")
+  .get(isAdminAuthenticated, authorizeRole(["SuperAdmin","Admin", "addSubAdmins"]),getTransactionHistory)
 
 module.exports = {
   adminAuthRoutes,

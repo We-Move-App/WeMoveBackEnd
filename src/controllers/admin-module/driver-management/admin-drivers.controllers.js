@@ -59,17 +59,22 @@ const getAllDrivers = async (req, res) => {
       });
     }
 
+    // Driver filter
     const driverFilter = {};
     if (status) driverFilter.status = status;
     if (mobile) driverFilter.phoneNo = { $regex: mobile, $options: "i" };
 
-    const vehicleMatch = {};
-    if (vehicleType) vehicleMatch["vehicleInfo.vehicleType"] = vehicleType;
-    if (registrationNo)
-      vehicleMatch["vehicleInfo.registrationNo"] = { $regex: registrationNo, $options: "i" };
+    // Vehicle filter
+    const vehicleMatch = { "vehicleInfo.vehicleType": vehicleType };
+    if (registrationNo) {
+      vehicleMatch["vehicleInfo.registrationNo"] = {
+        $regex: registrationNo,
+        $options: "i",
+      };
+    }
 
+    // Fetch drivers with pagination
     const drivers = await DriverBasicDetails.aggregate([
-      { $match: driverFilter },
       {
         $lookup: {
           from: "vehicledetails",
@@ -78,9 +83,14 @@ const getAllDrivers = async (req, res) => {
           as: "vehicleInfo",
         },
       },
-      { $unwind: { path: "$vehicleInfo", preserveNullAndEmptyArrays: false } },
-      { $match: vehicleMatch },
-      { $sort: { createdAt: -1 } }, // Default sorting by recent creation
+      { $unwind: { path: "$vehicleInfo", preserveNullAndEmptyArrays: true } },
+      {
+        $match: {
+          ...driverFilter,
+          ...vehicleMatch,
+        },
+      },
+      { $sort: { createdAt: -1 } }, // recent first
       { $skip: skip },
       { $limit: limit },
       {
@@ -93,12 +103,13 @@ const getAllDrivers = async (req, res) => {
           mobile: "$phoneNo",
           vehicleType: "$vehicleInfo.vehicleType",
           registrationNumber: "$vehicleInfo.registrationNo",
+          createdAt: 1,
         },
       },
     ]);
 
+    // Total count (unique drivers only ✅)
     const totalCount = await DriverBasicDetails.aggregate([
-      { $match: driverFilter },
       {
         $lookup: {
           from: "vehicledetails",
@@ -107,8 +118,16 @@ const getAllDrivers = async (req, res) => {
           as: "vehicleInfo",
         },
       },
-      { $unwind: { path: "$vehicleInfo", preserveNullAndEmptyArrays: false } },
-      { $match: vehicleMatch },
+      { $unwind: { path: "$vehicleInfo", preserveNullAndEmptyArrays: true } },
+      {
+        $match: {
+          ...driverFilter,
+          ...vehicleMatch,
+        },
+      },
+      {
+        $group: { _id: "$driverId" }, // avoid duplicates
+      },
       { $count: "total" },
     ]);
 
@@ -120,6 +139,8 @@ const getAllDrivers = async (req, res) => {
       total,
       page,
       limit,
+      sortBy: "createdAt",
+      order: "desc",
       data: drivers,
     });
   } catch (error) {
@@ -143,7 +164,7 @@ const getdriverDetailsById = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.BAD_REQUEST, "vehicleType must be 'bike'");
   
   }
-  // Fetch driver with populated admin references
+ 
   const basicDetails = await DriverBasicDetails.findOne({ driverId })
     .populate("createdById", "name email role")
     .populate("updatedAtById", "name email role")
@@ -172,15 +193,15 @@ const getdriverDetailsById = catchAsyncError(async (req, res) => {
         }
       : null;
   };
-   const findDocs = (type) => {
-    const docs = allDocs.filter((d) => d.documentType === type);
-    return docs.map((doc) => ({
-      documentType: doc.documentType,
-      fileName: doc.fileName,
-      fileUrl: doc.fileUrl,
-      status: doc.status,
-    }));
-  };
+  //  const findDocs = (type) => {
+  //   const docs = allDocs.filter((d) => d.documentType === type);
+  //   return docs.map((doc) => ({
+  //     documentType: doc.documentType,
+  //     fileName: doc.fileName,
+  //     fileUrl: doc.fileUrl,
+  //     status: doc.status,
+  //   }));
+  // };
 
   const response = {
     success: true,
@@ -205,7 +226,7 @@ const getdriverDetailsById = catchAsyncError(async (req, res) => {
         passbook: findDoc(DriverDocEnum.PASSBOOK),
         insurance: findDoc(DriverDocEnum.INSURANCE),
         registrationCertificate: findDoc(DriverDocEnum.REGISTRATION),
-        vehicleBikePhotos: findDocs(DriverDocEnum.VEHICLEPHOTO),
+        vehicleBikePhotos: findDoc(DriverDocEnum.VEHICLEPHOTO),
         avatarPhotos: findDoc(DriverDocEnum.AVATAR),
       },
       bikeDetails: vehicleDetails
@@ -345,15 +366,15 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
   basicDriverDetails.createdBy = "admin";
   basicDriverDetails.createdById = adminId;
 
-  // Check existing driver
-  const existingDriver = await DriverBasicDetails.findOne({
-    $or: [
-      { phoneNo: basicDriverDetails.phoneNo },
-      { email: basicDriverDetails.email }
-    ]
-  });
-  if (existingDriver) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Phone number or email already exists");
+ if (basicDriverDetails.email) {
+    const emailExists = await DriverBasicDetails.findOne({ email: basicDriverDetails.email });
+    if (emailExists) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Email already exists");
+    }
+  }
+  const phoneExists = await DriverBasicDetails.findOne({ phoneNo: basicDriverDetails.phoneNo });
+  if (phoneExists) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Phone number already exists");
   }
 
   const existingVehicle = await VehicleDetail.findOne({
@@ -385,7 +406,6 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
     };
   };
 
-  // Handle vehiclePhotos as array
   const vehiclePhotoDocs = Array.isArray(vehicleDetails.vehiclePhotos)
     ? vehicleDetails.vehiclePhotos.map(photo => normalizeDoc(photo, DriverDocEnum.VEHICLEPHOTO))
     : vehicleDetails.vehiclePhotos
@@ -400,15 +420,13 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
     ...vehiclePhotoDocs,
     normalizeDoc(vehicleDetails.avatarPhotos, DriverDocEnum.AVATAR)
   ].filter(Boolean);
-
-  // Save bank details
   await DriverBankDetail.updateOne(
     { driverId },
     { $set: { ...bankDetails, updatedAt: new Date() } },
     { upsert: true }
   );
 
-  // Save vehicle details (without photos/insurance/avatar)
+ 
   await VehicleDetail.updateOne(
     { driverId },
     {
@@ -419,16 +437,11 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
     },
     { upsert: true }
   );
-
-  // Save documents in DB
   await DriverDocDetails.create({ driverId, documents: normalizedDocs });
 
-  // Generate driver token
   const driverToken = await generateTokens({ driverId });
   const populatedDriver = await DriverBasicDetails.findOne({ driverId })
     .populate("createdById", "name email role");
-
-  // Build response documents
   const allDocuments = {
     vehicleBikePhotos: []
   };
@@ -501,6 +514,7 @@ const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
     { driverId },
     {
       ...basicDriverDetails,
+        status: "approved", 
       updatedAt: new Date(),
       updatedAtById: adminId,
     }
@@ -527,7 +541,7 @@ const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
       documentType: type,
       fileUrl: doc.fileUrl || doc.url,
       fileName: doc.fileName,
-      status: DriverDocStatusEnum.APPROVED,
+      // status: DriverDocStatusEnum.APPROVED,
     };
   };
 
@@ -541,11 +555,12 @@ const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
   ].filter(Boolean);
 
   if (allDocuments.length > 0) {
-    await DriverDocDetails.findOneAndUpdate(
-      { driverId },
-      { documents: allDocuments },
-      { upsert: true }
-    );
+   await DriverDocDetails.findOneAndUpdate(
+  { driverId },
+  { documents: allDocuments.map(doc => ({ ...doc, status: "APPROVED" })) },
+  { upsert: true }
+);
+
   }
 
   // 6️⃣ Generate token
@@ -580,7 +595,8 @@ const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
           mobile: basicDriverDetails.phoneNo || savedDriver.phoneNo,
           email: basicDriverDetails.email || savedDriver.email,
           address: basicDriverDetails.address || savedDriver.address,
-          status: basicDriverDetails.status || savedDriver.status,
+          status:  "approved",
+
           experience: basicDriverDetails.experience || savedDriver.experience,
           createdById: savedDriver.createdById,
           updatedBy: updatedDriver.updatedAtById
@@ -752,16 +768,17 @@ const createTaxiDriverFromAdmin = catchAsyncError(async (req, res) => {
 });
 const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
   const { driverId } = req.params;
-   const { vehicleType } = req.query
+  const { vehicleType } = req.query;
   const { basicDriverDetails = {}, bankDetails = {}, vehicleDetails = {}, documents = [] } = req.body;
 
-  if (!driverId ||!vehicleType) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Driver ID  and vehileType is required");
+  if (!driverId || !vehicleType) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Driver ID and vehicleType are required");
   }
-   if (vehicleType?.toLowerCase() !== "taxi") {
+
+  if (vehicleType?.toLowerCase() !== "taxi") {
     throw new ApiError(statusCode.BAD_REQUEST, "vehicleType must be 'taxi'");
-  
   }
+
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Access token is missing or invalid");
@@ -778,11 +795,9 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
   // 2️⃣ Update driver basic details
   await DriverBasicDetails.updateOne(
     { driverId },
-    {
-      ...basicDriverDetails,
-      updatedAt: new Date(),
-      updatedAtById: adminId,
-    }
+    { ...basicDriverDetails,
+       status: "approved", 
+       updatedAt: new Date(), updatedAtById: adminId }
   );
 
   // 3️⃣ Update bank details
@@ -799,19 +814,34 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
     { upsert: true }
   );
 
-  // 5️⃣ Collect & normalize all documents
+  // 5️⃣ Helper: Normalize document with backend auto-approved status (status not included in response)
   const normalizeDoc = (doc, type) => {
     if (!doc) return null;
     return {
       documentType: type,
       fileUrl: doc.fileUrl || doc.url,
-      fileName: doc.fileName,
-      status: DriverDocStatusEnum.APPROVED,
+      fileName: doc.fileName || "default_file_name"
+      
     };
   };
 
-  const allDocuments = [
-    ...documents.map(doc => normalizeDoc(doc, doc.documentType)),
+  // 6️⃣ Helper: Update single document (remove old, add new)
+  const updateSingleDocument = async (driverId, doc) => {
+    if (!doc) return;
+    await DriverDocDetails.updateOne(
+      { driverId },
+      { $pull: { documents: { documentType: doc.documentType } } }
+    );
+    await DriverDocDetails.updateOne(
+      { driverId },
+      { $push: { documents: { ...doc, status: "APPROVED" } } }, // auto-approved in DB
+      { upsert: true }
+    );
+  };
+
+  // 7️⃣ Prepare all documents to update
+  const allDocsToUpdate = [
+    ...documents.map(d => normalizeDoc(d, d.documentType)),
     normalizeDoc(bankDetails.document, DriverDocEnum.PASSBOOK),
     normalizeDoc(vehicleDetails.insurance, DriverDocEnum.INSURANCE),
     normalizeDoc(vehicleDetails.registrationCertificate, DriverDocEnum.REGISTRATION),
@@ -819,35 +849,36 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
     normalizeDoc(vehicleDetails.avatarPhotos, DriverDocEnum.AVATAR)
   ].filter(Boolean);
 
-  if (allDocuments.length > 0) {
-    await DriverDocDetails.findOneAndUpdate(
-      { driverId },
-      { documents: allDocuments },
-      { upsert: true }
-    );
+  // 8️⃣ Update each document individually
+  for (const doc of allDocsToUpdate) {
+    await updateSingleDocument(driverId, doc);
   }
 
-  // 6️⃣ Generate token
+  // 9️⃣ Generate token
   const driverToken = await generateTokens({ driverId });
-  const updatedDriver = await DriverBasicDetails.findOne({ driverId })
-    .populate("updatedAtById", "name email role");
+  const updatedDriver = await DriverBasicDetails.findOne({ driverId }).populate(
+    "updatedAtById",
+    "name email role"
+  );
 
-  // 7️⃣ Prepare documents in clean response format
+  // 10️⃣ Prepare clean document response (status removed)
   const docResponse = {};
-  allDocuments.forEach(doc => {
-    if (doc.documentType === DriverDocEnum.IDCARD) docResponse.idCard = doc;
-    if (doc.documentType === DriverDocEnum.LICENSE) docResponse.license = doc;
-    if (doc.documentType === DriverDocEnum.PASSBOOK) docResponse.passbook = doc;
-    if (doc.documentType === DriverDocEnum.INSURANCE) docResponse.insurance = doc;
-    if (doc.documentType === DriverDocEnum.REGISTRATION) docResponse.registrationCertificate = doc;
-    if (doc.documentType === DriverDocEnum.VEHICLEPHOTO) docResponse.vehicleTaxiPhotos = doc; // 🚖 Taxi specific
-    if (doc.documentType === DriverDocEnum.AVATAR) docResponse.avatarPhotos = doc;
+  allDocsToUpdate.forEach(doc => {
+    switch (doc.documentType) {
+      case DriverDocEnum.IDCARD: docResponse.idCard = doc; break;
+      case DriverDocEnum.LICENSE: docResponse.license = doc; break;
+      case DriverDocEnum.PASSBOOK: docResponse.passbook = doc; break;
+      case DriverDocEnum.INSURANCE: docResponse.insurance = doc; break;
+      case DriverDocEnum.REGISTRATION: docResponse.registrationCertificate = doc; break;
+      case DriverDocEnum.VEHICLEPHOTO: docResponse.vehicleTaxiPhotos = doc; break; 
+      case DriverDocEnum.AVATAR: docResponse.avatarPhotos = doc; break; 
+    }
   });
 
-  // 🚨 Clean taxiDetails (remove embedded docs)
+  // 11️⃣ Clean taxiDetails (remove embedded docs)
   const { insurance, registrationCertificate, vehiclePhotos, avatarPhotos, ...cleanTaxiDetails } = vehicleDetails;
 
-  // ✅ Final Response
+  // 12️⃣ Final Response
   return res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
@@ -859,12 +890,13 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
           mobile: basicDriverDetails.phoneNo || savedDriver.phoneNo,
           email: basicDriverDetails.email || savedDriver.email,
           address: basicDriverDetails.address || savedDriver.address,
-          status: basicDriverDetails.status || savedDriver.status,
+           status: "approved",
+
           experience: basicDriverDetails.experience || savedDriver.experience,
           createdById: savedDriver.createdById,
           updatedBy: updatedDriver.updatedAtById
         },
-        documents: docResponse,
+        documents: docResponse, // status removed here
         taxiDetails: cleanTaxiDetails,
         bankDetails,
         isOnline: false,
@@ -916,15 +948,15 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
   };
 
 
-  const findDocs = (type) => {
-    const docs = allDocs.filter((d) => d.documentType === type);
-    return docs.map((doc) => ({
-      documentType: doc.documentType,
-      fileName: doc.fileName,
-      fileUrl: doc.fileUrl,
-      status: doc.status,
-    }));
-  };
+  // const findDocs = (type) => {
+  //   const docs = allDocs.filter((d) => d.documentType === type);
+  //   return docs.map((doc) => ({
+  //     documentType: doc.documentType,
+  //     fileName: doc.fileName,
+  //     fileUrl: doc.fileUrl,
+  //     status: doc.status,
+  //   }));
+  // };
 
   const response = {
     success: true,
@@ -949,7 +981,7 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
         passbook: findDoc(DriverDocEnum.PASSBOOK),
         insurance: findDoc(DriverDocEnum.INSURANCE),
         registrationCertificate: findDoc(DriverDocEnum.REGISTRATION),
-        vehicleTaxiPhotos: findDocs(DriverDocEnum.VEHICLEPHOTO), // ✅ now array
+        vehicleTaxiPhotos: findDoc(DriverDocEnum.VEHICLEPHOTO),
         avatarPhotos: findDoc(DriverDocEnum.AVATAR),
       },
       taxiDetails: vehicleDetails
@@ -1088,7 +1120,6 @@ const getAllBikeBookings = catchAsyncError(async (req, res) => {
     data: bookings,
   });
 });
-
 const getBookingDetailsById = catchAsyncError(async (req, res) => {
   const { bookingId } = req.params;
 
@@ -1195,9 +1226,9 @@ module.exports = {
   updateBikeDriverByAdmin,
   createTaxiDriverFromAdmin,
    updateTaxiDriverByAdmin,
-   getTaxiDriverDetailsById,
-    getAllBikeBookings,
-    getBookingDetailsById
+  getTaxiDriverDetailsById,
+  getAllBikeBookings,
+  getBookingDetailsById
 
 
 

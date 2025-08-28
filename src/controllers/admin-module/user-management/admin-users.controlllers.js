@@ -14,54 +14,74 @@ const {
 } = require("../../../utils/services/admin.services");
 const HotelBookingModel = require("../../../models/hotel-module/hotel-bookings/hotel-bookings.model")
 const BusBookingModel = require("../../../models/bus-module/bus-bookings/bus-bookings.model")
-const RideBookingDetail= require("../../../models/new-driver-module/booking-details/booking-details.model");
+const RideBookingDetail = require("../../../models/new-driver-module/booking-details/booking-details.model");
 const BusModel = require("../../../models/bus-module/buses/buses.model")
 const getAllUsers = catchAsyncError(async (req, res) => {
-  const {  name, email, mobile , page=1 , limit=20} = req.query;
+  const {
+    name,
+    email,
+    mobile,
+    page = 1,
+    limit = 20,
+    sortBy = "createdAt", // default sort by creation date
+    order = "desc",       // default descending (recent first)
+  } = req.query;
 
-  // Build filter object dynamically
+  // Build dynamic filter
   const filter = {};
-  if (name) filter.fullName = new RegExp(name, "i"); // case-insensitive
+  if (name) filter.fullName = new RegExp(name, "i");
   if (email) filter.email = new RegExp(email, "i");
   if (mobile) filter.phoneNumber = new RegExp(mobile, "i");
 
-  const pageNum = parseInt(page, 10 )||1;
-  const limitNum = parseInt(limit,10)|| 10;
-  const skip = (pageNum-1)*limitNum;
+  const pageNum = Math.max(parseInt(page, 10), 1);
+  const limitNum = Math.max(parseInt(limit, 10), 1);
+  const skip = (pageNum - 1) * limitNum;
 
-  const totalCount = await UserModel.countDocuments(filter);
-    if (totalCount === 0) {
+  const total = await UserModel.countDocuments(filter);
+  if (total === 0) {
     return res.status(404).json({
-      statusCode: 404,
       success: false,
       message: "User not found",
+      total: 0,
+      page: pageNum,
+      limit: limitNum,
+      sortBy,
+      order,
       data: [],
     });
   }
 
+  // Sorting
+  const sortOrder = order.toLowerCase() === "desc" ? -1 : 1;
+  const sort = {};
+  sort[sortBy] = sortOrder;
 
-  const users = await UserModel.find(
+  // Fetch users with pagination and sorting
+  const data = await UserModel.find(
     filter,
-    "fullName phoneNumber email verificationStatus"
+    "fullName phoneNumber email verificationStatus createdAt"
   )
+    .skip(skip)
+    .limit(limitNum)
+    .sort(sort);
+
+  // Return flat response
   res.status(200).json({
-    statusCode: 200,
     success: true,
     message: "Users fetched successfully",
-   pagination:{
-    totalCount,
+    total,
     page: pageNum,
     limit: limitNum,
-    totalPage: Math.ceil(totalCount/limitNum)
-   },
-    userDetails: users,
+    sortBy,
+    order,
+    data,
   });
 });
 const getSingleUser = catchAsyncError(async (req, res) => {
   const { userId } = req.params;
+  const { page = 1, limit = 10, sortBy = "date", order = "desc" } = req.query;
 
-  // 1. Find user basic info
-  const user = await UserModel.findById(userId, "fullName email phoneNumber");
+  const user = await UserModel.findById(userId, "fullName email phoneNumber verificationStatus");
   if (!user) {
     return res.status(404).json({
       success: false,
@@ -69,77 +89,87 @@ const getSingleUser = catchAsyncError(async (req, res) => {
     });
   }
 
-  // 2. Fetch booking counts
+  // Fetch booking counts
   const [busCount, hotelCount, rideCount] = await Promise.all([
     BusBookingModel.countDocuments({ bookedBy: userId }),
     HotelBookingModel.countDocuments({ bookedBy: userId }),
-     RideBookingDetail.countDocuments({ userId: userId }),
+    RideBookingDetail.countDocuments({ userId: userId }),
   ]);
-const busBookings = await BusBookingModel.find(
-  { bookedBy: userId },
-  "_id busId routeId journeyDate price status"
-)
-.populate({
-  path: "busId",
-  select: "busRegNumber routes",   // also fetch routes
-  populate: {
-    path: "routes",
-    model: "BusRoute",
-    select: "routeName startLocation endLocation",
-  },
-})
-.populate({
-  path: "routeId",
-  select: "routeName startLocation endLocation",
-});
-const formattedBusBookings = busBookings.map((b) => ({
-  busBookingId: b._id,
-    type: "bus",
-  busNumber: b.busId?.busRegNumber || null,
-  // Prefer routeId, else fallback to bus.routes
-  route: b.routeId 
-    ? `${b.routeId.startLocation} → ${b.routeId.endLocation}` 
-    : b.busId?.routes 
-      ? `${b.busId.routes.startLocation} → ${b.busId.routes.endLocation}`
-      : null,
-  date: b.journeyDate,
-  amount: b.price,
-  status: b.status,
-}));
 
-
-
+  // Fetch all bookings without pagination
+  const busBookings = await BusBookingModel.find({ bookedBy: userId }, "_id busId routeId journeyDate price status")
+    .populate({
+      path: "busId",
+      select: "busRegNumber routes",
+      populate: {
+        path: "routes",
+        model: "BusRoute",
+        select: "routeName startLocation endLocation",
+      },
+    })
+    .populate({
+      path: "routeId",
+      select: "routeName startLocation endLocation",
+    });
 
   const hotelBookings = await HotelBookingModel.find(
     { bookedBy: userId },
     "_id hotelId checkInDate checkOutDate totalAmount status"
   );
 
+  const rideBookings = await RideBookingDetail.find(
+    { userId: userId.toString() },
+    "bookingId timestamps.completedAt fare rideStatus"
+  );
+
+  // Format bookings
+  const formattedBusBookings = busBookings.map((b) => ({
+    busBookingId: b._id,
+    type: "bus",
+    busNumber: b.busId?.busRegNumber || null,
+    route: b.routeId
+      ? `${b.routeId.startLocation} → ${b.routeId.endLocation}`
+      : b.busId?.routes
+      ? `${b.busId.routes.startLocation} → ${b.busId.routes.endLocation}`
+      : null,
+    date: b.journeyDate,
+    amount: b.price,
+    status: b.status,
+  }));
+
   const formattedHotelBookings = hotelBookings.map((h) => ({
     id: h._id,
     hotelId: h.hotelId,
-      type: "hotel",
+    type: "hotel",
+    date: h.checkInDate,
     stayDuration: `${h.checkInDate.toDateString()} - ${h.checkOutDate.toDateString()}`,
     amount: h.totalAmount,
     status: h.status,
   }));
-const rideBookings = await RideBookingDetail.find(
-  { userId: userId.toString() },
-  "bookingId timestamps.completedAt fare rideStatus"
-);
 
   const formattedRideBookings = rideBookings.map((r) => ({
     bookingId: r.bookingId,
-      type: "ride",
-    rideDate: r.timestamps?.completedAt || null,
+    type: "ride",
+    date: r.timestamps?.completedAt || null,
     amount: r.fare,
     status: r.rideStatus,
   }));
-    const allBookings = [...formattedRideBookings, ...formattedBusBookings, ...formattedHotelBookings].sort(
-    (a, b) => new Date(b.date) - new Date(a.date)
+
+  // Merge all bookings and sort by date
+  const allBookingsSorted = [...formattedRideBookings, ...formattedBusBookings, ...formattedHotelBookings].sort(
+    (a, b) => {
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return order === "asc" ? new Date(a.date) - new Date(b.date) : new Date(b.date) - new Date(a.date);
+    }
   );
 
-  // Final Response
+  // Apply pagination to merged list
+  const totalBookings = allBookingsSorted.length;
+  const totalPages = Math.ceil(totalBookings / limit);
+  const paginatedAllBookings = allBookingsSorted.slice((page - 1) * limit, page * limit);
+
+  // Final response
   res.status(200).json({
     success: true,
     message: "User profile with bookings fetched successfully",
@@ -148,6 +178,7 @@ const rideBookings = await RideBookingDetail.find(
       name: user.fullName,
       email: user.email,
       mobile: user.phoneNumber,
+      status: user.verificationStatus,
     },
     bookingSummary: {
       busBookings: busCount,
@@ -157,11 +188,13 @@ const rideBookings = await RideBookingDetail.find(
     busBookings: formattedBusBookings,
     hotelBookings: formattedHotelBookings,
     rideBookings: formattedRideBookings,
-    allBookings: allBookings
+    allBookings: paginatedAllBookings,
+    currentPage: parseInt(page),
+    total: totalPages,
+    totalBookings: totalBookings,
+    pageSize: parseInt(limit),
   });
 });
-
-
 
 
 const verifyUserProfile = catchAsyncError(async (req, res, next) => {
@@ -170,8 +203,8 @@ const verifyUserProfile = catchAsyncError(async (req, res, next) => {
   return res.status(statusCode.OK).json(result);
 });
 
-const deleteUserPermanently = catchAsyncError(async(req,res ,next)=>{
-  const {userId} = req.params
+const deleteUserPermanently = catchAsyncError(async (req, res, next) => {
+  const { userId } = req.params
 
   const [user, userBank, userDocs] = await Promise.all([
     UserModel.findById(_id),
@@ -181,7 +214,6 @@ const deleteUserPermanently = catchAsyncError(async(req,res ,next)=>{
 
 
 })
-
 module.exports = {
   getAllUsers,
   getSingleUser,

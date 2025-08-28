@@ -98,6 +98,7 @@ const momoRouter = require("./routes/momo-mtn/momo-mtn.routes");
 const webhookRouter = require("./routes/web-hook/webhook.routes");
 const walletRouter = require("./routes/wallet-module/wallet.routes");
 const invoiceRouter = require("./routes/invoice-module/invoice-routes");
+const userCouponsRoutes = require("./routes/user-module/userCoupons/userCoupons.routes")
 const commissionRouter = require("./routes/admin-module/commission-management/commission-route");
 const dashBoardRouter = require("./routes/admin-module/dashboard/dashboard.routes");
 
@@ -179,6 +180,9 @@ app.use("/api/v1/user/user-Google-searches", usersearchroutes);
 app.use("/api/v1/user/rides", userRidesBookingRoutes);
 app.use("/api/v1/user/bus-bookings", userBusBookingsRoutes);
 app.use("/api/v1/user/hotel-booking", hotelbookingRoutes);
+app.use("/api/v1/user/available-coupons", userCouponsRoutes);
+
+
 // app.use("/api/v1/user/wallet", userDigitalWalletRoutes);
 app.use("/api/v1/user/notifications", userNotificationRoutes);
 

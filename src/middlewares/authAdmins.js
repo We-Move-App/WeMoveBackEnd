@@ -16,8 +16,7 @@ const message = {
 const isAdminAuthenticated = catchAsyncError(async (req, res, next) => {
   logger.info("Hitting isAuthenticated middleware");
 
-  const token =
-    req?.cookies?.accessToken || req?.headers["authorization"]?.split(" ")[1];
+  const token = req?.headers["authorization"]?.split(" ")[1];
 
   if (!token) {
     throw new ApiError(
@@ -53,6 +52,7 @@ const isAdminAuthenticated = catchAsyncError(async (req, res, next) => {
 
   if (["approved"].includes(user?.verificationStatus)) {
     req.user = user;
+
     return next();
   }
 

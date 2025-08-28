@@ -5,15 +5,11 @@ const mongoose = require("mongoose");
 const BranchSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
-    location: { type: String, required: true },
-    coordinates: {
-      latitude: {
-        type: Number,
-      },
-      longitude: {
-        type: Number,
-      },
+    location: { type: String, required: true,
+       trim: true,
+      unique: true, 
     },
+  
   },
   {
    timestamps:true
