@@ -3,7 +3,7 @@ const statusCode = require("../../../utils/constants/statusCode");
 const logger = require("../../../utils/logger/logger");
 const UserModel = require("../../../models/user-module/users/user.model");
 const ApiResponse = require("../../../utils/response/ApiResponse");
-const UserBankModel  = require( "../../../models/user-module/user-banks/user-banks.model");
+const UserBankModel = require("../../../models/user-module/user-banks/user-banks.model");
 const {
   saveDeviceToken,
   removeDeviceToken,
@@ -15,7 +15,7 @@ const {
 const { TypeOfUser } = require("../../../utils/constants/constants");
 const {
   registerUserWithEmailOrPhoneAndOtp,
-  sendOtpOnlyWithoutUserCreation ,
+  sendOtpOnlyWithoutUserCreation,
   registerUserWithEmailAndPhoneNumber,
   loginUserWithEmailAndPhoneNumber,
   logoutUserFunc,
@@ -225,11 +225,11 @@ const verifyEmailExist = catchAsyncError(async (req, res, next) => {
 
   return res.status(statusCode.OK).json(result);
 });
-const verifyOTP= catchAsyncError(async (req, res, next) => {
+const verifyOTP = catchAsyncError(async (req, res, next) => {
   const result = await verifyOtpFunc({
     req,
     res,
-    reqModel:UserModel,
+    reqModel: UserModel,
     typeOfUser: TypeOfUser.USER,
   });
   const { accessToken, refreshToken, reqData } = result;

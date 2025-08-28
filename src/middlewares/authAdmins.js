@@ -41,10 +41,11 @@ const isAdminAuthenticated = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid access token");
   }
 
-  const user = await AdminModel.findOne({
-    _id: decodedToken?._id,
-  }).select("_id email role verificationStatus authorities parentUserId") ||
-  (await AdminModel.findOne({ _id: decodedToken?._id }));
+  const user =
+    (await AdminModel.findOne({
+      _id: decodedToken?._id,
+    }).select("_id email role verificationStatus authorities parentUserId")) ||
+    (await AdminModel.findOne({ _id: decodedToken?._id }));
 
   if (!user) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Admin not found");

@@ -39,6 +39,12 @@ const {
   HotelManagerBankModel,
 } = require("../../models/hotel-module/hotel-manager-banks/hotel-manager-banks.model");
 const { WalletCurrencyEnum } = require("../constants/ENUM");
+const {
+  sendOtpToPhone,
+  sendOtpToEmail,
+  verifyEmailOtp,
+  verifyPhoneOtp,
+} = require("../otpService/otpService");
 
 // ==============================================
 const registerUserWithEmailAndPhoneNumber = async ({
@@ -503,69 +509,43 @@ const resendOtpWithoutTokenFunc = async ({ req, res, reqModel }) => {
 // version 2 of the function to verify otp without token
 const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
   const { email, phoneNumber, emailOrPhone, otp } = req.body;
-
   const identifier = emailOrPhone || email || phoneNumber;
 
+  if (!identifier) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Email or phone number is required"
+    );
+  }
   if (!otp) {
     throw new ApiError(statusCode.BAD_REQUEST, "Please enter OTP");
   }
 
-  let user;
-  let query = {};
+  const isEmail = validateEmail(identifier);
+  const isPhone = validatePhoneNumber(identifier);
 
-  if (identifier) {
-    const isEmail = validateEmail(identifier);
-    const isPhone = validatePhoneNumber(identifier);
-
-    if (!isEmail && !isPhone) {
-      throw new ApiError(
-        statusCode.BAD_REQUEST,
-        "Invalid email or phone number"
-      );
-    }
-
-    user = await reqModel.findOne(
-      isEmail ? { email: identifier } : { phoneNumber: identifier }
-    );
-
-    if (!user) {
-      throw new ApiError(statusCode.NOT_FOUND, "User not found");
-    }
-
-    query = { ownerId: user._id };
-  } else {
-    if (!req.user || !req.user._id) {
-      throw new ApiError(statusCode.UNAUTHORIZED, "User not authenticated");
-    }
-
-    user = await reqModel.findById(req.user._id);
-    if (!user) {
-      throw new ApiError(statusCode.NOT_FOUND, "User not found");
-    }
-
-    query = { ownerId: req.user._id };
+  if (!isEmail && !isPhone) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid email or phone number");
   }
 
-  const otpInDb = await OtpModel.findOne({ ...query, isUsed: false });
-  console.log("OTP from DB:", otpInDb);
-
-  if (!otpInDb || otpInDb.otp !== otp || otpInDb.expiresAt < Date.now()) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid or expired OTP");
+  // ✅ Find the user
+  const user = await reqModel.findOne(
+    isEmail ? { email: identifier } : { phoneNumber: identifier }
+  );
+  if (!user) {
+    throw new ApiError(statusCode.NOT_FOUND, "User not found");
   }
 
-  if (!["approved", "submitted"].includes(user.verificationStatus)) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      getStatusMessage(user.verificationStatus)
-    );
-  }
-
-  if (validateEmail(identifier)) {
+  // ✅ Verify OTP using reusable functions
+  if (isEmail) {
+    await verifyEmailOtp(identifier, otp);
     user.emailVerified = true;
-  } else if (validatePhoneNumber(identifier)) {
+  } else if (isPhone) {
+    await verifyPhoneOtp(identifier, otp);
     user.phoneVerified = true;
   }
-  await user.save(); // ✅ Save updated verification flags
+
+  await user.save();
 
   // ✅ Create wallet if not exists
   let wallet = await Wallet.findOne({ userId: user._id });
@@ -578,26 +558,22 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
     });
   }
 
+  // ✅ Tokens
   const { accessToken, refreshToken } = await generateTokens(user, typeOfUser);
   setTokenCookies(res, accessToken, refreshToken);
 
+  // ✅ Extra details
   const bankDetails = await UserBankModel.findOne({ userId: user._id });
-  const isBankdetails = !!bankDetails;
-
   const pinDetails = await SecurePinModel.findOne({ userId: user._id });
 
-  // ✅ Create userData AFTER updating and saving user
   const userData = {
     ...user.toObject(),
     isEmailVerified: !!user.emailVerified,
     isPhoneVerified: !!user.phoneVerified,
     bankDetails,
-    isBankdetails,
-    isPinExist: pinDetails ? true : false,
+    isBankdetails: !!bankDetails,
+    isPinExist: !!pinDetails,
   };
-
-  otpInDb.isUsed = true;
-  await otpInDb.save();
 
   return new ApiResponse(
     statusCode.OK,
@@ -986,10 +962,10 @@ const updateAvatarFunc = async ({ req, res, reqModel }) => {
     user.verificationStatus = "processing";
   }
   await user.save();
- 
+
   return new ApiResponse(
     statusCode.OK,
-  
+
     uploadImage,
     "Your profile picture has been updated successfully"
   );
@@ -1108,8 +1084,10 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
     if (!emailOrPhone) {
       throw new ApiError(statusCode.BAD_REQUEST, "Please enter email or phone");
     }
+
     const isEmail = validateEmail(emailOrPhone);
     const isPhoneNumber = validatePhoneNumber(emailOrPhone);
+
     if (!isEmail && !isPhoneNumber) {
       throw new ApiError(
         statusCode.BAD_REQUEST,
@@ -1117,90 +1095,45 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
       );
     }
 
-    const findOrCreateUser = async (field, value, role) => {
-      if (!value) {
-        throw new ApiError(
-          statusCode.BAD_REQUEST,
-          `${field} cannot be null or empty`
-        );
-      }
-      let user = await reqModel.findOne({ [field]: value });
-
-      if (!user) {
-        const userData =
-          field === "email" ? { email: value } : { phoneNumber: value };
-
-        user = new reqModel({
-          ...userData,
-        });
-        await user.save();
-      }
-
-      return user;
-    };
+    // 🔹 Create or find user
     const userField = isEmail ? "email" : "phoneNumber";
-    const createdUser = await findOrCreateUser(userField, emailOrPhone);
-    console.log(createdUser);
+    let user = await reqModel.findOne({ [userField]: emailOrPhone });
 
-    const otp = getOtp();
-    const emailData = { otp, name: createdUser?.fullName || "User" };
-    // const emailData = { otp, name: createdUser?.name || "User" };
+    if (!user) {
+      const userData = isEmail
+        ? { email: emailOrPhone }
+        : { phoneNumber: emailOrPhone };
 
-    // if (isPhoneNumber) {
-    //   const response = await sendOtpToPhoneNumbers(emailOrPhone, otp);
-    //   if (!response.success) {
-    //     throw new ApiError(
-    //       statusCode.INTERNAL_SERVER_ERROR,
-    //       "OTP is failed to triggered"
-    //     );
-    //   }
-    // }
+      user = new reqModel(userData);
+      await user.save();
+    }
 
-    // if (isEmail) {
-    //   try {
-    //     const res = await sendEmailUsingNodemailer({
-    //       to: createdUser?.email,
-    //       params: emailData,
-    //       template: "otpTemplate.ejs",
-    //       subject: "Verification Code for WeMOVE",
-    //     });
-    //   } catch (error) {
-    //     throw new ApiError(
-    //       statusCode.BAD_REQUEST,
-    //       "Error in sending email",
-    //       error
-    //     );
-    //   }
-    // }
+    // 🔹 Send OTP using existing utils
+    let otpData;
+    if (isPhoneNumber) {
+      otpData = await sendOtpToPhone(emailOrPhone);
+    } else if (isEmail) {
+      otpData = await sendOtpToEmail(emailOrPhone);
+    }
 
-    const expiresAt = new Date(Date.now() + 5 * 60 * 1000);
+    console.log("✅ OTP sent:", otpData);
 
-    const otpdd = await OtpModel.findOneAndUpdate(
-      { ownerId: createdUser?._id },
-      { otp, expiresAt, isUsed: false },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-    console.log(otpdd);
-
-    // const { accessToken, refreshToken } = await generateTokens(
-    //   createdUser,
-    //   typeOfUser
-    // );
+    // 🔹 Later you can return tokens if needed
+    // const { accessToken, refreshToken } = await generateTokens(user, typeOfUser);
     // setTokenCookies(res, accessToken, refreshToken);
 
-    // const reqData = {
-    //   _id: createdUser?._id,
-    //   email: createdUser?.email,
-    //   role: createdUser?.role,
-    //   verificationStatus: createdUser?.verificationStatus,
-    //   avatar: createdUser?.avatar,
-    //   phoneNumber: createdUser?.phoneNumber,
-    // };
-
-    // return { accessToken, refreshToken, reqData };
-    return true;
+    return {
+      success: true,
+      message: `OTP sent to ${isEmail ? "email" : "phone number"}`,
+      contact: emailOrPhone,
+      expiresAt: otpData.expiresAt,
+    };
   } catch (error) {
-    return false;
+    console.error("❌ Error in registerUserWithEmailOrPhoneAndOtp:", error);
+    throw new ApiError(
+      statusCode.INTERNAL_SERVER_ERROR,
+      error.message || "Something went wrong"
+    );
   }
 };
 

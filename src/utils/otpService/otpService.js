@@ -5,7 +5,7 @@ const sgMail = require("@sendgrid/mail");
 
 const getOtp = () => {
   // return Math.floor(1000 + Math.random() * 9000).toString();
-  return "1234";
+  return "8888";
 };
 
 const sendOtpToPhone = async (phoneNumber) => {
