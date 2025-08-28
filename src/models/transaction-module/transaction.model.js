@@ -9,7 +9,7 @@ const transactionSchema = new mongoose.Schema(
   {
     transactionId: { type: String, required: true, unique: true }, // UUID
     momoRefId: { type: String, default: null },
-     userId: {
+    userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       index: true,
@@ -21,12 +21,12 @@ const transactionSchema = new mongoose.Schema(
       index: true,
       default: null,
     },
-   hotelManagerId: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "Hotel-Manager", 
-  index: true,
-  default: null,
-},
+    hotelManagerId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Hotel-Manager",
+      index: true,
+      default: null,
+    },
 
     adminId: {
       type: mongoose.Schema.Types.ObjectId,

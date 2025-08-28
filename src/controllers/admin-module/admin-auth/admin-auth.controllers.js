@@ -1,5 +1,7 @@
-const 
-  {AdminModel, defaultPermissions} = require("../../../models/admin-module/admin/admin.model");
+const {
+  AdminModel,
+  defaultPermissions,
+} = require("../../../models/admin-module/admin/admin.model");
 const Joi = require("joi");
 const statusCode = require("../../../utils/constants/statusCode");
 const {
@@ -20,18 +22,18 @@ const {
   saveDeviceToken,
   removeDeviceToken,
 } = require("../../../utils/services/deviceToken.services");
+const DriverBasicDetails = require("../../../models/new-driver-module/basic-details/basic-details.model");
 const AdminDeviceTokenModel = require("../../../models/admin-module/admin-device-tokens/admin-device-tokens.model");
 const {
   TypeOfUser,
   adminAuthorities,
 } = require("../../../utils/constants/constants");
 
-const UserModel = require("../../../models/user-module/users/user.model")
-const {driverBasicDetailSchema } = require("../../../models/new-driver-module/basic-details/basic-details.model")
-const BusOperatorModel = require("../../../models/bus-module/bus-operator/bus-operator.model")
-const Admin = require("../../../models/admin-module/admin/admin.model")
-const HotelManagerModel = require("../../../models/hotel-module/hotel-manager/hotel-manager.model")
-const { logActivity } = require("../../../utils/ActivityLog/ActivityLog")
+const UserModel = require("../../../models/user-module/users/user.model");
+const BusOperatorModel = require("../../../models/bus-module/bus-operator/bus-operator.model");
+const Admin = require("../../../models/admin-module/admin/admin.model");
+const HotelManagerModel = require("../../../models/hotel-module/hotel-manager/hotel-manager.model");
+const { logActivity } = require("../../../utils/ActivityLog/ActivityLog");
 const { format, differenceInCalendarDays } = require("date-fns");
 const { getFinalPrice } = require("../../../utils/services/prices.services");
 const {
@@ -44,10 +46,14 @@ const { hash_rounds } = process.env;
 const {
   busOperatorAuthorities,
 } = require("../../../utils/constants/constants");
-const BranchModel = require("../../../models/admin-module/branch/branches.model")
-const { UserActivityModel } = require("../../../models/admin-module/ActivityModel/ActivityModel");
-const  {CouponModel} = require("../../../models/admin-module/Admin-coupon/adminCouponModel")
-const {  formatDistanceToNowStrict } = require("date-fns");
+const BranchModel = require("../../../models/admin-module/branch/branches.model");
+const {
+  UserActivityModel,
+} = require("../../../models/admin-module/ActivityModel/ActivityModel");
+const {
+  CouponModel,
+} = require("../../../models/admin-module/Admin-coupon/adminCouponModel");
+const { formatDistanceToNowStrict } = require("date-fns");
 const Transaction = require("../../../models/transaction-module/transaction.model");
 
 // Register Admin
@@ -155,7 +161,7 @@ const Transaction = require("../../../models/transaction-module/transaction.mode
 //     .json(new ApiResponse(statusCode.OK, data, `created successfully`));
 // });
 const addAdmins = catchAsyncError(async (req, res, next) => {
-  const { email, userName, phoneNumber, branch, role, permissions } = req.body; 
+  const { email, userName, phoneNumber, branch, role, permissions } = req.body;
   const { _id, performedBy } = req.user;
 
   const isRoleValid = ["Admin", "SubAdmin"].includes(role);
@@ -163,15 +169,23 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.BAD_REQUEST, `You can add Admin role only`);
   }
 
-  const reqField = ["email", "userName", "phoneNumber", "branch", "role", "permissions"]; 
+  const reqField = [
+    "email",
+    "userName",
+    "phoneNumber",
+    "branch",
+    "role",
+    "permissions",
+  ];
   validateRequestBody(reqField, req.body);
 
-
   if (typeof permissions !== "object" || Array.isArray(permissions)) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Permissions must be an object with boolean values");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Permissions must be an object with boolean values"
+    );
   }
 
- 
   const validPermissions = Object.keys(defaultPermissions);
   const invalidPermissions = Object.keys(permissions).filter(
     (key) => !validPermissions.includes(key)
@@ -190,13 +204,12 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.BAD_REQUEST, "Admin already exist");
   }
 
-
   const defaultPassword = "Admin@123";
 
   const newUser = new AdminModel({
     email,
     userName,
-    password: defaultPassword, 
+    password: defaultPassword,
     phoneNumber,
     role,
     branch,
@@ -204,7 +217,7 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
     parentUserId: _id,
     createdBy: performedBy,
     updatedBy: performedBy,
-    reportingManager: req.body.reportingManager 
+    reportingManager: req.body.reportingManager,
   });
 
   await newUser.save();
@@ -212,20 +225,23 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
   const logs = await logActivity({
     userId: newUser._id,
     activity: `Created a new ${role} with username: ${userName}`,
-    performedBy: _id,   // use logged-in user’s id
+    performedBy: _id, // use logged-in user’s id
   });
 
   const userObject = newUser.toObject();
   delete userObject.password; // don’t return password in response
 
-  const { accessToken, refreshToken } = await generateTokens(newUser, TypeOfUser.ADMIN);
+  const { accessToken, refreshToken } = await generateTokens(
+    newUser,
+    TypeOfUser.ADMIN
+  );
   setTokenCookies(res, accessToken, refreshToken);
 
   const data = {
     accessToken,
     refreshToken,
     user: userObject,
-    logs
+    logs,
   };
 
   return res
@@ -233,7 +249,6 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
     .json(new ApiResponse(statusCode.OK, data, `created successfully`));
 });
 const addSubAdmins = catchAsyncError(async (req, res, next) => {
-
   const { _id: performedBy, role: loggedInRole, branch: userBranch } = req.user;
 
   // Joi schema
@@ -260,7 +275,15 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
   const { error, value } = schema.validate(req.body);
   if (error) throw new ApiError(400, error.details[0].message);
 
-  let { email, userName, phoneNumber, role, branch, reportingManger, permissions } = value;
+  let {
+    email,
+    userName,
+    phoneNumber,
+    role,
+    branch,
+    reportingManger,
+    permissions,
+  } = value;
 
   // Admin creating a SubAdmin → reportingManger is Admin's _id
   if (loggedInRole === "Admin") {
@@ -268,8 +291,15 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
   }
 
   // Admin can only create SubAdmin under own branch
-  if (loggedInRole === "Admin" && branch && branch.toString() !== userBranch.toString()) {
-    throw new ApiError(403, "Admin can only create SubAdmin under their own branch");
+  if (
+    loggedInRole === "Admin" &&
+    branch &&
+    branch.toString() !== userBranch.toString()
+  ) {
+    throw new ApiError(
+      403,
+      "Admin can only create SubAdmin under their own branch"
+    );
   }
 
   // Only Admin or SuperAdmin can create SubAdmin
@@ -299,7 +329,7 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
     createdBy: performedBy,
     updatedBy: performedBy,
     password: defaultPassword,
-         reportingManager: req.body.reportingManager 
+    reportingManager: req.body.reportingManager,
   });
 
   await newUser.save();
@@ -314,18 +344,26 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
   const userObject = newUser.toObject();
   delete userObject.password;
 
-  const { accessToken, refreshToken } = await generateTokens(newUser, TypeOfUser.ADMIN);
+  const { accessToken, refreshToken } = await generateTokens(
+    newUser,
+    TypeOfUser.ADMIN
+  );
   setTokenCookies(res, accessToken, refreshToken);
 
   return res
     .status(200)
-    .json(new ApiResponse(200, { accessToken, refreshToken, user: userObject, logs }, `${role} created successfully`));
+    .json(
+      new ApiResponse(
+        200,
+        { accessToken, refreshToken, user: userObject, logs },
+        `${role} created successfully`
+      )
+    );
 });
 // ======================|| LOGIN USER ||========================
 const loginAdmin = catchAsyncError(async (req, res, next) => {
   const { username, password } = req.body;
-  console.log(req.body)
-
+  console.log(req.body);
 
   if (!username?.trim() || !password?.trim()) {
     throw new ApiError(
@@ -370,29 +408,25 @@ const loginAdmin = catchAsyncError(async (req, res, next) => {
   setTokenCookies(res, accessToken, refreshToken);
 
   const activityLog = await logActivity({
-  userId: existingUser._id,
-  activity: "Logged in successfully",
-  type: "login",      
-  performedBy: existingUser._id  
-});
-
-
+    userId: existingUser._id,
+    activity: "Logged in successfully",
+    type: "login",
+    performedBy: existingUser._id,
+  });
 
   const data = {
     accessToken,
     refreshToken,
-    UserActivity: activityLog
+    UserActivity: activityLog,
   };
-
 
   // Optionally include full user object
   // user: userObject,
 
-
   return res
     .status(statusCode.OK)
     .json(new ApiResponse(statusCode.OK, data, `Login Successfully`));
-})
+});
 const saveDeviceTokens = catchAsyncError(async (req, res, next) => {
   const { token, deviceType } = req.body;
 
@@ -410,22 +444,23 @@ const saveDeviceTokens = catchAsyncError(async (req, res, next) => {
 
   // Log activity and get formatted log
   const activityLog = await logActivity({
-  userId: req.user._id,
-  activity: "Saved device token",
-  type: "update",       // Use a proper type: "login", "create", "update", "delete", "download"
-  performedBy: req.user._id
-});
-
+    userId: req.user._id,
+    activity: "Saved device token",
+    type: "update", // Use a proper type: "login", "create", "update", "delete", "download"
+    performedBy: req.user._id,
+  });
 
   // Build final response
   const data = {
     result: response,
-    UserActivity: activityLog
+    UserActivity: activityLog,
   };
 
   return res
     .status(statusCode.OK)
-    .json(new ApiResponse(statusCode.OK, data, "Device token saved successfully"));
+    .json(
+      new ApiResponse(statusCode.OK, data, "Device token saved successfully")
+    );
 });
 const removeDeviceTokens = catchAsyncError(async (req, res, next) => {
   const { token, deviceType } = req.body;
@@ -443,22 +478,24 @@ const removeDeviceTokens = catchAsyncError(async (req, res, next) => {
   );
 
   // Log activity and get formatted log
- const activityLog = await logActivity({
+  const activityLog = await logActivity({
     userId: req.user._id,
     activity: "Removed device token",
-    type: "delete",           // Type is delete since we are removing
-    performedBy: req.user._id
+    type: "delete", // Type is delete since we are removing
+    performedBy: req.user._id,
   });
 
   // Build final response
   const data = {
     result: response,
-    UserActivity: activityLog
+    UserActivity: activityLog,
   };
 
   return res
     .status(statusCode.OK)
-    .json(new ApiResponse(statusCode.OK, data, "Device token removed successfully"));
+    .json(
+      new ApiResponse(statusCode.OK, data, "Device token removed successfully")
+    );
 });
 const getAllAdmins = catchAsyncError(async (req, res, next) => {
   const page = parseInt(req.query.page) || 1;
@@ -487,17 +524,24 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
     if (Array.isArray(user.permissions)) {
       // if it's an array of booleans or objects
       truePermissionCount = user.permissions.filter(
-        (perm) => perm === true || (typeof perm === "object" && Object.values(perm).some(Boolean))
+        (perm) =>
+          perm === true ||
+          (typeof perm === "object" && Object.values(perm).some(Boolean))
       ).length;
-    } else if (typeof user.permissions === "object" && user.permissions !== null) {
+    } else if (
+      typeof user.permissions === "object" &&
+      user.permissions !== null
+    ) {
       // if it's a plain object like {create: true, edit: false}
-      truePermissionCount = Object.values(user.permissions).filter(Boolean).length;
+      truePermissionCount = Object.values(user.permissions).filter(
+        Boolean
+      ).length;
     }
 
     return {
       _id: user._id,
       name: user.userName,
-      phoneNumber:user.phoneNumber,
+      phoneNumber: user.phoneNumber,
       reportingManger: user.reportingManger,
       email: user.email,
       role: user.role,
@@ -505,32 +549,33 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
       createdAt: user.createdAt,
       branch: user.branch
         ? {
-          branchId: user.branch?._id,
-          name: user.branch.name,
-          location: user.branch.location,
-          createdAt: user.branch.createdAt,
-        }
+            branchId: user.branch?._id,
+            name: user.branch.name,
+            location: user.branch.location,
+            createdAt: user.branch.createdAt,
+          }
         : null,
     };
   });
 
   const results = {
     data: {
-    success:true,
-    message: " fetched successfully",
-    total: totalUser,
-    page,
-    limit,
-    sortBy: "createdAt",
-    order: "desc",
-    data: users,
-
+      success: true,
+      message: " fetched successfully",
+      total: totalUser,
+      page,
+      limit,
+      sortBy: "createdAt",
+      order: "desc",
+      data: users,
     },
   };
 
   return res
     .status(statusCode.OK)
-    .json(new ApiResponse(statusCode.OK, results.data, "Data found successfully"));
+    .json(
+      new ApiResponse(statusCode.OK, results.data, "Data found successfully")
+    );
 });
 const getSubAdminsByBranch = catchAsyncError(async (req, res) => {
   const { role, _id } = req.user; // authenticated admin
@@ -547,13 +592,13 @@ const getSubAdminsByBranch = catchAsyncError(async (req, res) => {
 
   // 2️⃣ Find all subadmins under the same branch
   const subAdmins = await AdminModel.find({
-    branch: admin.branch,   // same branch as admin
-    role: "SubAdmin"
+    branch: admin.branch, // same branch as admin
+    role: "SubAdmin",
   }).select("-password");
 
-  return res.status(200).json(
-    new ApiResponse(200, subAdmins, "SubAdmins fetched successfully")
-  );
+  return res
+    .status(200)
+    .json(new ApiResponse(200, subAdmins, "SubAdmins fetched successfully"));
 });
 const getAdminById = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
@@ -611,7 +656,9 @@ const getAdminById = catchAsyncError(async (req, res, next) => {
 
   return res
     .status(statusCode.OK)
-    .json(new ApiResponse(statusCode.OK, formattedAdmin, "Data found successfully"));
+    .json(
+      new ApiResponse(statusCode.OK, formattedAdmin, "Data found successfully")
+    );
 });
 
 const getProfile = catchAsyncError(async (req, res, next) => {
@@ -636,8 +683,8 @@ const updateAvatar = catchAsyncError(async (req, res, next) => {
   const activityLog = await logActivity({
     userId: req.user._id,
     activity: "Updated profile avatar",
-    type: "update",            // Type of activity
-    performedBy: req.user._id
+    type: "update", // Type of activity
+    performedBy: req.user._id,
   });
 
   return res.status(statusCode.OK).json({
@@ -654,8 +701,8 @@ const changePassword = catchAsyncError(async (req, res, next) => {
   const activityLog = await logActivity({
     userId: req.user._id,
     activity: "Changed password",
-    type: "update",        
-    performedBy: req.user._id
+    type: "update",
+    performedBy: req.user._id,
   });
 
   return res.status(statusCode.OK).json({
@@ -673,8 +720,8 @@ const resetPassword = catchAsyncError(async (req, res, next) => {
   const activityLog = await logActivity({
     userId: req.user._id,
     activity: "Reset password",
-    type: "update",          // Type is update
-    performedBy: req.user._id
+    type: "update", // Type is update
+    performedBy: req.user._id,
   });
 
   return res.status(statusCode.OK).json({
@@ -689,14 +736,10 @@ const addSuperAdmin = catchAsyncError(async (req, res, next) => {
   validateRequestBody(reqField, req.body);
 
   const existingUser = await AdminModel.findOne({
-    $or: [
-      { email },
-      { phoneNumber },
-      { userName },
-    ],
+    $or: [{ email }, { phoneNumber }, { userName }],
   });
 
-  console.log(existingUser)
+  console.log(existingUser);
   if (existingUser) {
     throw new ApiError(statusCode.BAD_REQUEST, "SuperAdmin already exists");
   }
@@ -738,28 +781,35 @@ const addSuperAdmin = catchAsyncError(async (req, res, next) => {
     TypeOfUser.ADMIN
   );
   setTokenCookies(res, accessToken, refreshToken);
-  
+
   const activityLog = await logActivity({
     userId: newUser._id,
     activity: "SuperAdmin account created",
-    type: "create",          // Type is create since this is a creation action
-    performedBy: newUser._id // The SuperAdmin is creating their own account
+    type: "create", // Type is create since this is a creation action
+    performedBy: newUser._id, // The SuperAdmin is creating their own account
   });
 
   return res.status(statusCode.OK).json(
-    new ApiResponse(statusCode.OK, {
-      accessToken,
-      refreshToken,
-      user: userObject,
-      userActivity: activityLog
-    }, "SuperAdmin created successfully")
+    new ApiResponse(
+      statusCode.OK,
+      {
+        accessToken,
+        refreshToken,
+        user: userObject,
+        userActivity: activityLog,
+      },
+      "SuperAdmin created successfully"
+    )
   );
 });
 const updateAdmin = catchAsyncError(async (req, res, next) => {
   const { adminId } = req.params;
   const { _id: updatedBy, role: currentUserRole } = req.user;
   if (currentUserRole !== "SuperAdmin") {
-    throw new ApiError(statusCode.FORBIDDEN, "Only SuperAdmin can update admins");
+    throw new ApiError(
+      statusCode.FORBIDDEN,
+      "Only SuperAdmin can update admins"
+    );
   }
   if (!adminId) {
     throw new ApiError(statusCode.BAD_REQUEST, "Admin ID is required");
@@ -800,42 +850,49 @@ const updateAdmin = catchAsyncError(async (req, res, next) => {
     admin.role = role;
   }
 
-if (permissions && typeof permissions === "object") {
-  const allowedPermissions = Object.keys(defaultPermissions); 
+  if (permissions && typeof permissions === "object") {
+    const allowedPermissions = Object.keys(defaultPermissions);
 
-  const updatedPermissions = { ...admin.permissions };
+    const updatedPermissions = { ...admin.permissions };
 
-  Object.keys(permissions).forEach((perm) => {
-    if (allowedPermissions.includes(perm)) {
-      updatedPermissions[perm] = !!permissions[perm];
-    }
-  });
+    Object.keys(permissions).forEach((perm) => {
+      if (allowedPermissions.includes(perm)) {
+        updatedPermissions[perm] = !!permissions[perm];
+      }
+    });
 
-  admin.permissions = updatedPermissions;
-}
+    admin.permissions = updatedPermissions;
+  }
 
   await admin.save();
 
-   const logs = await logActivity({
-    userId: admin._id,                  
-    activity: `Updated admin: ${admin.userName}`, 
-    type: "update",                    
-    performedBy: updatedBy             
+  const logs = await logActivity({
+    userId: admin._id,
+    activity: `Updated admin: ${admin.userName}`,
+    type: "update",
+    performedBy: updatedBy,
   });
 
   const userObject = admin.toObject();
   delete userObject.password;
 
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      { user: userObject , logs},
-      "updated successfully"
-    )
-)});
-  const updateSubAdmin = catchAsyncError(async (req, res, next) => {
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { user: userObject, logs },
+        "updated successfully"
+      )
+    );
+});
+const updateSubAdmin = catchAsyncError(async (req, res, next) => {
   const { adminId } = req.params;
-  const { _id: updatedBy, role: currentUserRole, branch: currentUserBranch } = req.user;
+  const {
+    _id: updatedBy,
+    role: currentUserRole,
+    branch: currentUserBranch,
+  } = req.user;
 
   if (!adminId) {
     throw new ApiError(statusCode.BAD_REQUEST, "Admin ID is required");
@@ -921,13 +978,15 @@ if (permissions && typeof permissions === "object") {
   const userObject = admin.toObject();
   delete userObject.password;
 
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      { user: userObject, logs },
-      "updated successfully"
-    )
-  );
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { user: userObject, logs },
+        "updated successfully"
+      )
+    );
 });
 const createCoupon = catchAsyncError(async (req, res) => {
   const {
@@ -942,11 +1001,14 @@ const createCoupon = catchAsyncError(async (req, res) => {
     expiryDate,
     status,
   } = req.body;
-  console.log(minOrderAmount)
+  console.log(minOrderAmount);
 
   const { _id: performedBy, role } = req.user;
   if (!["SuperAdmin", "Admin"].includes(role)) {
-    throw new ApiError(statusCode.FORBIDDEN, "Only SuperAdmin or Admin can create coupons");
+    throw new ApiError(
+      statusCode.FORBIDDEN,
+      "Only SuperAdmin or Admin can create coupons"
+    );
   }
   const existingCoupon = await CouponModel.findOne({ couponCode });
   if (existingCoupon) {
@@ -965,7 +1027,7 @@ const createCoupon = catchAsyncError(async (req, res) => {
     status,
     createdBy: performedBy,
   });
-   const activityLog = await logActivity({
+  const activityLog = await logActivity({
     userId: performedBy,
     activity: `Created a new coupon ${couponName} (${couponCode})`,
     performedBy,
@@ -975,17 +1037,19 @@ const createCoupon = catchAsyncError(async (req, res) => {
     success: true,
     message: "Coupon created successfully",
     data: newCoupon,
-    activityLog
+    activityLog,
   });
 });
 const updateCoupon = catchAsyncError(async (req, res) => {
-  const {couponId } = req.params;
+  const { couponId } = req.params;
   const updateData = req.body;
   const { _id: performedBy, role } = req.user;
 
-
   if (!["SuperAdmin", "Admin"].includes(role)) {
-    throw new ApiError(statusCode.FORBIDDEN, "Only SuperAdmin or Admin can update coupons");
+    throw new ApiError(
+      statusCode.FORBIDDEN,
+      "Only SuperAdmin or Admin can update coupons"
+    );
   }
 
   const coupon = await CouponModel.findById(couponId);
@@ -996,7 +1060,6 @@ const updateCoupon = catchAsyncError(async (req, res) => {
   Object.assign(coupon, updateData, { updatedBy: performedBy });
   await coupon.save();
 
- 
   const activityLog = await logActivity({
     userId: performedBy,
     activity: `Updated coupon ${coupon.couponName} (${coupon.couponCode})`,
@@ -1007,7 +1070,7 @@ const updateCoupon = catchAsyncError(async (req, res) => {
     success: true,
     message: "Coupon updated successfully",
     data: coupon,
-    activityLog
+    activityLog,
   });
 });
 const updateCouponStatus = catchAsyncError(async (req, res) => {
@@ -1044,7 +1107,7 @@ const updateCouponStatus = catchAsyncError(async (req, res) => {
     success: true,
     data: {
       oldStatus,
-      newStatus: status
+      newStatus: status,
     },
   });
 });
@@ -1052,7 +1115,10 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
   const { _id, role } = req.user;
 
   if (!["SuperAdmin", "Admin"].includes(role)) {
-    throw new ApiError(statusCode.FORBIDDEN, "Only SuperAdmin or Admin can view all coupons");
+    throw new ApiError(
+      statusCode.FORBIDDEN,
+      "Only SuperAdmin or Admin can view all coupons"
+    );
   }
 
   const {
@@ -1121,7 +1187,10 @@ const getCouponById = catchAsyncError(async (req, res) => {
   const { _id, role } = req.user;
 
   if (!["SuperAdmin", "Admin"].includes(role)) {
-    throw new ApiError(statusCode.FORBIDDEN, "Only SuperAdmin or Admin can view coupon");
+    throw new ApiError(
+      statusCode.FORBIDDEN,
+      "Only SuperAdmin or Admin can view coupon"
+    );
   }
 
   const { id } = req.params; // coupon id from params
@@ -1167,7 +1236,9 @@ const getUserActivities = async (req, res) => {
     const { page = 1, limit = 10, type, startDate, endDate } = req.query;
 
     if (!userId) {
-      return res.status(400).json({ success: false, message: "User ID is required" });
+      return res
+        .status(400)
+        .json({ success: false, message: "User ID is required" });
     }
 
     const pageNum = parseInt(page, 10);
@@ -1196,7 +1267,9 @@ const getUserActivities = async (req, res) => {
     const total = await UserActivityModel.countDocuments(filter);
 
     if (!activities.length) {
-      return res.status(404).json({ success: false, message: "No activities found for this user" });
+      return res
+        .status(404)
+        .json({ success: false, message: "No activities found for this user" });
     }
 
     const formatActivityTime = (date) => {
@@ -1226,7 +1299,8 @@ const getUserActivities = async (req, res) => {
     }));
 
     const recentActivity = formattedActivities[0] || null;
-    const lastActivity = formattedActivities.length > 1 ? formattedActivities[1] : null;
+    const lastActivity =
+      formattedActivities.length > 1 ? formattedActivities[1] : null;
 
     res.status(200).json({
       success: true,
@@ -1234,221 +1308,306 @@ const getUserActivities = async (req, res) => {
       page: pageNum,
       limit: limitNum,
       totalPages: Math.ceil(total / limitNum),
-      filters: { type: type || null, startDate: startDate || null, endDate: endDate || null },
+      filters: {
+        type: type || null,
+        startDate: startDate || null,
+        endDate: endDate || null,
+      },
       lastActivity,
       recentActivity,
       data: formattedActivities,
     });
   } catch (err) {
     console.error("Error fetching activities:", err.message);
-    res.status(500).json({ success: false, message: "Server error while fetching activities" });
+    res.status(500).json({
+      success: false,
+      message: "Server error while fetching activities",
+    });
   }
 };
+
+// const getTransactionHistory = async (req, res) => {
+//   try {
+//     const {
+//       page = 1,
+//       limit = 10,
+//       sortBy = "createdAt",
+//       order = "desc",
+//     } = req.query;
+
+//     // Pagination + Sorting
+//     const skip = (page - 1) * limit;
+//     const sortOrder = order === "desc" ? -1 : 1;
+
+//     // === 1. Transactions with lookups ===
+//     const transactions = await Transaction.aggregate([
+//       { $sort: { [sortBy]: sortOrder } },
+//       { $skip: skip },
+//       { $limit: Number(limit) },
+
+//       // Lookup Booking
+//       {
+//         $lookup: {
+//           from: "bookings",
+//           localField: "bookingId",
+//           foreignField: "_id",
+//           as: "booking",
+//         },
+//       },
+//       { $unwind: { path: "$booking", preserveNullAndEmptyArrays: true } },
+
+//       // Lookup User from Booking
+//       {
+//         $lookup: {
+//           from: "users",
+//           localField: "booking.userId",
+//           foreignField: "_id",
+//           as: "bookingUser",
+//         },
+//       },
+//       { $unwind: { path: "$bookingUser", preserveNullAndEmptyArrays: true } },
+
+//       // Lookup direct userId
+//       {
+//         $lookup: {
+//           from: "users",
+//           localField: "userId",
+//           foreignField: "_id",
+//           as: "directUser",
+//         },
+//       },
+//       { $unwind: { path: "$directUser", preserveNullAndEmptyArrays: true } },
+
+//       // Lookup busOperator
+//       {
+//         $lookup: {
+//           from: "busoperators",
+//           localField: "busOperatorId",
+//           foreignField: "_id",
+//           as: "busOperator",
+//         },
+//       },
+//       { $unwind: { path: "$busOperator", preserveNullAndEmptyArrays: true } },
+
+//       // Lookup hotelManager
+//       {
+//         $lookup: {
+//           from: "hotelmanagers",
+//           localField: "hotelManagerId",
+//           foreignField: "_id",
+//           as: "hotelManager",
+//         },
+//       },
+//       { $unwind: { path: "$hotelManager", preserveNullAndEmptyArrays: true } },
+
+//       // Lookup admin
+//       {
+//         $lookup: {
+//           from: "admins",
+//           localField: "adminId",
+//           foreignField: "_id",
+//           as: "admin",
+//         },
+//       },
+//       { $unwind: { path: "$admin", preserveNullAndEmptyArrays: true } },
+
+//       // Lookup driver
+//       {
+//         $lookup: {
+//           from: "drivers",
+//           localField: "driverId",
+//           foreignField: "_id",
+//           as: "driver",
+//         },
+//       },
+//       { $unwind: { path: "$driver", preserveNullAndEmptyArrays: true } },
+
+//       // === Final projection ===
+//       {
+//         $project: {
+//           transactionId: 1,
+//           type: 1,
+//           amount: 1,
+//           createdAt: 1,
+//           status: 1,
+//           description: 1,
+
+//           // Priority for user name:
+//           user: {
+//             $ifNull: [
+//               "$directUser.fullName",
+//               {
+//                 $ifNull: [
+//                   "$busOperator.name",
+//                   {
+//                     $ifNull: [
+//                       "$hotelManager.fullName",
+//                       {
+//                         $ifNull: [
+//                           "$hotelManager.name",
+//                           {
+//                             $ifNull: [
+//                               "$admin.fullName",
+//                               {
+//                                 $ifNull: [
+//                                   "$driver.fullName",
+//                                   "$bookingUser.fullName",
+//                                 ],
+//                               },
+//                             ],
+//                           },
+//                         ],
+//                       },
+//                     ],
+//                   },
+//                 ],
+//               },
+//             ],
+//           },
+//         },
+//       },
+//     ]);
+
+//     // === 2. Wallet Stats ===
+//     const [totalTransactions, totalCredits, totalDebits, pendingWithdrawals] =
+//       await Promise.all([
+//         Transaction.countDocuments(),
+//         Transaction.aggregate([
+//           { $match: { type: "CREDIT", status: "SUCCESS" } },
+//           { $group: { _id: null, total: { $sum: "$amount" } } },
+//         ]),
+//         Transaction.aggregate([
+//           { $match: { type: "DEBIT", status: "SUCCESS" } },
+//           { $group: { _id: null, total: { $sum: "$amount" } } },
+//         ]),
+//         Transaction.aggregate([
+//           { $match: { type: "DEBIT", status: "PENDING" } },
+//           { $group: { _id: null, total: { $sum: "$amount" } } },
+//         ]),
+//       ]);
+
+//     // === 3. Format transactions ===
+//     const formattedTransactions = transactions.map((txn) => ({
+//       transactionId: txn.transactionId,
+//       user: txn.user || "Unknown",
+//       type: txn.type.charAt(0).toUpperCase() + txn.type.slice(1).toLowerCase(),
+//       amount: `$${txn.amount.toFixed(2)}`,
+//       date: new Date(txn.createdAt).toLocaleDateString("en-US"),
+//       status:
+//         txn.status === "SUCCESS"
+//           ? "Completed"
+//           : txn.status.charAt(0).toUpperCase() +
+//             txn.status.slice(1).toLowerCase(),
+//       description: txn.description || "",
+//     }));
+
+//     // === 4. Response ===
+//     return res.status(200).json({
+//       success: true,
+//       message: "Fetched successfully",
+//       walletManagement: {
+//         totalTransactions,
+//         totalCredits: `$${(totalCredits[0]?.total || 0).toFixed(2)}`,
+//         totalDebits: `$${(totalDebits[0]?.total || 0).toFixed(2)}`,
+//         pendingWithdrawals: `$${(pendingWithdrawals[0]?.total || 0).toFixed(2)}`,
+//       },
+//       transactionHistory: {
+//         page: Number(page),
+//         limit: Number(limit),
+//         sortBy,
+//         order,
+//         transactions: formattedTransactions,
+//       },
+//     });
+//   } catch (err) {
+//     console.error("Error fetching transactions:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Server error while fetching transactions",
+//     });
+//   }
+// };
+
 const getTransactionHistory = async (req, res) => {
   try {
-    const { page = 1, limit = 10, sortBy = "createdAt", order = "desc" } = req.query;
-
-    // Pagination + Sorting
+    // Pagination defaults
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
-    const sortOrder = order === "desc" ? -1 : 1;
 
-    // === 1. Transactions with lookups ===
-    const transactions = await Transaction.aggregate([
-      { $sort: { [sortBy]: sortOrder } },
-      { $skip: skip },
-      { $limit: Number(limit) },
+    // Fetch transactions (LIFO)
+    const transactions = await Transaction.find({})
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit);
 
-      // Lookup Booking
-      {
-        $lookup: {
-          from: "bookings",
-          localField: "bookingId",
-          foreignField: "_id",
-          as: "booking",
-        },
-      },
-      { $unwind: { path: "$booking", preserveNullAndEmptyArrays: true } },
+    const results = [];
 
-      // Lookup User from Booking
-      {
-        $lookup: {
-          from: "users",
-          localField: "booking.userId",
-          foreignField: "_id",
-          as: "bookingUser",
-        },
-      },
-      { $unwind: { path: "$bookingUser", preserveNullAndEmptyArrays: true } },
+    for (const txn of transactions) {
+      let name = null;
+      let role = null;
 
-      // Lookup direct userId
-      {
-        $lookup: {
-          from: "users",
-          localField: "userId",
-          foreignField: "_id",
-          as: "directUser",
-        },
-      },
-      { $unwind: { path: "$directUser", preserveNullAndEmptyArrays: true } },
+      if (txn.userId) {
+        const user = await UserModel.findById(txn.userId, "fullName role");
+        name = user?.fullName || "Unknown User";
+        role = user?.role || "user";
+      } else if (txn.busOperatorId) {
+        const op = await BusOperatorModel.findById(
+          txn.busOperatorId,
+          "fullName role"
+        );
+        name = op?.fullName || "Unknown Bus Operator";
+        role = op?.role || "bus-operator";
+      } else if (txn.hotelManagerId) {
+        const hm = await HotelManagerModel.findById(
+          txn.hotelManagerId,
+          "fullName role"
+        );
+        name = hm?.fullName || "Unknown Hotel Manager";
+        role = hm?.role || "hotel-manager";
+      } else if (txn.adminId) {
+        const admin = await AdminModel.findById(txn.adminId, "userName role");
+        name = admin?.userName || "Unknown Admin";
+        role = admin?.role || null;
+      } else if (txn.driverId) {
+        const driver = await DriverBasicDetails.findOne(
+          { driverId: txn.driverId },
+          "fullName"
+        );
+        name = driver?.fullName || "Unknown Driver";
+        role = driver?.role || "Driver";
+      } else {
+        name = "System";
+        role = "System";
+      }
 
-      // Lookup busOperator
-      {
-        $lookup: {
-          from: "busoperators",
-          localField: "busOperatorId",
-          foreignField: "_id",
-          as: "busOperator",
-        },
-      },
-      { $unwind: { path: "$busOperator", preserveNullAndEmptyArrays: true } },
+      results.push({
+        transactionId: txn.transactionId,
+        name,
+        role,
+        type: txn.type,
+        amount: txn.amount,
+        date: txn.createdAt,
+        status: txn.status,
+        description: txn.description,
+      });
+    }
 
-      // Lookup hotelManager
-      {
-        $lookup: {
-          from: "hotelmanagers",
-          localField: "hotelManagerId",
-          foreignField: "_id",
-          as: "hotelManager",
-        },
-      },
-      { $unwind: { path: "$hotelManager", preserveNullAndEmptyArrays: true } },
+    // Total count for pagination
+    const total = await Transaction.countDocuments();
 
-      // Lookup admin
-      {
-        $lookup: {
-          from: "admins",
-          localField: "adminId",
-          foreignField: "_id",
-          as: "admin",
-        },
-      },
-      { $unwind: { path: "$admin", preserveNullAndEmptyArrays: true } },
-
-      // Lookup driver
-      {
-        $lookup: {
-          from: "drivers",
-          localField: "driverId",
-          foreignField: "_id",
-          as: "driver",
-        },
-      },
-      { $unwind: { path: "$driver", preserveNullAndEmptyArrays: true } },
-
-      // === Final projection ===
-      {
-        $project: {
-          transactionId: 1,
-          type: 1,
-          amount: 1,
-          createdAt: 1,
-          status: 1,
-          description: 1,
-
-          // Priority for user name:
-          user: {
-            $ifNull: [
-              "$directUser.fullName",
-              {
-                $ifNull: [
-                  "$busOperator.name",
-                  {
-                    $ifNull: [
-                      "$hotelManager.fullName",
-                      {
-                        $ifNull: [
-                          "$hotelManager.name",
-                          {
-                            $ifNull: [
-                              "$admin.fullName",
-                              {
-                                $ifNull: ["$driver.fullName", "$bookingUser.fullName"],
-                              },
-                            ],
-                          },
-                        ],
-                      },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        },
-      },
-    ]);
-
-    // === 2. Wallet Stats ===
-    const [totalTransactions, totalCredits, totalDebits, pendingWithdrawals] =
-      await Promise.all([
-        Transaction.countDocuments(),
-        Transaction.aggregate([
-          { $match: { type: "CREDIT", status: "SUCCESS" } },
-          { $group: { _id: null, total: { $sum: "$amount" } } },
-        ]),
-        Transaction.aggregate([
-          { $match: { type: "DEBIT", status: "SUCCESS" } },
-          { $group: { _id: null, total: { $sum: "$amount" } } },
-        ]),
-        Transaction.aggregate([
-          { $match: { type: "DEBIT", status: "PENDING" } },
-          { $group: { _id: null, total: { $sum: "$amount" } } },
-        ]),
-      ]);
-
-    // === 3. Format transactions ===
-    const formattedTransactions = transactions.map((txn) => ({
-      transactionId: txn.transactionId,
-      user: txn.user || "Unknown",
-      type: txn.type.charAt(0).toUpperCase() + txn.type.slice(1).toLowerCase(),
-      amount: `$${txn.amount.toFixed(2)}`,
-      date: new Date(txn.createdAt).toLocaleDateString("en-US"),
-      status:
-        txn.status === "SUCCESS"
-          ? "Completed"
-          : txn.status.charAt(0).toUpperCase() + txn.status.slice(1).toLowerCase(),
-      description: txn.description || "",
-    }));
-
-    // === 4. Response ===
-    return res.status(200).json({
-      success: true,
-      message: "Fetched successfully",
-      walletManagement: {
-        totalTransactions,
-        totalCredits: `$${(totalCredits[0]?.total || 0).toFixed(2)}`,
-        totalDebits: `$${(totalDebits[0]?.total || 0).toFixed(2)}`,
-        pendingWithdrawals: `$${(pendingWithdrawals[0]?.total || 0).toFixed(2)}`,
-      },
-      transactionHistory: {
-        page: Number(page),
-        limit: Number(limit),
-        sortBy,
-        order,
-        transactions: formattedTransactions,
-      },
+    res.json({
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+      totalRecords: total,
+      data: results,
     });
-  } catch (err) {
-    console.error("Error fetching transactions:", err);
-    return res.status(500).json({
-      success: false,
-      message: "Server error while fetching transactions",
-    });
+  } catch (error) {
+    console.error("Error fetching transactions:", error);
+    res.status(500).json({ message: "Internal Server Error" });
   }
 };
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 module.exports = {
   addAdmins,
@@ -1464,16 +1623,13 @@ module.exports = {
   resetPassword,
   createSuperAdmin: addSuperAdmin,
   updateAdmin,
-   updateSubAdmin,
-  getUserActivities ,
+  updateSubAdmin,
+  getUserActivities,
   createCoupon,
-   getCouponById ,
+  getCouponById,
   updateCoupon,
   updateCouponStatus,
-   getAllCoupons ,
-    getSubAdminsByBranch,
-    getTransactionHistory 
-
-
-
+  getAllCoupons,
+  getSubAdminsByBranch,
+  getTransactionHistory,
 };

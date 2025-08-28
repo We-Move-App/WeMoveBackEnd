@@ -41,7 +41,7 @@ const userSchema = new mongoose.Schema(
       minlength: [6, "Password must be at least 6 characters long"],
     },
     avatar: {
-        type:ImageSchema
+      type: ImageSchema,
     },
     role: {
       type: String,
@@ -100,8 +100,8 @@ const userSchema = new mongoose.Schema(
       ref: "Branch",
     },
     socketId: {
-      type:String
-    }
+      type: String,
+    },
   },
   {
     timestamps: true,

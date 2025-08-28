@@ -59,7 +59,11 @@ const AdminSchema = new mongoose.Schema(
       enum: ["SuperAdmin", "Admin", "SubAdmin"],
       required: true,
     },
-   reportingManager: { type: mongoose.Schema.Types.ObjectId, ref: "Admin", default: null },
+    reportingManager: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
+      default: null,
+    },
 
     branch: {
       type: mongoose.Schema.Types.ObjectId,
@@ -108,7 +112,7 @@ AdminSchema.pre("save", function (next) {
       notifications: true,
       roleManagement: true,
       commissionManagement: true,
-      couponManagement: true
+      couponManagement: true,
     };
   }
   next();
