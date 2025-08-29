@@ -17,7 +17,10 @@ const {
   getMonthlyRevenue,
 } = require("./dashboard.aggregations");
 const BusBookingModel = require("../../../models/bus-module/bus-bookings/bus-bookings.model");
-const { RideBookStatusEnum, PaymentStatusEnum } = require("../../../utils/constants/ENUM");
+const {
+  RideBookStatusEnum,
+  PaymentStatusEnum,
+} = require("../../../utils/constants/ENUM");
 
 async function hotelBookings(adminId, filter = "monthly") {
   // ----------------- Step 1: Collect Hotel Booking IDs -----------------
@@ -80,7 +83,10 @@ async function busBookings(adminId, filter = "monthly") {
 async function rideBookings(adminId, filter = "monthly") {
   // ----------------- Step 1: Collect Completed Ride IDs -----------------
   const rides = await RideBookingModel.find(
-    { rideStatus: RideBookStatusEnum.COMPLETED, paymentStatus: PaymentStatusEnum.SUCCESS },
+    {
+      rideStatus: RideBookStatusEnum.COMPLETED,
+      paymentStatus: PaymentStatusEnum.SUCCESS,
+    },
     { bookingId: 1, vehicleType: 1 }
   );
 
@@ -172,7 +178,13 @@ const getTopAnalytics = catchAsyncError(async (req, res) => {
 
   // ----------------- Step 2: Fetch Data Based on Permissions -----------------
   const analyticsData = {};
-  const adminId="ADM001" // TODO need to change
+  const superAdmin = await AdminModel.findOne({ role: "SuperAdmin" });
+  if (!superAdmin) {
+    console.log("Super Admin not found adding to default wallet"); // TODO no need here
+  }
+
+  const adminId = superAdmin?._id || "ADM001"; // TODO need to change
+  console.log(adminId);
 
   if (permissions?.hotelManagement) {
     analyticsData.hotel = await hotelBookings(adminId, "weekly");
@@ -195,13 +207,11 @@ const getTopAnalytics = catchAsyncError(async (req, res) => {
   }
 
   // ----------------- Step 3: Response -----------------
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      analyticsData,
-      "Data fetched successfully"
-    )
-  );
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(statusCode.OK, analyticsData, "Data fetched successfully")
+    );
 });
 
 module.exports = { getTopAnalytics };

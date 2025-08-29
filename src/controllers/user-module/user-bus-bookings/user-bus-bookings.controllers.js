@@ -25,6 +25,9 @@ const {
   TransactionTypeEnum,
 } = require("../../../utils/constants/ENUM");
 const Commission = require("../../../models/admin-module/commission-management/commission.model");
+const {
+  AdminModel,
+} = require("../../../models/admin-module/admin/admin.model");
 
 const getUserBusBookings = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
@@ -279,8 +282,15 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       { session, new: true, upsert: true, setDefaultsOnInsert: true }
     );
 
+    const superAdmin = await AdminModel.findOne({ role: "SuperAdmin" });
+    if (!superAdmin) {
+      console.log("Super Admin not found adding to default wallet ADM001");
+    }
+
+    const adminId = superAdmin?._id || "ADM001";
+
     await WalletModel.findOneAndUpdate(
-      { userId: "ADM001" },
+      { userId: adminId },
       { $inc: { balance: platformFee } },
       { session, new: true, upsert: true, setDefaultsOnInsert: true }
     );
@@ -310,7 +320,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
         },
         {
           transactionId: uuidv4(),
-          adminId: "ADM001",
+          adminId: adminId,
           bookingId: newBooking._id,
           type: "CREDIT",
           status: PaymentStatusEnum.SUCCESS,

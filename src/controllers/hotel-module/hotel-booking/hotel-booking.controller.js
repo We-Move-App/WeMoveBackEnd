@@ -30,8 +30,13 @@ const {
   CommissionServiceTypeEnum,
 } = require("../../../utils/constants/ENUM");
 const UserRecentSearchModel = require("../../../models/user-module/user-recent-search/user-recent-search.model");
-const { CouponModel } = require("../../../models/admin-module/Admin-coupon/adminCouponModel")
+const {
+  CouponModel,
+} = require("../../../models/admin-module/Admin-coupon/adminCouponModel");
 const Commission = require("../../../models/admin-module/commission-management/commission.model");
+const {
+  AdminModel,
+} = require("../../../models/admin-module/admin/admin.model");
 
 //-------------------- create booking --------------------
 const createBooking = catchAsyncError(async (req, res) => {
@@ -130,7 +135,6 @@ const createBooking = catchAsyncError(async (req, res) => {
   session.startTransaction();
 
   try {
-
     let finalAmount = totalAmount;
     let appliedCoupon = null;
 
@@ -144,11 +148,14 @@ const createBooking = catchAsyncError(async (req, res) => {
         serviceType: { $in: ["Hotel", "All Services"] },
         startDate: { $lte: currentDate },
         expiryDate: { $gte: currentDate },
-        $expr: { $lt: ["$usedCount", "$maxUsage"] }
+        $expr: { $lt: ["$usedCount", "$maxUsage"] },
       });
 
       if (!coupon) {
-        throw new ApiError(statusCode.BAD_REQUEST, "Invalid or expired coupon.");
+        throw new ApiError(
+          statusCode.BAD_REQUEST,
+          "Invalid or expired coupon."
+        );
       }
 
       // ✅ Check if user already used this coupon
@@ -156,7 +163,10 @@ const createBooking = catchAsyncError(async (req, res) => {
         (u) => u.userId.toString() === bookedBy.toString()
       );
       if (alreadyUsed) {
-        throw new ApiError(statusCode.BAD_REQUEST, "You have already used this coupon.");
+        throw new ApiError(
+          statusCode.BAD_REQUEST,
+          "You have already used this coupon."
+        );
       }
 
       // ✅ Check min order amount
@@ -169,13 +179,13 @@ const createBooking = catchAsyncError(async (req, res) => {
 
       // ✅ Calculate discount
       if (coupon.discountType === "Percentage") {
-        finalAmount = totalAmount - (totalAmount * coupon.discountPercentage) / 100;
+        finalAmount =
+          totalAmount - (totalAmount * coupon.discountPercentage) / 100;
       } else if (coupon.discountType === "Fixed Amount") {
         finalAmount = totalAmount - coupon.discountAmount;
       }
 
       if (finalAmount < 0) finalAmount = 0;
-        
 
       appliedCoupon = coupon;
     }
@@ -241,7 +251,7 @@ const createBooking = catchAsyncError(async (req, res) => {
     // Step 4: Commission split
     const commission = await Commission.findOne({
       serviceType: "hotel",
-      status: 'active',
+      status: "active",
     }).session(session);
 
     let platformFee = 0;
@@ -274,8 +284,15 @@ const createBooking = catchAsyncError(async (req, res) => {
       { session, new: true, upsert: true, setDefaultsOnInsert: true }
     );
 
+    const superAdmin = await AdminModel.findOne({ role: "SuperAdmin" });
+    if (!superAdmin) {
+      console.log("Super Admin not found adding to default wallet ADM001");
+    }
+
+    const adminId = superAdmin?._id || "ADM001";
+
     await WalletModel.findOneAndUpdate(
-      { userId: "ADM001" },
+      { userId: adminId },
       { $inc: { balance: platformFee } },
       { session, new: true, upsert: true, setDefaultsOnInsert: true }
     );
@@ -306,7 +323,7 @@ const createBooking = catchAsyncError(async (req, res) => {
         },
         {
           transactionId: uuidv4(),
-          adminId: "ADM001",
+          adminId: adminId,
           bookingId: newBooking._id,
           type: "CREDIT",
           status: PaymentStatusEnum.SUCCESS,
@@ -315,8 +332,6 @@ const createBooking = catchAsyncError(async (req, res) => {
           description: "Commission from hotel booking",
           platformFee,
         },
-
-
       ],
       { session }
     );
@@ -607,8 +622,6 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       ? "No room found"
       : "Hotels retrieved successfully.";
 
-
-
   if (filteredHotels.length > 0) {
     const firstHotelName = filteredHotels[0]?.hotel?.hotelName || null;
 
@@ -646,9 +659,6 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       console.log("Search for this location already exists. Skipping save.");
     }
   }
-
-
-
 
   return res.status(statusCode.OK).json(
     new ApiResponse(
@@ -808,11 +818,11 @@ const getHotelById = catchAsyncError(async (req, res) => {
         roomTypes: roomTypesWithAvailability,
         ...(checkIn && checkOut
           ? {
-            dateFilter: {
-              checkInDate: checkIn.toISOString(),
-              checkOutDate: checkOut.toISOString(),
-            },
-          }
+              dateFilter: {
+                checkInDate: checkIn.toISOString(),
+                checkOutDate: checkOut.toISOString(),
+              },
+            }
           : {}),
       },
       "Hotel details fetched successfully."

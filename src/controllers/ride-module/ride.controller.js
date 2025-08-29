@@ -34,6 +34,7 @@ const { getIO } = require("../../socket/index");
 const DriverBasicDetails = require("../../models/new-driver-module/basic-details/basic-details.model");
 const DriverVehicleDetails = require("../../models/new-driver-module/vehicle-details/vehicle-details.model");
 const Commission = require("../../models/admin-module/commission-management/commission.model");
+const { AdminModel } = require("../../models/admin-module/admin/admin.model");
 
 function calculateFare(type, distanceInKm, durationInMin) {
   const config = vehicleConfig[type];
@@ -561,8 +562,15 @@ const completeRide = catchAsyncError(async (req, res, next) => {
       { session, new: true, upsert: true, setDefaultsOnInsert: true }
     );
 
+    const superAdmin = await AdminModel.findOne({ role: "SuperAdmin" });
+    if (!superAdmin) {
+      console.log("Super Admin not found adding to default wallet ADM001");
+    }
+
+    const adminId = superAdmin?._id || "ADM001";
+
     await WalletModel.findOneAndUpdate(
-      { userId: "ADM001" },
+      { userId: adminId },
       { $inc: { balance: platformFee } },
       { session, new: true, upsert: true, setDefaultsOnInsert: true }
     );
@@ -592,7 +600,7 @@ const completeRide = catchAsyncError(async (req, res, next) => {
         },
         {
           transactionId: uuidv4(),
-          adminId: "ADM001",
+          adminId: adminId,
           bookingId: booking.bookingId,
           type: "CREDIT",
           status: PaymentStatusEnum.SUCCESS,

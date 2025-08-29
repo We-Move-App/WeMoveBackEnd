@@ -19,6 +19,7 @@ const SecurePinModel = require("../../models/global-module/secure-pins/secure-pi
 const BusOperatorModel = require("../../models/bus-module/bus-operator/bus-operator.model");
 const HotelManagerModel = require("../../models/hotel-module/hotel-manager/hotel-manager.model");
 const DriverDetails = require("../../models/new-driver-module/basic-details/basic-details.model");
+const { AdminModel } = require("../../models/admin-module/admin/admin.model");
 
 const deductfromUserWallet = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -289,13 +290,15 @@ const getTransactions = catchAsyncError(async (req, res) => {
       throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
     }
 
-    return res.status(statusCode.OK).json(
-      new ApiResponse(
-        statusCode.OK,
-        transaction,
-        "Transaction details fetched successfully"
-      )
-    );
+    return res
+      .status(statusCode.OK)
+      .json(
+        new ApiResponse(
+          statusCode.OK,
+          transaction,
+          "Transaction details fetched successfully"
+        )
+      );
   }
 
   // ---------------- Paginated Transactions ----------------
@@ -334,7 +337,8 @@ const getTransactions = catchAsyncError(async (req, res) => {
     default:
       Model = UserModel;
       entityExists = await Model.findById(userId);
-      if (!entityExists) throw new ApiError(statusCode.NOT_FOUND, "User not found");
+      if (!entityExists)
+        throw new ApiError(statusCode.NOT_FOUND, "User not found");
       txFilter.userId = userId;
   }
 
@@ -363,7 +367,13 @@ const getTransactions = catchAsyncError(async (req, res) => {
 });
 
 const getTransactionsAdmin = catchAsyncError(async (req, res) => {
-  const adminId = "ADM001";
+  const superAdmin = await AdminModel.findOne({ role: "SuperAdmin" });
+  if (!superAdmin) {
+    console.log("Super Admin not found adding to default wallet ADM001");
+  }
+
+  const adminId = superAdmin?._id || "ADM001";
+
   const {
     entity,
     page: pageQuery,
@@ -690,7 +700,12 @@ const getWallet = catchAsyncError(async (req, res) => {
 });
 
 const getWalletAdmin = catchAsyncError(async (req, res) => {
-  const userId = "ADM001";
+  const superAdmin = await AdminModel.findOne({ role: "SuperAdmin" });
+  if (!superAdmin) {
+    console.log("Super Admin not found adding to default wallet ADM001");
+  }
+
+  const userId = superAdmin?._id || "ADM001";
 
   const wallet = await Wallet.findOne({ userId: userId });
   if (!wallet) {
