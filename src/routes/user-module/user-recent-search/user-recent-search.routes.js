@@ -7,7 +7,9 @@ const {
 
 const userRecentSearchRoutes = express.Router();
 
-userRecentSearchRoutes.route("/").get(isUserAuthenticated, getRecentSearch);
+userRecentSearchRoutes.route("/")
+.get(isUserAuthenticated, getRecentSearch);
+
 userRecentSearchRoutes
   .route("/delete/:id")
   .delete(isUserAuthenticated, deleteRecentSearches);

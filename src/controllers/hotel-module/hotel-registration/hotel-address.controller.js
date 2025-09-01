@@ -77,24 +77,25 @@ const createOrUpdateLocation = catchAsyncError(async (req, res, next) => {
 
 const getAddressByHotelId = catchAsyncError(async (req, res, next) => {
     const { _id } = req.user;
-    let { hotelId } = req.params;
+    const { hotelId } = req.params;
 
-    if (!hotelId || typeof hotelId !== "string") {
-        return res.status(statusCode.BAD_REQUEST).json({
-            success: false,
-            message: "Hotel ID is required"
-        });
+    if (!hotelId || !mongoose.Types.ObjectId.isValid(hotelId)) {
+        return next(new ApiError(statusCode.BAD_REQUEST, "Invalid hotelId format"));
     }
 
-    hotelId = hotelId.trim();
-    const hotelAddress = await HotelAddressModel.findOne({ hotelId }).populate("address");
+    const hotelAddress = await HotelAddressModel.findOne({
+        hotelId: new mongoose.Types.ObjectId(hotelId)
+    }).populate("address");
 
     if (!hotelAddress) {
-        throw new ApiError(statusCode.NOT_FOUND, "No address found for this hotel");
+        return next(new ApiError(statusCode.NOT_FOUND, "No address found for this hotel"));
     }
 
-    res.status(statusCode.OK).json(new ApiResponse(statusCode.OK, hotelAddress.address, "Address retrieved successfully."));
+    res.status(statusCode.OK).json(
+        new ApiResponse(statusCode.OK, hotelAddress.address, "Address retrieved successfully.")
+    );
 });
+
 
 const deleteAddressByHotelId = catchAsyncError(async (req, res, next) => {
     const { _id } = req.user;

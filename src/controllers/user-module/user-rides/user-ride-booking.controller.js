@@ -53,7 +53,7 @@ const getVehicleFaresForRide = catchAsyncError(async (req, res, next) => {
   });
 
   if (recentSearch) {
-    // Update timestamp instead of adding duplicate entry
+   
     recentSearch.searchDetails.vehicle.pickup = {
       address: pickup,
       latitude: pickupCoordinates.ltd,

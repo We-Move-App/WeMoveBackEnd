@@ -10,6 +10,7 @@ const {
   getAllAdmins,
   getAdminById,
   getProfile,
+  getAvatar,
   updateAvatar,
   changePassword,
   resetPassword,
@@ -76,7 +77,12 @@ adminAuthRoutes
     uploadDocuments,
     updateAvatar
   );
-
+ adminAuthRoutes
+ .route("/avtatar")
+ .get( isAdminAuthenticated,
+    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+     getAvatar
+ )
 adminAuthRoutes
   .route("/change-password")
   .put(
@@ -130,7 +136,7 @@ adminAuthRoutes
 
 
    adminAuthRoutes
-   .route("/get-coupon/:d")
+   .route("/get-coupon/:id")
    .get(isAdminAuthenticated,authorizeRole(["SuperAdmin", "Admin"]),getCouponById)
 
    adminAuthRoutes

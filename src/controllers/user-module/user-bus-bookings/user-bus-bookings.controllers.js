@@ -25,6 +25,7 @@ const {
   TransactionTypeEnum,
 } = require("../../../utils/constants/ENUM");
 const Commission = require("../../../models/admin-module/commission-management/commission.model");
+const { CouponModel } = require("../../../models/admin-module/Admin-coupon/adminCouponModel");
 
 const getUserBusBookings = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
@@ -84,7 +85,6 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
       )
     );
 });
-
 const createBusBooking = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
 
@@ -96,6 +96,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     passengers,
     noOfPassengers,
     price,
+    couponCode,
     journeyDate,
     termAndConditions,
   } = req.body;
@@ -138,10 +139,67 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
   session.startTransaction();
 
   try {
+
+
+    let finalAmount = price;
+    let appliedCoupon = null;
+    let discountApplied = 0;
+
+    if (req.body.couponCode) {
+      const currentDate = new Date();
+
+      // ✅ Find valid coupon
+      const coupon = await CouponModel.findOne({
+        couponCode: req.body.couponCode,
+        status: "Active",
+        serviceType: { $in: ["Bus", "All Services"] },
+        startDate: { $lte: currentDate },
+        expiryDate: { $gte: currentDate },
+        $expr: { $lt: ["$usedCount", "$maxUsage"] }
+      });
+
+      if (!coupon) {
+        throw new ApiError(statusCode.BAD_REQUEST, "coupon not found .");
+      }
+
+      // ✅ Check if user already used this coupon
+      const alreadyUsed = coupon.usageHistory.some(
+        (u) => u.userId.toString() === userId.toString()
+      );
+      if (alreadyUsed) {
+        throw new ApiError(statusCode.BAD_REQUEST, "You have already used this coupon.");
+      }
+
+      // ✅ Check min order amount
+      if (price < coupon.minOrderAmount) {
+        throw new ApiError(
+          statusCode.BAD_REQUEST,
+          `Coupon valid only on orders above ₹${coupon.minOrderAmount}`
+        );
+      }
+
+      // ✅ Calculate discount
+      if (coupon.discountType === "Percentage") {
+        discountApplied = (price * coupon.discountPercentage) / 100;
+        finalAmount = price - discountApplied;
+      } else if (coupon.discountType === "Fixed Amount") {
+        discountApplied = coupon.discountAmount;
+        finalAmount = price - discountApplied;
+      }
+
+
+      if (finalAmount < 0) finalAmount = 0;
+
+
+      appliedCoupon = coupon;
+    }
+
+
+
     // Step 1: Check user wallet balance
     const userWallet = await WalletModel.findOne({ userId }).session(session);
 
-    if (!userWallet || userWallet.balance < price) {
+    if (!userWallet || userWallet.balance < finalAmount) {
       await TransactionModel.create(
         [
           {
@@ -150,7 +208,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
             bookingId: null,
             type: "DEBIT",
             status: PaymentStatusEnum.FAILED,
-            amount: price,
+            amount: finalAmount,
             currency: process.env.MOMO_CURRENCY,
             description: "Bus booking failed - insufficient balance",
           },
@@ -220,6 +278,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           routeId,
           passengers: assignSeatToPassenger,
           noOfPassengers,
+          finalAmount,
           price,
           journeyDate: journeyDateNormalized,
           termAndConditions,
@@ -227,6 +286,18 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           from,
           to,
           seatNumbers: assignedSeats,
+          coupon: appliedCoupon
+            ? {
+              couponId: appliedCoupon._id,
+              couponCode: appliedCoupon.couponCode,
+              discountType: appliedCoupon.discountType,
+              discountValue:
+                appliedCoupon.discountType === "Percentage"
+                  ? appliedCoupon.discountPercentage
+                  : appliedCoupon.discountAmount,
+              discountApplied,
+            }
+            : null,
         },
       ],
       { session }
@@ -246,27 +317,27 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     await seatAvailability.save({ session });
 
     // Step 5: Deduct from user wallet
-    userWallet.balance -= price;
+    userWallet.balance -= finalAmount;
     await userWallet.save({ session });
 
     // Step 6: Commission split
     const commission = await Commission.findOne({ serviceType: "bus" }).lean();
 
     let platformFee = 0;
-    let operatorShare = price;
+    let operatorShare = finalAmount;
 
     if (commission && commission.status === "active") {
       if (commission.commissionType === "fixed" && commission.commissionRate) {
         platformFee = commission.commissionRate;
-        operatorShare = price - platformFee;
+        operatorShare = finalAmount - platformFee;
       } else if (
         commission.commissionType === "percentage" &&
         commission.commissionPercentage
       ) {
         platformFee = parseFloat(
-          ((price * commission.commissionPercentage) / 100).toFixed(2)
+          ((finalAmount * commission.commissionPercentage) / 100).toFixed(2)
         );
-        operatorShare = price - platformFee;
+        operatorShare = finalAmount - platformFee;
       }
     }
 
@@ -294,7 +365,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           bookingId: newBooking._id,
           type: "DEBIT",
           status: PaymentStatusEnum.SUCCESS,
-          amount: price,
+          amount: finalAmount,
           currency: process.env.MOMO_CURRENCY,
           description: `Bus booking ${from} → ${to}`,
         },
@@ -321,6 +392,18 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       ],
       { session }
     );
+  
+
+    if (appliedCoupon) {
+  await CouponModel.findByIdAndUpdate(
+    appliedCoupon._id,
+    {
+      $inc: { usedCount: 1 },
+      $push: { usageHistory: { userId, bookingId: newBooking._id, usedAt: new Date() } },
+    },
+    { session }
+  );
+}
 
     await session.commitTransaction();
     session.endSession();
@@ -371,6 +454,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
         new ApiResponse(
           statusCode.CREATED,
           bookingWithBusDetails,
+
           "Bus booked successfully"
         )
       );
