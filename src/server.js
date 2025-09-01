@@ -6,7 +6,6 @@ const logger = require("./utils/logger/logger");
 const http = require("http");
 const { initSuperAdmin } = require("./utils/services/SuperAdminInit");
 
-
 const PORT = port || 8000;
 const server = http.createServer(app);
 
@@ -20,7 +19,7 @@ const io = new Server(server, {
 });
 
 // ✅ Register socket namespaces
-const {initializeSocket} = require("./socket");
+const { initializeSocket } = require("./socket");
 initializeSocket(io);
 
 // 🔄 Graceful shutdown handlers
@@ -56,12 +55,11 @@ const startServer = async () => {
     await connectDatabase();
 
     //SuperAmdin
-       await initSuperAdmin();
+    await initSuperAdmin();
 
-    server.listen(PORT,'0.0.0.0' ,() => {
+    server.listen(PORT, "0.0.0.0", () => {
       logger.info(`✅ Server listening on port ${PORT}`);
     });
-
   } catch (error) {
     logger.error(" Error starting server:", error);
     process.exit(1);

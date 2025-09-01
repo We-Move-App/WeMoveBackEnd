@@ -5,6 +5,7 @@ const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const {
   addBankDetailsValidation,
 } = require("../validations/bank-details.validation");
+const Wallet = require("../../../models/wallet-module/wallets.model");
 const {
   DriverDocEnum,
   DriverDocStatusEnum,
@@ -18,6 +19,7 @@ const {
 const {
   getDriverBankWithPassbook,
 } = require("../aggregations/bank-details.aggregations");
+const generateUniqueCardNumber = require("../../../utils/customId/generateUniqueCardNumber");
 
 const addDriverBankDetails = catchAsyncError(async (req, res) => {
   const { error, value } = addBankDetailsValidation.validate(req.body, {
@@ -48,6 +50,16 @@ const addDriverBankDetails = catchAsyncError(async (req, res) => {
   const driverExists = await DriverBasicDetails.exists({ driverId });
   if (!driverExists) {
     throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+  }
+
+  let wallet = await Wallet.findOne({ userId: driverId });
+  if (!wallet) {
+    wallet = await Wallet.create({
+      userId: driverId,
+      balance: 0,
+      currency: process.env.MOMO_CURRENCY,
+      cardNumber: await generateUniqueCardNumber(),
+    });
   }
 
   const bankUpdate = DriverBankDetail.updateOne(

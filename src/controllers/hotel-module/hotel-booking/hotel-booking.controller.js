@@ -273,7 +273,6 @@ const createBooking = catchAsyncError(async (req, res) => {
       operatorShare = parseFloat((totalAmount - platformFee).toFixed(2));
     }
 
-
     await WalletModel.findOneAndUpdate(
       { userId: hotelManagerId },
       { $inc: { balance: operatorShare } },

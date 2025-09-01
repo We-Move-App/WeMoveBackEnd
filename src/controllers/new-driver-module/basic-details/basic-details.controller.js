@@ -419,7 +419,7 @@ const verifyPin = catchAsyncError(async (req, res) => {
 
   const isMatch = await bcrypt.compare(pin, driver.pin);
   if (!isMatch) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid pin");
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid pin");
   }
 
   return res

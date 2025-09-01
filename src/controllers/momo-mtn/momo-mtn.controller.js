@@ -1,5 +1,6 @@
 const express = require("express");
 const { v4: uuidv4 } = require("uuid");
+const mongoose = require("mongoose");
 const {
   decodeAccessToken,
 } = require("../../utils/jwtToken/customTokenService");
@@ -195,15 +196,15 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
   let phoneNumber;
 
   if (entity === "driver") {
-    userId = decoded?.driverId;
+    userId = decoded?.driverId; // driverId is a String
     Model = DriverBasicDetails;
     phoneNumber = decoded?.phoneNo;
   } else if (entity === "busOperator") {
-    userId = decoded?._id;
+    userId = decoded?._id; // ObjectId
     Model = BusOperatorModel;
     phoneNumber = decoded?.phoneNumber;
   } else if (entity === "hotelManager") {
-    userId = decoded?._id;
+    userId = decoded?._id; // ObjectId
     Model = HotelManagerModel;
     phoneNumber = decoded?.phoneNumber;
   }
@@ -240,9 +241,9 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
   if (entity === "driver") {
     matchQuery.driverId = userId;
   } else if (entity === "busOperator") {
-    matchQuery.busOperatorId = userId;
+    matchQuery.busOperatorId = new mongoose.Types.ObjectId(userId);
   } else if (entity === "hotelManager") {
-    matchQuery.hotelManagerId = userId;
+    matchQuery.hotelManagerId = new mongoose.Types.ObjectId(userId);
   }
 
   const recentCredits = await Transaction.aggregate([
@@ -251,10 +252,7 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
   ]);
 
   const recentCreditAmount = recentCredits[0]?.total || 0;
-
-  // withdrawable balance = wallet balance - credits in last 24h
   const withdrawableBalance = Math.max(wallet.balance - recentCreditAmount, 0);
-  console.log("withdrawableBalance :", withdrawableBalance);
 
   if (amount > withdrawableBalance) {
     throw new ApiError(
@@ -305,12 +303,7 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
 
     if (momoResponse.status === 202) {
       // ----------------- Step 5: Record transaction -----------------
-      const transaction = await Transaction.create({
-        [entity === "busOperator"
-          ? "busOperatorId"
-          : entity === "hotelManager"
-            ? "hotelManagerId"
-            : "driverId"]: userId,
+      const transactionPayload = {
         transactionId: uuidv4(),
         momoRefId: referenceId,
         type: TransactionTypeEnum.DEBIT,
@@ -319,7 +312,17 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
         description: description || "Withdraw via MoMo",
         status: PaymentStatusEnum.SUCCESS,
         withdraw: true,
-      });
+      };
+
+      if (entity === "driver") {
+        transactionPayload.driverId = userId; // String
+      } else if (entity === "busOperator") {
+        transactionPayload.busOperatorId = new mongoose.Types.ObjectId(userId);
+      } else if (entity === "hotelManager") {
+        transactionPayload.hotelManagerId = new mongoose.Types.ObjectId(userId);
+      }
+
+      const transaction = await Transaction.create(transactionPayload);
 
       // Update wallet
       wallet.balance -= amount;
