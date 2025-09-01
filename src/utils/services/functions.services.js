@@ -769,9 +769,9 @@ const getAvatarFunc = async ({ req, res, reqModel }) => {
 };
 
 const changePasswordFunc = async ({ req, res, reqModel }) => {
-  const { oldPassword, newPassword } = req.body;
+  const { oldPassword, newPassword, confirmPassword } = req.body;
   const _id = req?.user._id;
-  if (!oldPassword || !newPassword) {
+  if (!oldPassword || !newPassword||!confirmPassword ){
     throw new ApiError(
       statusCode.BAD_REQUEST,
       "Please enter your old and new password"
@@ -783,6 +783,13 @@ const changePasswordFunc = async ({ req, res, reqModel }) => {
       "Both password are same. Please enter  different Password to proceed"
     );
   }
+    if (newPassword !== confirmPassword) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "New password and confirm password do not match."
+    );
+  }
+
   const isUserExist = await reqModel.findById(_id);
   if (!isUserExist) {
     throw new ApiError(statusCode.NOT_FOUND, "User not found");

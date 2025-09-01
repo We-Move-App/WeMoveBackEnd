@@ -4,6 +4,7 @@ const { port } = require("./config/config");
 const connectDatabase = require("./config/database");
 const logger = require("./utils/logger/logger");
 const http = require("http");
+const {initSuperAdmin} = require("../../services/src/utils/services/SuperAdminInit")
 
 
 
@@ -58,12 +59,15 @@ const startServer = async () => {
   try {
     await connectDatabase();
 
+    //SuperAmdin
+       await initSuperAdmin();
+
     server.listen(PORT,'0.0.0.0' ,() => {
       logger.info(`✅ Server listening on port ${PORT}`);
     });
 
   } catch (error) {
-    logger.error("❌ Error starting server:", error);
+    logger.error(" Error starting server:", error);
     process.exit(1);
   }
 };

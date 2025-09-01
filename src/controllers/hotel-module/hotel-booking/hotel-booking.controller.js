@@ -246,8 +246,6 @@ const createBooking = catchAsyncError(async (req, res) => {
     userWallet.balance -= finalAmount;
     await userWallet.save({ session });
 
-    console.log("totalAmount", totalAmount);
-
     // Step 4: Commission split
     const commission = await Commission.findOne({
       serviceType: "hotel",
@@ -275,8 +273,6 @@ const createBooking = catchAsyncError(async (req, res) => {
       operatorShare = parseFloat((totalAmount - platformFee).toFixed(2));
     }
 
-    console.log("platformFee", platformFee);
-    console.log("operatorShare", operatorShare);
 
     await WalletModel.findOneAndUpdate(
       { userId: hotelManagerId },

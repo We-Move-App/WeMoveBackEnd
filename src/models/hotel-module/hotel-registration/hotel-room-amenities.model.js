@@ -20,7 +20,7 @@ const roomSchema = new mongoose.Schema(
     type: Number
 
   },
-    numberOfRoom: { type: String},
+    numberOfRoom: { type: Number},
 
 
     roomPrice: { type: Number, required: true, min: 0 },

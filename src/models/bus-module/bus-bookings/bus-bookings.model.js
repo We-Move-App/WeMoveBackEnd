@@ -70,6 +70,15 @@ const bookingSchema = new Schema(
       enum: ["user", "busOperator"],
       default: "user",
     },
+    coupon: {
+  couponId: { type: Schema.Types.ObjectId, ref: "Coupon" },
+  couponCode: { type: String },
+  discountType: { type: String, enum: ["Percentage", "Fixed Amount"] },
+  discountValue: { type: Number }, // percentage or amount applied
+  discountApplied: { type: Number, default: 0 }, // actual ₹ discount
+},
+finalAmount: { type: Number, required: true, min: 0 },
+
     status: {
       type: String,
       enum: ["Booked", "Cancelled", "Completed"],

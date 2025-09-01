@@ -40,6 +40,7 @@ const {
   updateAvatarFunc,
   resetPasswordFunc,
   changePasswordFunc,
+   getAvatarFunc
 } = require("../../../utils/services/functions.services");
 const bcrypt = require("bcrypt");
 const { hash_rounds } = process.env;
@@ -674,6 +675,17 @@ const getProfile = catchAsyncError(async (req, res, next) => {
     .status(statusCode.OK)
     .json(new ApiResponse(statusCode.OK, admin, "Data found successfully"));
 });
+const getAvatar = catchAsyncError(async (req, res, next) => {
+  const result = await getAvatarFunc ({
+    req,
+    reqModel: AdminModel,
+  });
+
+  return res.status(statusCode.OK).json({
+    ...result,
+  
+  });
+});
 const updateAvatar = catchAsyncError(async (req, res, next) => {
   const result = await updateAvatarFunc({
     req,
@@ -1158,6 +1170,7 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     .lean();
 
   const data = coupons.map((c) => ({
+    couponId : c._id,
     couponName: c.couponName,
     couponCode: c.couponCode,
     serviceType: c.serviceType,
@@ -1168,10 +1181,7 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     startDate: c.startDate,
     expiryDate: c.expiryDate,
     status: c.status,
-    actions: {
-      update: `/api/v1/admin/coupons/${c._id}`, // example endpoint for update
-      delete: `/api/v1/admin/coupons/${c._id}`, // example endpoint for delete
-    },
+ 
   }));
 
   res.status(200).json({
@@ -1193,7 +1203,7 @@ const getCouponById = catchAsyncError(async (req, res) => {
     );
   }
 
-  const { id } = req.params; // coupon id from params
+  const { id } = req.params;
 
   const coupon = await CouponModel.findById(id).lean();
 
@@ -1213,10 +1223,7 @@ const getCouponById = catchAsyncError(async (req, res) => {
       startDate: coupon.startDate,
       expiryDate: coupon.expiryDate,
       status: coupon.status,
-      actions: {
-        update: `/api/v1/admin/coupons/${coupon._id}`, // example endpoint for update
-        delete: `/api/v1/admin/coupons/${coupon._id}`, // example endpoint for delete
-      },
+  
     },
   ];
 
@@ -1618,6 +1625,7 @@ module.exports = {
   getAllAdmins,
   getAdminById,
   getProfile,
+  getAvatar,
   updateAvatar,
   changePassword,
   resetPassword,

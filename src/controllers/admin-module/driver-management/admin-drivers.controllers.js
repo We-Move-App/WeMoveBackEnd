@@ -154,17 +154,17 @@ const getAllDrivers = async (req, res) => {
 };
 const getdriverDetailsById = catchAsyncError(async (req, res) => {
   const { driverId } = req.params;
-   const { vehicleType } = req.query
-  
+  const { vehicleType } = req.query
 
-   if (!driverId ||!vehicleType) {
+
+  if (!driverId || !vehicleType) {
     throw new ApiError(statusCode.BAD_REQUEST, "Driver ID  and vehileType is required");
   }
-   if (vehicleType?.toLowerCase() !== "bike") {
+  if (vehicleType?.toLowerCase() !== "bike") {
     throw new ApiError(statusCode.BAD_REQUEST, "vehicleType must be 'bike'");
-  
+
   }
- 
+
   const basicDetails = await DriverBasicDetails.findOne({ driverId })
     .populate("createdById", "name email role")
     .populate("updatedAtById", "name email role")
@@ -186,11 +186,11 @@ const getdriverDetailsById = catchAsyncError(async (req, res) => {
     const doc = allDocs.find((d) => d.documentType === type);
     return doc
       ? {
-          documentType: doc.documentType,
-          fileName: doc.fileName,
-          fileUrl: doc.fileUrl,
-          status: doc.status,
-        }
+        documentType: doc.documentType,
+        fileName: doc.fileName,
+        fileUrl: doc.fileUrl,
+        status: doc.status,
+      }
       : null;
   };
   //  const findDocs = (type) => {
@@ -231,21 +231,21 @@ const getdriverDetailsById = catchAsyncError(async (req, res) => {
       },
       bikeDetails: vehicleDetails
         ? {
-            seats: vehicleDetails.seats || 2, // default if not stored
-            model: vehicleDetails.model,
-            registrationNo: vehicleDetails.registrationNo,
-            vehicleType: vehicleDetails.vehicleType,
-          }
+          seats: vehicleDetails.seats || 2, // default if not stored
+          model: vehicleDetails.model,
+          registrationNo: vehicleDetails.registrationNo,
+          vehicleType: vehicleDetails.vehicleType,
+        }
         : null,
       bankDetails: bankDetails
         ? {
-            accountNumber: bankDetails.accountNumber,
-            holderName: bankDetails.holderName,
-            document: findDoc(DriverDocEnum.PASSBOOK),
-          }
+          accountNumber: bankDetails.accountNumber,
+          holderName: bankDetails.holderName,
+          document: findDoc(DriverDocEnum.PASSBOOK),
+        }
         : null,
       isOnline,
-      
+
     },
   };
 
@@ -359,14 +359,14 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
   }
 
   // Ensure only admins can create approved drivers
- 
+
 
   // Auto-set admin creation details
   basicDriverDetails.status = DriverBasicStatus.APPROVED;
   basicDriverDetails.createdBy = "admin";
   basicDriverDetails.createdById = adminId;
 
- if (basicDriverDetails.email) {
+  if (basicDriverDetails.email) {
     const emailExists = await DriverBasicDetails.findOne({ email: basicDriverDetails.email });
     if (emailExists) {
       throw new ApiError(statusCode.BAD_REQUEST, "Email already exists");
@@ -426,7 +426,7 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
     { upsert: true }
   );
 
- 
+
   await VehicleDetail.updateOne(
     { driverId },
     {
@@ -486,15 +486,15 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
 });
 const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
   const { driverId } = req.params;
-   const { vehicleType } = req.query
+  const { vehicleType } = req.query
   const { basicDriverDetails = {}, bankDetails = {}, vehicleDetails = {}, documents = [] } = req.body;
 
- if (!driverId ||!vehicleType) {
+  if (!driverId || !vehicleType) {
     throw new ApiError(statusCode.BAD_REQUEST, "Driver ID  and vehileType is required");
   }
-   if (vehicleType?.toLowerCase() !== "bike") {
+  if (vehicleType?.toLowerCase() !== "bike") {
     throw new ApiError(statusCode.BAD_REQUEST, "vehicleType must be 'bike'");
-  
+
   }
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
@@ -514,7 +514,7 @@ const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
     { driverId },
     {
       ...basicDriverDetails,
-        status: "approved", 
+      status: "approved",
       updatedAt: new Date(),
       updatedAtById: adminId,
     }
@@ -555,11 +555,11 @@ const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
   ].filter(Boolean);
 
   if (allDocuments.length > 0) {
-   await DriverDocDetails.findOneAndUpdate(
-  { driverId },
-  { documents: allDocuments.map(doc => ({ ...doc, status: "APPROVED" })) },
-  { upsert: true }
-);
+    await DriverDocDetails.findOneAndUpdate(
+      { driverId },
+      { documents: allDocuments.map(doc => ({ ...doc, status: "APPROVED" })) },
+      { upsert: true }
+    );
 
   }
 
@@ -595,7 +595,7 @@ const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
           mobile: basicDriverDetails.phoneNo || savedDriver.phoneNo,
           email: basicDriverDetails.email || savedDriver.email,
           address: basicDriverDetails.address || savedDriver.address,
-          status:  "approved",
+          status: "approved",
 
           experience: basicDriverDetails.experience || savedDriver.experience,
           createdById: savedDriver.createdById,
@@ -693,7 +693,7 @@ const createTaxiDriverFromAdmin = catchAsyncError(async (req, res) => {
     normalizeDoc(bankDetails.document, DriverDocEnum.PASSBOOK),
     normalizeDoc(vehicleDetails.insurance, DriverDocEnum.INSURANCE),
     normalizeDoc(vehicleDetails.registrationCertificate, DriverDocEnum.REGISTRATION),
-    ...normalizeDocsArray(vehicleDetails.vehiclePhotos, DriverDocEnum.VEHICLEPHOTO), // ✅ multiple vehicle photos
+    normalizeDoc(vehicleDetails.vehiclePhotos, DriverDocEnum.VEHICLEPHOTO),
     normalizeDoc(vehicleDetails.avatarPhotos, DriverDocEnum.AVATAR), // single
   ].filter(Boolean);
 
@@ -795,9 +795,11 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
   // 2️⃣ Update driver basic details
   await DriverBasicDetails.updateOne(
     { driverId },
-    { ...basicDriverDetails,
-       status: "approved", 
-       updatedAt: new Date(), updatedAtById: adminId }
+    {
+      ...basicDriverDetails,
+      status: "approved",
+      updatedAt: new Date(), updatedAtById: adminId
+    }
   );
 
   // 3️⃣ Update bank details
@@ -821,7 +823,7 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
       documentType: type,
       fileUrl: doc.fileUrl || doc.url,
       fileName: doc.fileName || "default_file_name"
-      
+
     };
   };
 
@@ -870,8 +872,8 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
       case DriverDocEnum.PASSBOOK: docResponse.passbook = doc; break;
       case DriverDocEnum.INSURANCE: docResponse.insurance = doc; break;
       case DriverDocEnum.REGISTRATION: docResponse.registrationCertificate = doc; break;
-      case DriverDocEnum.VEHICLEPHOTO: docResponse.vehicleTaxiPhotos = doc; break; 
-      case DriverDocEnum.AVATAR: docResponse.avatarPhotos = doc; break; 
+      case DriverDocEnum.VEHICLEPHOTO: docResponse.vehicleTaxiPhotos = doc; break;
+      case DriverDocEnum.AVATAR: docResponse.avatarPhotos = doc; break;
     }
   });
 
@@ -890,7 +892,7 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
           mobile: basicDriverDetails.phoneNo || savedDriver.phoneNo,
           email: basicDriverDetails.email || savedDriver.email,
           address: basicDriverDetails.address || savedDriver.address,
-           status: "approved",
+          status: "approved",
 
           experience: basicDriverDetails.experience || savedDriver.experience,
           createdById: savedDriver.createdById,
@@ -939,11 +941,11 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
     const doc = allDocs.find((d) => d.documentType === type);
     return doc
       ? {
-          documentType: doc.documentType,
-          fileName: doc.fileName,
-          fileUrl: doc.fileUrl,
-          status: doc.status,
-        }
+        documentType: doc.documentType,
+        fileName: doc.fileName,
+        fileUrl: doc.fileUrl,
+        status: doc.status,
+      }
       : null;
   };
 
@@ -986,18 +988,18 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
       },
       taxiDetails: vehicleDetails
         ? {
-            seats: vehicleDetails.seats || 4,
-            model: vehicleDetails.model,
-            registrationNo: vehicleDetails.registrationNo,
-            vehicleType: vehicleDetails.vehicleType,
-          }
+          seats: vehicleDetails.seats || 4,
+          model: vehicleDetails.model,
+          registrationNo: vehicleDetails.registrationNo,
+          vehicleType: vehicleDetails.vehicleType,
+        }
         : null,
       bankDetails: bankDetails
         ? {
-            accountNumber: bankDetails.accountNumber,
-            holderName: bankDetails.holderName,
-            document: findDoc(DriverDocEnum.PASSBOOK),
-          }
+          accountNumber: bankDetails.accountNumber,
+          holderName: bankDetails.holderName,
+          document: findDoc(DriverDocEnum.PASSBOOK),
+        }
         : null,
       isOnline,
     },
@@ -1225,7 +1227,7 @@ module.exports = {
   createBikeDriverFromAdmin,
   updateBikeDriverByAdmin,
   createTaxiDriverFromAdmin,
-   updateTaxiDriverByAdmin,
+  updateTaxiDriverByAdmin,
   getTaxiDriverDetailsById,
   getAllBikeBookings,
   getBookingDetailsById
@@ -1233,6 +1235,6 @@ module.exports = {
 
 
 
-}; 
+};
 
 

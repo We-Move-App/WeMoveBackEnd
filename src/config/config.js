@@ -41,4 +41,8 @@ module.exports = {
   twilio_auth_token: process.env.TWILIO_AUTH_TOKEN,
   twilio_phone_number: process.env.TWILIO_PHONE_NUMBER,
   cameroon_country_code: process.env.CAMEROON_COUNTRY_CODE,
+    superadmin_email: process.env.SUPERADMIN_EMAIL,
+  superadmin_username: process.env.SUPERADMIN_USERNAME,
+  superadmin_password: process.env.SUPERADMIN_PASSWORD,
+  superadmin_phone: process.env.SUPERADMIN_PHONE,
 };

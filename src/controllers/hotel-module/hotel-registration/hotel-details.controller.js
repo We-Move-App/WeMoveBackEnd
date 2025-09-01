@@ -138,7 +138,6 @@ const getHotelById = catchAsyncError(async (req, res, next) => {
   );
 });
 
-
 // const updateHotelById = catchAsyncError(async (req, res) => {
 //   const { hotelId } = req.params;
 //   const { imageId } = req.body;
@@ -335,6 +334,7 @@ if (typeof imageId === "string") {
   if (!updatedHotel) {
     throw new ApiError(404, "Hotel not found");
   }
+  
 
   let newlyUploadedImages = [];
   let deletedImages = [];
