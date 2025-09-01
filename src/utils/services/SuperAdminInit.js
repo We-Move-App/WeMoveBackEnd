@@ -3,9 +3,6 @@ const config = require("../../config/config")
 
 const { createSuperAdmin}  = require("../../controllers/admin-module/admin-auth/admin-auth.controllers");
 
-
-
-
 async function initSuperAdmin() {
   const existing = await AdminModel.findOne({ role: "SuperAdmin" });
   if (existing) {
@@ -15,7 +12,6 @@ async function initSuperAdmin() {
 
   console.log(" Creating SuperAdmin...");
 
-  // Construct a real req/res/next (minimal mock, but real execution of your controller)
   const req = {
     body: {
       email: config.superadmin_email,
