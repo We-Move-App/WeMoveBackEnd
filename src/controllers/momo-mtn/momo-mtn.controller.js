@@ -197,7 +197,7 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
   if (entity === "driver") {
     userId = decoded?.driverId;
     Model = DriverBasicDetails;
-    phoneNumber = decoded?.phoneNo; 
+    phoneNumber = decoded?.phoneNo;
   } else if (entity === "busOperator") {
     userId = decoded?._id;
     Model = BusOperatorModel;
@@ -228,7 +228,42 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
   const wallet = await Wallet.findOne({ userId });
   if (!wallet) throw new ApiError(statusCode.NOT_FOUND, "Wallet not found");
 
-  // Minimum balance check
+  // ----------------- Step 3.1: Check withdrawable balance -----------------
+  const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+  let matchQuery = {
+    type: TransactionTypeEnum.CREDIT,
+    status: PaymentStatusEnum.SUCCESS,
+    createdAt: { $gte: cutoffTime },
+  };
+
+  if (entity === "driver") {
+    matchQuery.driverId = userId;
+  } else if (entity === "busOperator") {
+    matchQuery.busOperatorId = userId;
+  } else if (entity === "hotelManager") {
+    matchQuery.hotelManagerId = userId;
+  }
+
+  const recentCredits = await Transaction.aggregate([
+    { $match: matchQuery },
+    { $group: { _id: null, total: { $sum: "$amount" } } },
+  ]);
+
+  const recentCreditAmount = recentCredits[0]?.total || 0;
+
+  // withdrawable balance = wallet balance - credits in last 24h
+  const withdrawableBalance = Math.max(wallet.balance - recentCreditAmount, 0);
+  console.log("withdrawableBalance :", withdrawableBalance);
+
+  if (amount > withdrawableBalance) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      `You can only withdraw ${withdrawableBalance} at this moment. Funds added in the last 24h are locked.`
+    );
+  }
+
+  // ----------------- Step 3.2: Minimum balance check -----------------
   if (wallet.balance - amount < 1000) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -298,6 +333,7 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
             transactionId: transaction.transactionId,
             amount,
             newBalance: wallet.balance,
+            withdrawableBalance: withdrawableBalance - amount,
           },
           "Withdrawal processed successfully"
         )
