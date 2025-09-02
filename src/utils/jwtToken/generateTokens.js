@@ -31,6 +31,7 @@ const generateTokens = async (user, userType) => {
     phoneNumber: user?.phoneNumber,
     verificationStatus: user?.verificationStatus,
     permissions: user.permissions || {}, 
+  branch: user?.branch?._id || user?.branch || null, 
 
   };
 
