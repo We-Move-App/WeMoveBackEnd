@@ -31,15 +31,16 @@ const BusRouteModel = require("../../../models/bus-module/bus-routes/bus-routes.
 const multer = require("../../../utils/uploadFiles/multer");
 
 const { TypeOfUser } = require("../../../utils/constants/constants");
+const {
+  validateRequestBody,
+} = require("../../../utils/reqFunctions/reqFunction");
+const generateUniqueCardNumber = require("../../../utils/customId/generateUniqueCardNumber");
+
 const getAllBusOperators = catchAsyncError(async (req, res, next) => {
   const results = await getAllUsersByAdmin({ req, model: BusOperatorModel });
 
   return res.status(statusCode.OK).json(results);
 });
-const {
-  validateRequestBody,
-} = require("../../../utils/reqFunctions/reqFunction");
-const generateUniqueCardNumber = require("../../../utils/customId/generateUniqueCardNumber");
 
 const getSingleUser = catchAsyncError(async (req, res, next) => {
   const result = await getUserByIdByAdmin({

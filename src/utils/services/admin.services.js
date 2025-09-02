@@ -1,37 +1,43 @@
 const statusCode = require("../constants/statusCode");
 const ApiError = require("../response/ApiError");
 const ApiResponse = require("../response/ApiResponse");
-const busModel = require("../../models/bus-module/buses/buses.model");  
+const busModel = require("../../models/bus-module/buses/buses.model");
 const { HostAddress } = require("mongodb");
-const getAllUsersByAdmin = async ({ req, model, options }) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
-  const startIndex = (page - 1) * limit;
-  const { email, phoneNumber, name } = req.query;
 
-  const query = {
-    $or: [],
-  };
 
-  if (email) {
-    query.$or.push({ email: { $regex: email, $options: "i" } });
+
+const getAllUsersByAdmin = async ({ req, model }) => {
+  const {
+    page = 1,
+    limit = 10,
+    sortBy = "createdAt",
+    order = "desc",
+    search = ""
+  } = req.body;
+
+  const skip = (page - 1) * limit;
+
+  const query = {};
+
+  if (search) {
+    query.$or = [
+      { email: { $regex: search, $options: "i" } },
+      { phoneNumber: { $regex: search, $options: "i" } },
+      { fullName: { $regex: search, $options: "i" } },
+      { verificationStatus: { $regex: search, $options: "i" } }
+    ];
   }
 
-  if (phoneNumber) {
-    query.$or.push({ phoneNumber });
-  }
-
-  if (name) {
-    query.$or.push({ fullName: { $regex: name, $options: "i" } });
-  }
-
+  
   const users = await model
     .find(query)
-    .sort({ createdAt: -1 })
+    .sort({ [sortBy]: order === "asc" ? 1 : -1 })
     .limit(limit)
-    .skip(startIndex)
+    .skip(skip)
     .select("avatar email phoneNumber fullName verificationStatus");
-    const  totalbusCount = await Promise.all(
+
+  // Attach bus count
+  const usersWithBusCount = await Promise.all(
     users.map(async (user) => {
       const busCount = await busModel.countDocuments({ ownerId: user._id });
       return {
@@ -40,18 +46,23 @@ const getAllUsersByAdmin = async ({ req, model, options }) => {
       };
     })
   );
+
+  // Total count
   const totalUser = await model.countDocuments(query).exec();
 
-
-  const results = {
-    data: totalbusCount,
-    totalPages: Math.ceil(totalUser / limit),
-    currentPage: page,
-    totalCount: totalUser,
+  return {
+    success: true,
+    message: "Users fetched successfully",
+    total: totalUser,
+    page,
+    limit,
+    sortBy,
+    order,
+    data: usersWithBusCount,
   };
-
-  return new ApiResponse(statusCode.OK, results, `Data found Successfully`);
 };
+
+
 
 const getUserByIdByAdmin = async ({
   req,
@@ -61,7 +72,7 @@ const getUserByIdByAdmin = async ({
 
 }) => {
   const { userId } = req.params;
-  const [user, userDocs, userBank , ] = await Promise.all([
+  const [user, userDocs, userBank,] = await Promise.all([
     userModel
       .findOne({ _id: userId })
       .populate("verifiedBy.admin", "userName phoneNumber email"),
@@ -111,14 +122,14 @@ const userVerifiedByAdmin = async ({ req, model }) => {
   );
 };
 
-const deleteUserPermanentlyByAdmin = async({
+const deleteUserPermanentlyByAdmin = async ({
   req,
   userModel,
   userDocsModel,
   userBankModel,
-}) =>{
-  const {userId} = req.params
-  
+}) => {
+  const { userId } = req.params
+
 
 }
 
