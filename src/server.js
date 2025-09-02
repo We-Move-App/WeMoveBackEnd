@@ -5,8 +5,6 @@ const connectDatabase = require("./config/database");
 const logger = require("./utils/logger/logger");
 const http = require("http");
 const { initSuperAdmin } = require("./utils/services/SuperAdminInit");
-
-
 const PORT = port || 8000;
 const server = http.createServer(app);
 

@@ -49,6 +49,7 @@ const hotelManagerSchema = new mongoose.Schema(
     companyAddress:{
       type: String
     },
+   
     
     role: {
       type: String,

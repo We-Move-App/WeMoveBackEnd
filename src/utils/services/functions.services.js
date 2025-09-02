@@ -45,6 +45,7 @@ const {
   verifyEmailOtp,
   verifyPhoneOtp,
 } = require("../otpService/otpService");
+const {BranchModel }= require("../../models/admin-module/branch/branches.model")
 
 // ==============================================
 const registerUserWithEmailAndPhoneNumber = async ({
@@ -62,7 +63,13 @@ const registerUserWithEmailAndPhoneNumber = async ({
     password,
     address,
     phoneNumber,
+    branch
   } = req.body;
+
+  const branchDoc = await BranchModel.findById(branch);
+    if (!branchDoc) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
+    }
   if (createdByAdmin) {
     password = "operator@123";
   }
@@ -93,6 +100,7 @@ const registerUserWithEmailAndPhoneNumber = async ({
       );
     }
   }
+  
 
   const existingUser = await reqModel
     .findOne({
@@ -135,6 +143,7 @@ const registerUserWithEmailAndPhoneNumber = async ({
     password,
     address,
     phoneNumber,
+    branch: branchDoc._id,
     emailVerified: true,
     phoneNumberVerified: true,
     verificationStatus: createdByAdmin ? "approved" : "submitted",
@@ -151,6 +160,7 @@ const registerUserWithEmailAndPhoneNumber = async ({
       cardNumber: await generateUniqueCardNumber(),
     });
   }
+   
 
   const userObject = newUser.toObject();
   delete userObject.password;
