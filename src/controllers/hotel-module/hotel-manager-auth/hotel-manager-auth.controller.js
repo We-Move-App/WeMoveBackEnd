@@ -46,6 +46,7 @@ const {
   verifyEmailExistFunc,
 } = require("../../../utils/services/functions.services");
 const generateUniqueCardNumber = require("../../../utils/customId/generateUniqueCardNumber");
+const {BranchModel }= require("../../../models/admin-module/branch/branches.model")
 
 const generateOtp = () => {
   return Math.floor(1000 + Math.random() * 9000).toString();
@@ -53,20 +54,20 @@ const generateOtp = () => {
 
 // =====================|| REGISTER HOTEL-MANAGER ||==========================
 const registerHotelManager = catchAsyncError(async (req, res, next) => {
-  const { email, fullName, password, address, phoneNumber } = req.body;
+  const { email, fullName, password, address, phoneNumber, branch } = req.body;
 
-  const reqField = ["email", "fullName", "password", "address", "phoneNumber"];
+  const reqField = ["email", "fullName", "password", "address", "phoneNumber", "branch"];
   validateRequestBody(reqField, req.body);
 
-  // Check if email or phone number exists and is verified
-  const isEmailVerified = await emailVerifyModel.findOne({
-    email,
-    verified: true,
-  });
-  const isPhoneNumberVerified = await phoneNumberVerifyModel.findOne({
-    phoneNumber,
-    verified: true,
-  });
+
+  const branchDoc = await BranchModel.findById(branch);
+  if (!branchDoc) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
+  }
+
+  // ✅ Check email and phone verification
+  const isEmailVerified = await emailVerifyModel.findOne({ email, verified: true });
+  const isPhoneNumberVerified = await phoneNumberVerifyModel.findOne({ phoneNumber, verified: true });
 
   if (!isEmailVerified || !isPhoneNumberVerified) {
     const missingVerification = !isEmailVerified ? "email" : "phone number";
@@ -76,8 +77,9 @@ const registerHotelManager = catchAsyncError(async (req, res, next) => {
     );
   }
 
+  // ✅ Check if user already exists
   const existingUser = await HotelManagerModel.findOne({
-    $or: [{ email: email }, { phoneNumber: phoneNumber }],
+    $or: [{ email }, { phoneNumber }],
   }).select("-password");
 
   if (existingUser) {
@@ -88,34 +90,29 @@ const registerHotelManager = catchAsyncError(async (req, res, next) => {
       );
     }
 
-    const { accessToken, refreshToken } = await generateTokens(
-      existingUser,
-      TypeOfUser.HOTELMANAGER
-    );
-
+    const { accessToken, refreshToken } = await generateTokens(existingUser, TypeOfUser.HOTELMANAGER);
     setTokenCookies(res, accessToken, refreshToken);
 
-    const data = {
-      accessToken,
-      refreshToken,
-      hotelmanager: existingUser,
-    };
+    const populatedUser = await HotelManagerModel.findById(existingUser._id).populate("branch");
+
     return res
       .status(statusCode.OK)
-      .json(new ApiResponse(statusCode.OK, data, `Data found`));
+      .json(new ApiResponse(statusCode.OK, { accessToken, refreshToken, hotelmanager: populatedUser }, "Data found"));
   }
 
-  // Create new hotel manager
+  // ✅ Create new hotel manager
   const newUser = new HotelManagerModel({
     email,
     fullName,
     password,
     address,
     phoneNumber,
+    branch: branchDoc._id,
   });
 
   await newUser.save();
 
+  // ✅ Ensure wallet
   let wallet = await Wallet.findOne({ userId: newUser._id });
   if (!wallet) {
     wallet = await Wallet.create({
@@ -126,31 +123,23 @@ const registerHotelManager = catchAsyncError(async (req, res, next) => {
     });
   }
 
-  const userObject = newUser.toObject();
-  delete userObject.password;
+  // ✅ Populate branch before sending response
+  const populatedUser = await HotelManagerModel.findById(newUser._id)
+    .select("-password")
+    .populate("branch");
 
-  const { accessToken, refreshToken } = await generateTokens(
-    newUser,
-    TypeOfUser.HOTELMANAGER
-  );
+  const { accessToken, refreshToken } = await generateTokens(newUser, TypeOfUser.HOTELMANAGER);
   setTokenCookies(res, accessToken, refreshToken);
 
-  const data = {
-    accessToken,
-    refreshToken,
-    hotelmanager: userObject,
-  };
-
-  return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(
-        statusCode.OK,
-        data,
-        `Hotel Manager registered successfully`
-      )
-    );
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      { accessToken, refreshToken, hotelmanager: populatedUser },
+      "Hotel Manager registered successfully"
+    )
+  );
 });
+
 
 // =====================|| LOGIN USER ||=====================================
 const loginHotelManager = catchAsyncError(async (req, res, next) => {

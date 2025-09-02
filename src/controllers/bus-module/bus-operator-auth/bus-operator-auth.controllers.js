@@ -56,8 +56,20 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
     typeOfUser: TypeOfUser.BUSOPERATOR,
   });
 
+  // Populate branch before sending response
+  if (result?.data?.user?._id) {
+    const populatedUser = await BusOperatorModel.findById(result.data.user._id)
+      .select("-password")
+      .populate("branch");
+
+    if (populatedUser) {
+      result.data.user = populatedUser; // overwrite with populated version
+    }
+  }
+
   return res.status(statusCode.OK).json(result);
 });
+
 
 // =====================|| LOGIN USER ||=====================================
 const loginBusOperator = catchAsyncError(async (req, res, next) => {

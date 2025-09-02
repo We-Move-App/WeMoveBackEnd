@@ -102,7 +102,7 @@ const busOperatorSchema = new mongoose.Schema(
     },
     createdBy: {
   type: mongoose.Schema.Types.ObjectId,
-  ref: "Admin", // or whatever your admin model is called
+  ref: "Admin", 
   default: null,
 },
 
@@ -112,6 +112,10 @@ const busOperatorSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+      branch: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Branch",
+        },
     nationIdExpiry: { type: Date },
     businessLicenseNumber: {
       type: String,
