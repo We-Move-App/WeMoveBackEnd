@@ -45,7 +45,7 @@ const HotelBookingSchema = new mongoose.Schema(
 
      couponUsed: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Coupon", // link to Coupon
+      ref: "Coupon", 
       default: null,
     },
    

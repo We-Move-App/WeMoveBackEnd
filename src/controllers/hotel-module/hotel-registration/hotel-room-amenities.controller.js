@@ -632,8 +632,6 @@ const getAllRooms = catchAsyncError(async (req, res, next) => {
 
 const updateRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
   const { _id } = req.user;
-
-
   const {
     standardRoomCount,
     luxuryRoomCount,
