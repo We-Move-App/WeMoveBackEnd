@@ -27,25 +27,16 @@ const transactionSchema = new mongoose.Schema(
       index: true,
       default: null,
     },
-
-    // adminId: {
-    //   type: mongoose.Schema.Types.ObjectId,
-    //   ref: "Admin",
-    //   index: true,
-    //   default: null,
-    // },
-    adminCode: {
+    adminId: {
       type: String,
-      unique: true,
+      default: null,
     },
     driverId: {
       type: String,
       index: true,
       default: null,
     },
-
     bookingId: { type: String, index: true, required: false },
-
     type: { type: String, enum: TransactionTypeEnum, required: true }, // CREDIT or DEBIT
     status: {
       type: String,

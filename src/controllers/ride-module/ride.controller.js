@@ -575,6 +575,8 @@ const completeRide = catchAsyncError(async (req, res, next) => {
       { session, new: true, upsert: true, setDefaultsOnInsert: true }
     );
 
+    console.log("adminId", adminId);
+
     // --- Step 3: Create transactions ---
     await TransactionModel.insertMany(
       [
