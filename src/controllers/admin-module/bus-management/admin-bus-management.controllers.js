@@ -29,6 +29,8 @@ const Wallet = require("../../../models/wallet-module/wallets.model");
 const BusModel = require("../../../models/bus-module/buses/buses.model");
 const BusRouteModel = require("../../../models/bus-module/bus-routes/bus-routes.model");
 const multer = require("../../../utils/uploadFiles/multer");
+const moment = require("moment");
+
 
 const { TypeOfUser } = require("../../../utils/constants/constants");
 const {
@@ -443,92 +445,103 @@ const searchBusOperators = async (req, res) => {
   }
 };
 const getAllBusBookings = catchAsyncError(async (req, res, next) => {
-  const {
-    date,
-    busId,
-    routeId,
-    sortBy,
-    order,
-    limit,
-    page,
-    startDate,
-    endDate,
-    pickup,
-    drop,
-  } = req.query;
-  // Initialize query object
+  let {
+    page = 1,
+    limit = 10,
+    sortBy = "createdAt",
+    order = "desc",
+    search = "",
+    status,
+    paymentStatus,
+    from,
+    to,
+  } = req.query; // ✅ use query instead of body
+
+  page = parseInt(page);
+  limit = parseInt(limit);
+  const skip = (page - 1) * limit;
+
   const query = {};
+  let busRegMatch = {};
 
-  if (startDate) {
-    const selectedStartDate = moment.utc(startDate, "YYYY-MM-DD", true);
-
-    if (!selectedStartDate.isValid()) {
-      throw new ApiError(statusCode.BAD_REQUEST, "Invalid date format");
-    }
-
-    query.journeyDate = {
-      $gte: normalizeDate(selectedStartDate),
-      // $lte: normalizeDate(selectedEndDate),
-    };
+  // ✅ Filters
+  if (status) {
+    query.status = status;
   }
-  if (endDate) {
-    const selectedEndDate = moment.utc(endDate, "YYYY-MM-DD", true);
-    if (!selectedEndDate.isValid()) {
-      throw new ApiError(statusCode.BAD_REQUEST, "Invalid date format");
-    }
-
-    query.journeyDate = {
-      // $gte: normalizeDate(selectedStartDate),
-      $lte: normalizeDate(selectedEndDate),
-    };
+  if (paymentStatus) {
+    query.paymentStatus = paymentStatus;
   }
-  if (pickup) {
-    query.from = { $regex: pickup, $options: "i" };
+  if (from) {
+    query.from = new RegExp(from, "i");
   }
-  if (drop) {
-    query.to = { $regex: drop, $options: "i" };
+  if (to) {
+    query.to = new RegExp(to, "i");
   }
 
-  if (routeId) {
-    query.routeId = routeId;
+  // ✅ Universal Search
+  if (search) {
+    const regex = new RegExp(search, "i");
+    const isDate = !isNaN(Date.parse(search));
+
+    query.$or = [
+      { from: regex },
+      { to: regex },
+      { email: regex },
+      { phoneNumber: regex },
+      { status: regex },
+      { paymentStatus: regex },
+      { "bookedBy.fullName": regex },
+      { "passengers.name": regex },
+      { "passengers.email": regex },
+      { "passengers.contactNumber": regex },
+      isDate ? { journeyDate: new Date(search) } : null,
+    ].filter(Boolean);
+
+    // ✅ handle busRegNumber via populate match
+    busRegMatch = { busRegNumber: regex };
   }
-
-  const pageNumber = parseInt(page) || 1;
-  const pageSize = parseInt(limit) || 10;
-  const skip = (pageNumber - 1) * pageSize;
-
-  const sortField = sortBy || "createdAt";
-  const sortOrder = order === "desc" ? 1 : -1;
 
   const bookings = await BusBookingModel.find(query)
-    .sort({ [sortField]: sortOrder })
-    .skip(skip)
-    .limit(pageSize)
-    .select(
-      "from to seatNumbers paymentStatus journeyDate passengers status price createdAt updatedAt email phoneNumber bookedBy bookedByOperator bookingBy"
-    )
+    .populate({
+      path: "busId",
+      select: "busRegNumber",
+      match: busRegMatch,
+    })
     .populate("bookedBy", "fullName email phoneNumber")
     .populate("bookedByOperator", "fullName email phoneNumber")
-    .populate("busId", "busRegNumber");
+    .sort({ [sortBy]: order === "asc" ? 1 : -1 })
+    .skip(skip)
+    .limit(limit);
 
-  if (!bookings || bookings.length === 0) {
-    throw new ApiError(statusCode.NOT_FOUND, "No bookings found");
-  }
-  const totalBookings = await BusBookingModel.countDocuments(query);
+  const validBookings = bookings;
 
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      {
-        bookings,
-        totalBookings,
-        totalPages: Math.ceil(totalBookings / pageSize),
-        currentPage: pageNumber,
-      },
-      "Bus bookings retrieved successfully"
-    )
-  );
+  const totalBookings = await BusBookingModel.countDocuments(query).exec();
+
+  return res.status(statusCode.OK).json({
+    success: true,
+    message: "Bus bookings retrieved successfully",
+    total: totalBookings,
+    page,
+    limit,
+    sortBy,
+    order,
+    data: validBookings.map((booking) => ({
+      bookingId: booking._id,
+      busRegNumber: booking.busId?.busRegNumber || "N/A",
+      customerName: booking.passengers.map((p) => p.name).join(", "),
+      phone: booking.phoneNumber,
+      email: booking.email,
+      from: booking.from,
+      to: booking.to,
+      journeyDate: booking.journeyDate,
+      amount: booking.price || 0,
+      paymentStatus: booking.paymentStatus,
+      status: booking.status,
+      createdAt: booking.createdAt,
+    })),
+  });
 });
+
 
 const searchAllBusBookings = catchAsyncError(async (req, res, next) => {
   const {
