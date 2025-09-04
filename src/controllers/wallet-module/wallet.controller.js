@@ -366,73 +366,6 @@ const getTransactions = catchAsyncError(async (req, res) => {
   );
 });
 
-const getTransactionsAdmin = catchAsyncError(async (req, res) => {
-  const superAdmin = await AdminModel.findOne({ role: "SuperAdmin" });
-  if (!superAdmin) {
-    console.log("Super Admin not found adding to default wallet ADM001");
-  }
-
-  const adminId = superAdmin?._id || "ADM001";
-
-  const {
-    entity,
-    page: pageQuery,
-    limit: limitQuery,
-    id: transactionId,
-  } = req.query;
-
-  // Handle single transaction request
-  if (transactionId) {
-    const transaction = await Transaction.findOne({
-      transactionId: transactionId,
-    });
-
-    if (!transaction) {
-      throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
-    }
-
-    return res
-      .status(statusCode.OK)
-      .json(
-        new ApiResponse(
-          statusCode.OK,
-          transaction,
-          "Transaction details fetched successfully"
-        )
-      );
-  }
-
-  // Pagination params
-  const page = Math.max(parseInt(pageQuery) || 1, 1);
-  const limit = Math.min(Math.max(parseInt(limitQuery) || 10, 1), 100);
-
-  // Correct filter using adminId field
-  const txFilter = { adminId };
-
-  const transactions = await Transaction.find(txFilter)
-    .sort({ createdAt: -1 })
-    .skip((page - 1) * limit)
-    .limit(limit);
-
-  const totalCount = await Transaction.countDocuments(txFilter);
-
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      {
-        transactions,
-        pagination: {
-          total: totalCount,
-          page,
-          pages: Math.ceil(totalCount / limit),
-          limit,
-        },
-      },
-      "Transactions fetched successfully"
-    )
-  );
-});
-
 const getAnalytics = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
@@ -779,5 +712,4 @@ module.exports = {
   getAnalytics,
   userInternalTransaction,
   getWalletAdmin,
-  getTransactionsAdmin,
 };

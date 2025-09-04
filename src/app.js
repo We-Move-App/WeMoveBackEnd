@@ -98,9 +98,10 @@ const momoRouter = require("./routes/momo-mtn/momo-mtn.routes");
 const webhookRouter = require("./routes/web-hook/webhook.routes");
 const walletRouter = require("./routes/wallet-module/wallet.routes");
 const invoiceRouter = require("./routes/invoice-module/invoice-routes");
-const userCouponsRoutes = require("./routes/user-module/userCoupons/userCoupons.routes")
+const userCouponsRoutes = require("./routes/user-module/userCoupons/userCoupons.routes");
 const commissionRouter = require("./routes/admin-module/commission-management/commission-route");
 const dashBoardRouter = require("./routes/admin-module/dashboard/dashboard.routes");
+const adminWalletRoute = require("./routes/admin-module/wallet/admin-wallet.routes");
 
 if (node_env !== "production") {
   require("dotenv").config();
@@ -123,7 +124,7 @@ const allowedOrigins = allowed_origin;
 app.use(
   cors({
     origin: (origin, callback) => {
-      callback(null, origin); 
+      callback(null, origin);
     },
     credentials: true,
   })
@@ -181,7 +182,6 @@ app.use("/api/v1/user/rides", userRidesBookingRoutes);
 app.use("/api/v1/user/bus-bookings", userBusBookingsRoutes);
 app.use("/api/v1/user/hotel-booking", hotelbookingRoutes);
 app.use("/api/v1/user/available-coupons", userCouponsRoutes);
-
 
 // app.use("/api/v1/user/wallet", userDigitalWalletRoutes);
 app.use("/api/v1/user/notifications", userNotificationRoutes);
@@ -266,8 +266,9 @@ app.use("/api/v1/admin/notifications", adminNotificationRoutes);
 app.use("/api/v1/admin/price-breakdown", adminPriceBreakRoutes);
 app.use("/api/v1/admin/vehicle-fares", adminVehicleFareRoutes);
 app.use("/api/v1/admin/branch", adminBranchesRoutes);
-app.use('/api/v1/admin/commission-management',commissionRouter)
-app.use('/api/v1/admin/dashboard',dashBoardRouter)
+app.use("/api/v1/admin/commission-management", commissionRouter);
+app.use("/api/v1/admin/dashboard", dashBoardRouter);
+app.use("/api/v1/admin/wallet", adminWalletRoute);
 
 // Global Routes
 app.use("/api/v1/google-search", googleSearchRoutes);
@@ -280,16 +281,16 @@ app.use((req, res, next) => {
 });
 // app.use(cors)
 
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught exception:', err);
+process.on("uncaughtException", (err) => {
+  console.error("Uncaught exception:", err);
 });
-process.on('unhandledRejection', (err) => {
-  console.error('Unhandled rejection:', err);
+process.on("unhandledRejection", (err) => {
+  console.error("Unhandled rejection:", err);
 });
 app.use((err, req, res, next) => {
-  console.error('Express error handler caught an error:', err);
+  console.error("Express error handler caught an error:", err);
   const statusCode = err.statusCode || 500;
-  const message = err.message || 'Internal Server Error';
+  const message = err.message || "Internal Server Error";
   res.status(statusCode).json({
     success: false,
     statusCode,
@@ -298,7 +299,6 @@ app.use((err, req, res, next) => {
     data: null,
   });
 });
-
 
 app.use(errorHandler);
 module.exports = app;
