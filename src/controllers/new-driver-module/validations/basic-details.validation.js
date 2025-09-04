@@ -1,4 +1,5 @@
 const Joi = require("joi");
+const mongoose = require("mongoose");
 const { DriverDocEnum, GenderEnum } = require("../../../utils/constants/ENUM");
 
 const addBasicDetailsValidation = Joi.object({
@@ -10,7 +11,9 @@ const addBasicDetailsValidation = Joi.object({
     .messages({
       "string.pattern.base": "Full name must contain only letters and spaces",
     }),
-  gender: Joi.string().valid(...Object.values(GenderEnum)).required(),
+  gender: Joi.string()
+    .valid(...Object.values(GenderEnum))
+    .required(),
   dob: Joi.date().iso().required(),
   age: Joi.number().integer().min(18).max(100).required(),
   experience: Joi.number().integer().min(0).max(80).required(),
@@ -18,6 +21,16 @@ const addBasicDetailsValidation = Joi.object({
   termsAccepted: Joi.boolean().valid(true).required().messages({
     "any.only": "Terms must be accepted.",
   }),
+  branch: Joi.string()
+    .required()
+    .custom((value, helpers) => {
+      if (!mongoose.Types.ObjectId.isValid(value)) {
+        return helpers.error("any.invalid", {
+          message: "Invalid branch ObjectId",
+        });
+      }
+      return value;
+    }, "ObjectId validation"),
   documents: Joi.array()
     .length(2)
     .items(

@@ -9,6 +9,8 @@ const {
 } = require("../../../utils/jwtToken/customTokenService");
 const BusOperatorModel = require("../../../models/bus-module/bus-operator/bus-operator.model");
 const HotelManagerModel = require("../../../models/hotel-module/hotel-manager/hotel-manager.model");
+const RideBookingModel = require("../../../models/new-driver-module/booking-details/booking-details.model");
+const DriverBasicDetailsModel = require("../../../models/new-driver-module/basic-details/basic-details.model");
 
 // More than 100 needed then
 // function calcTrend(current, previous) {
@@ -128,12 +130,16 @@ async function analyticsSuperAdmin(filter) {
   const results = {
     hotel: [],
     bus: [],
+    taxi: [],
+    bike: [],
     totalBookings: [],
     completed: [],
     cancelled: [],
     revenue: {
       hotelManager: [],
       busOperator: [],
+      taxiDriver: [],
+      bikeDriver: [],
       admin: [],
       totalRevenue: [],
     },
@@ -141,7 +147,6 @@ async function analyticsSuperAdmin(filter) {
 
   for (let i = 0; i < buckets.length; i++) {
     const bucket = buckets[i];
-    const prevBucket = buckets[i - 1];
 
     const bucketTxns = txns.filter(
       (t) => getBucketKey(t.createdAt, filter) === bucket
@@ -154,7 +159,30 @@ async function analyticsSuperAdmin(filter) {
     const busBookings = new Set(
       bucketTxns.filter((t) => t.busOperatorId).map((t) => t.bookingId)
     );
-    const totalBookings = new Set([...hotelBookings, ...busBookings]);
+
+    // Taxi & Bike → check RideBookingModel for vehicleType
+    const driverTxns = bucketTxns.filter((t) => t.driverId);
+    const taxiBookings = new Set();
+    const bikeBookings = new Set();
+
+    for (const txn of driverTxns) {
+      if (!txn.bookingId) continue;
+      const ride = await RideBookingModel.findOne(
+        { bookingId: txn.bookingId },
+        { vehicleType: 1 }
+      ).lean();
+      if (!ride) continue;
+
+      if (ride.vehicleType === "bike") bikeBookings.add(txn.bookingId);
+      if (ride.vehicleType === "taxi") taxiBookings.add(txn.bookingId);
+    }
+
+    const totalBookings = new Set([
+      ...hotelBookings,
+      ...busBookings,
+      ...taxiBookings,
+      ...bikeBookings,
+    ]);
 
     const cancelled = new Set(
       bucketTxns.filter((t) => t.refund === true).map((t) => t.bookingId)
@@ -175,19 +203,48 @@ async function analyticsSuperAdmin(filter) {
 
     const hotelRevenue = calcRevenue(bucketTxns, "hotelManagerId");
     const busRevenue = calcRevenue(bucketTxns, "busOperatorId");
+
+    // Bike & Taxi revenues (driverId != null + check vehicleType)
+    let bikeRevenue = 0;
+    let taxiRevenue = 0;
+
+    for (const txn of driverTxns) {
+      if (!txn.bookingId) continue;
+      const ride = await RideBookingModel.findOne(
+        { bookingId: txn.bookingId },
+        { vehicleType: 1 }
+      ).lean();
+      if (!ride) continue;
+
+      if (ride.vehicleType === "bike") {
+        if (txn.type === "CREDIT") bikeRevenue += txn.amount;
+        if (txn.type === "DEBIT" && txn.refund) bikeRevenue -= txn.amount;
+      }
+      if (ride.vehicleType === "taxi") {
+        if (txn.type === "CREDIT") taxiRevenue += txn.amount;
+        if (txn.type === "DEBIT" && txn.refund) taxiRevenue -= txn.amount;
+      }
+    }
+
     const adminRevenue = bucketTxns
       .filter((t) => t.adminId && t.type === "CREDIT")
       .reduce((sum, t) => sum + t.amount, 0);
-    const totalRevenue = hotelRevenue + busRevenue + adminRevenue;
+
+    const totalRevenue =
+      hotelRevenue + busRevenue + adminRevenue + bikeRevenue + taxiRevenue;
 
     // ---- Previous values for trend ----
     const prevHotel = results.hotel[i - 1]?.bookings || 0;
     const prevBus = results.bus[i - 1]?.bookings || 0;
+    const prevTaxi = results.taxi[i - 1]?.bookings || 0;
+    const prevBike = results.bike[i - 1]?.bookings || 0;
     const prevTotal = results.totalBookings[i - 1]?.bookings || 0;
     const prevCancelled = results.cancelled[i - 1]?.bookings || 0;
     const prevCompleted = results.completed[i - 1]?.bookings || 0;
     const prevHotelRev = results.revenue.hotelManager[i - 1]?.amount || 0;
     const prevBusRev = results.revenue.busOperator[i - 1]?.amount || 0;
+    const prevTaxiRev = results.revenue.taxiDriver[i - 1]?.amount || 0;
+    const prevBikeRev = results.revenue.bikeDriver[i - 1]?.amount || 0;
     const prevAdminRev = results.revenue.admin[i - 1]?.amount || 0;
     const prevTotalRev = results.revenue.totalRevenue[i - 1]?.amount || 0;
 
@@ -201,6 +258,16 @@ async function analyticsSuperAdmin(filter) {
       filter: bucket,
       bookings: busBookings.size,
       ...calcTrend(busBookings.size, prevBus),
+    });
+    results.taxi.push({
+      filter: bucket,
+      bookings: taxiBookings.size,
+      ...calcTrend(taxiBookings.size, prevTaxi),
+    });
+    results.bike.push({
+      filter: bucket,
+      bookings: bikeBookings.size,
+      ...calcTrend(bikeBookings.size, prevBike),
     });
     results.totalBookings.push({
       filter: bucket,
@@ -227,6 +294,16 @@ async function analyticsSuperAdmin(filter) {
       amount: busRevenue,
       ...calcTrend(busRevenue, prevBusRev),
     });
+    results.revenue.taxiDriver.push({
+      filter: bucket,
+      amount: taxiRevenue,
+      ...calcTrend(taxiRevenue, prevTaxiRev),
+    });
+    results.revenue.bikeDriver.push({
+      filter: bucket,
+      amount: bikeRevenue,
+      ...calcTrend(bikeRevenue, prevBikeRev),
+    });
     results.revenue.admin.push({
       filter: bucket,
       amount: adminRevenue,
@@ -245,7 +322,9 @@ async function analyticsSuperAdmin(filter) {
 async function analyticsOthers(branchId, permissions, filter) {
   let busOperators = [];
   let hotelManagers = [];
+  let drivers = [];
 
+  // ----------------- Step 1: Get Bus Operators & Hotel Managers -----------------
   if (permissions.busManagement) {
     busOperators = await BusOperatorModel.find(
       { branch: branchId },
@@ -262,7 +341,14 @@ async function analyticsOthers(branchId, permissions, filter) {
     hotelManagers = hotelManagers.map((h) => h._id.toString());
   }
 
-  // step 2: date range
+  // ----------------- Step 2: Get Drivers (for Taxi & Bike) -----------------
+  drivers = await DriverBasicDetailsModel.find(
+    { branch: branchId },
+    "driverId"
+  ).lean();
+  drivers = drivers.map((d) => d.driverId); // NOTE: driverId is string
+
+  // ----------------- Step 3: Date Range -----------------
   let startDate, endDate;
   if (filter === "yearly") {
     startDate = moment().startOf("year").toDate();
@@ -274,60 +360,107 @@ async function analyticsOthers(branchId, permissions, filter) {
     throw new Error("Invalid filter");
   }
 
-  // step 3: fetch transactions
+  // ----------------- Step 4: Fetch Transactions -----------------
   const txns = await Transaction.find({
     createdAt: { $gte: startDate, $lte: endDate },
   }).lean();
 
-  // step 4: buckets
+  // ----------------- Step 5: Buckets -----------------
   const buckets = getBuckets(filter);
 
   const hotel = [];
   const bus = [];
+  const taxi = [];
+  const bike = [];
   const totalBookings = [];
   const completed = [];
   const cancelled = [];
 
+  // Cache for bookingId → vehicleType to avoid multiple DB calls
+  const bookingVehicleMap = {};
+
   for (const bucket of buckets) {
     const hotelBookings = new Set();
     const busBookings = new Set();
+    const taxiBookings = new Set();
+    const bikeBookings = new Set();
     const cancelledBookings = new Set();
 
     for (const txn of txns) {
       const key = getBucketKey(txn.createdAt, filter);
       if (key !== bucket) continue;
 
+      // -------- Hotel ----------
       if (
+        permissions.hotelManagement &&
         txn.hotelManagerId &&
         hotelManagers.includes(txn.hotelManagerId.toString())
       ) {
         hotelBookings.add(txn.bookingId);
         if (txn.refund) cancelledBookings.add(txn.bookingId);
       }
+
+      // -------- Bus ----------
       if (
+        permissions.busManagement &&
         txn.busOperatorId &&
         busOperators.includes(txn.busOperatorId.toString())
       ) {
         busBookings.add(txn.bookingId);
         if (txn.refund) cancelledBookings.add(txn.bookingId);
       }
+
+      // -------- Taxi / Bike ----------
+      if (txn.driverId && drivers.includes(txn.driverId)) {
+        let vehicleType = bookingVehicleMap[txn.bookingId];
+        if (!vehicleType) {
+          const booking = await RideBookingModel.findOne(
+            { bookingId: txn.bookingId },
+            "vehicleType"
+          ).lean();
+          vehicleType = booking?.vehicleType;
+          bookingVehicleMap[txn.bookingId] = vehicleType; // cache it
+        }
+
+        if (vehicleType === "taxi") {
+          taxiBookings.add(txn.bookingId);
+          if (txn.refund) cancelledBookings.add(txn.bookingId);
+        } else if (vehicleType === "bike") {
+          bikeBookings.add(txn.bookingId);
+          if (txn.refund) cancelledBookings.add(txn.bookingId);
+        }
+      }
     }
 
     const hotelCount = hotelBookings.size;
     const busCount = busBookings.size;
-    const totalCount = new Set([...hotelBookings, ...busBookings]).size;
+    const taxiCount = taxiBookings.size;
+    const bikeCount = bikeBookings.size;
+    const totalCount = new Set([
+      ...hotelBookings,
+      ...busBookings,
+      ...taxiBookings,
+      ...bikeBookings,
+    ]).size;
+
     const cancelledCount = cancelledBookings.size;
     const completedCount = totalCount - cancelledCount;
 
-    hotel.push({ filter: bucket, bookings: hotelCount });
-    bus.push({ filter: bucket, bookings: busCount });
+    if (permissions.hotelManagement)
+      hotel.push({ filter: bucket, bookings: hotelCount });
+    if (permissions.busManagement)
+      bus.push({ filter: bucket, bookings: busCount });
+    taxi.push({ filter: bucket, bookings: taxiCount });
+    bike.push({ filter: bucket, bookings: bikeCount });
+
     totalBookings.push({ filter: bucket, bookings: totalCount });
     cancelled.push({ filter: bucket, bookings: cancelledCount });
     completed.push({ filter: bucket, bookings: completedCount });
   }
 
-  // step 5: add trends
+  // ----------------- Step 6: Trends -----------------
   function attachTrend(arr) {
+    if (arr.length === 0) return;
     for (let i = 1; i < arr.length; i++) {
       const { trend, status } = calcTrendOthers(
         arr[i - 1].bookings,
@@ -336,21 +469,30 @@ async function analyticsOthers(branchId, permissions, filter) {
       arr[i].trend = trend;
       arr[i].status = status;
     }
-    // no trend for first bucket
     arr[0].trend = 0;
     arr[0].status = "nochange";
   }
 
-  attachTrend(hotel);
-  attachTrend(bus);
+  if (permissions.hotelManagement) attachTrend(hotel);
+  if (permissions.busManagement) attachTrend(bus);
+  attachTrend(taxi);
+  attachTrend(bike);
   attachTrend(totalBookings);
   attachTrend(completed);
   attachTrend(cancelled);
 
-  console.log("busOperators :", busOperators, "hotelManagers :", hotelManagers);
+  // ----------------- Step 7: Response -----------------
+  const response = {};
+  if (permissions.hotelManagement) response.hotel = hotel;
+  if (permissions.busManagement) response.bus = bus;
+  if (permissions.taxiManagement) response.taxi = taxi;
+  if (permissions.bikeManagement) response.bike = bike;
 
-  // step 6: return
-  return { hotel, bus, totalBookings, completed, cancelled };
+  response.totalBookings = totalBookings;
+  response.completed = completed;
+  response.cancelled = cancelled;
+
+  return response;
 }
 
 const getTopAnalytics = catchAsyncError(async (req, res) => {
