@@ -36,6 +36,7 @@ const { generateTokens } = require("../../../utils/jwtToken/generateTokens")
 const UserModel = require("../../../models/user-module/users/user.model");
 const WalletModel = require("../../../models/wallet-module/wallets.model");
 const TransactionModel = require("../../../models/transaction-module/transaction.model");
+const BranchModel = require("../../../models/admin-module/branch/branches.model")
 
 const getAllDrivers = async (req, res) => {
   try {
@@ -168,6 +169,7 @@ const getdriverDetailsById = catchAsyncError(async (req, res) => {
   const basicDetails = await DriverBasicDetails.findOne({ driverId })
     .populate("createdById", "name email role")
     .populate("updatedAtById", "name email role")
+    .populate("branch", "name location")
     .lean();
 
   if (!basicDetails) {
@@ -474,8 +476,8 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
           experience: savedDriver.experience,
           createdById: populatedDriver.createdById,
         },
-        documents: allDocuments,   // ✅ multiple bike photos supported
-        bikeDetails: cleanBikeDetails, // ✅ clean, no duplicate docs
+        documents: allDocuments,
+        bikeDetails: cleanBikeDetails,
         bankDetails: bankDetails,
         isOnline: false,
         token: driverToken,
@@ -487,7 +489,7 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
 const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
   const { driverId } = req.params;
   const { vehicleType } = req.query
-  const { basicDriverDetails = {}, bankDetails = {}, vehicleDetails = {}, documents = [] } = req.body;
+  const { basicDriverDetails = {}, bankDetails = {}, vehicleDetails = {}, documents = [], branch } = req.body;
 
   if (!driverId || !vehicleType) {
     throw new ApiError(statusCode.BAD_REQUEST, "Driver ID  and vehileType is required");
@@ -508,6 +510,15 @@ const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
   // 1️⃣ Check if driver exists
   const savedDriver = await DriverBasicDetails.findOne({ driverId });
   if (!savedDriver) throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+
+
+  if (branch) {
+    const branchDoc = await BranchModel.findById(branch);
+    if (!branchDoc) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
+    }
+    basicDriverDetails.branch = branchDoc._id; // assign to basicDriverDetails
+  }
 
   // 2️⃣ Update driver basic details
   await DriverBasicDetails.updateOne(
@@ -769,7 +780,7 @@ const createTaxiDriverFromAdmin = catchAsyncError(async (req, res) => {
 const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
   const { driverId } = req.params;
   const { vehicleType } = req.query;
-  const { basicDriverDetails = {}, bankDetails = {}, vehicleDetails = {}, documents = [] } = req.body;
+  const { basicDriverDetails = {}, bankDetails = {}, vehicleDetails = {}, documents = [], branch } = req.body;
 
   if (!driverId || !vehicleType) {
     throw new ApiError(statusCode.BAD_REQUEST, "Driver ID and vehicleType are required");
@@ -791,6 +802,16 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
   // 1️⃣ Check if driver exists
   const savedDriver = await DriverBasicDetails.findOne({ driverId });
   if (!savedDriver) throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+
+
+
+  if (branch) {
+    const branchDoc = await BranchModel.findById(branch);
+    if (!branchDoc) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
+    }
+    basicDriverDetails.branch = branchDoc._id; // assign to driver basic details
+  }
 
   // 2️⃣ Update driver basic details
   await DriverBasicDetails.updateOne(
@@ -924,6 +945,7 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
   const basicDetails = await DriverBasicDetails.findOne({ driverId })
     .populate("createdById", "name email role")
     .populate("updatedAtById", "name email role")
+    .populate("branch", "name location")
     .lean();
 
   if (!basicDetails) {

@@ -16,6 +16,7 @@ const addMemberUnderBusOperator = catchAsyncError(async (req, res, next) => {
   const { fullName, phoneNumber, email, idNumber, dob, password, permissions } =
     req.body;
   const { _id } = req.user;
+
   const reqField = [
     "fullName",
     "phoneNumber",
@@ -43,7 +44,7 @@ const addMemberUnderBusOperator = catchAsyncError(async (req, res, next) => {
   }
 
   const existingUser = await BusOperatorModel.findOne({
-    $or: [{ email: email }, { phoneNumber: phoneNumber }],
+    $or: [{ email }, { phoneNumber }],
   });
 
   if (existingUser) {
@@ -52,7 +53,12 @@ const addMemberUnderBusOperator = catchAsyncError(async (req, res, next) => {
       "User already exist with email or phonenumber"
     );
   }
-  // Map permissions array to object
+
+  const parentOperator = await BusOperatorModel.findById(_id);
+  if (!parentOperator) {
+    throw new ApiError(statusCode.NOT_FOUND, "Parent bus operator not found");
+  }
+
   const mappedPermissions = {
     busManagement: permissions.includes("busManagement"),
     dashboardManagement: permissions.includes("dashboardManagement"),
@@ -63,38 +69,47 @@ const addMemberUnderBusOperator = catchAsyncError(async (req, res, next) => {
   };
 
   const newMember = new BusOperatorModel({
-    companyName,
     fullName,
     phoneNumber,
     email,
     idNumber,
-    companyAddress,
+    companyName: parentOperator.companyName,
+    companyAddress: parentOperator.companyAddress,
     dob,
     password,
     role: "bus-operator-member",
     authorities: { busOperatorAuthorities: permissions },
     parentUserId: _id,
+    createdBy: _id,
     verificationStatus: "approved",
     permissions: mappedPermissions,
+    branch: parentOperator.branch,
   });
 
-  await newMember.save();
-  if (!newMember) {
+  // Save the member and assign to a variable
+  const savedMember = await newMember.save();
+
+  if (!savedMember) {
     throw new ApiError(
       statusCode.INTERNAL_SERVER_ERROR,
       "Error occurred while creating the member"
     );
   }
 
-  res
-    .status(statusCode.CREATED)
-    .json(
-      new ApiResponse(
-        statusCode.CREATED,
-        { newMember: newMember },
-        "Member added successfully"
-      )
-    );
+  // Populate parent info and branch
+  await savedMember.populate({
+    path: "parentUserId",
+    select: "fullName companyName branch email phoneNumber",
+    populate: { path: "branch", select: "name address" },
+  });
+
+  res.status(statusCode.CREATED).json(
+    new ApiResponse(
+      statusCode.CREATED,
+      { newMember: savedMember },
+      "Member added successfully"
+    )
+  );
 });
 
 // =====================|| UPDATE BUS MEMBER UNDER BUS OPERATOR ||===============================
@@ -102,14 +117,13 @@ const addMemberUnderBusOperator = catchAsyncError(async (req, res, next) => {
 const updateBusMemberUnderBusOperator = catchAsyncError(
   async (req, res, next) => {
     const { id } = req.params;
+    const { _id: operatorId, branch: operatorBranch } = req.user;
+    const { fullName, phoneNumber, email, idNumber, dob, permissions, branch } = req.body;
 
-    const { fullName, phoneNumber, email, idNumber, dob, permissions } =
-      req.body;
-
+    // Validate permissions
     const invalidPermissions = permissions.filter(
       (permission) => !busOperatorAuthorities.includes(permission)
     );
-
     if (invalidPermissions.length > 0) {
       throw new ApiError(
         statusCode.BAD_REQUEST,
@@ -126,33 +140,43 @@ const updateBusMemberUnderBusOperator = catchAsyncError(
       walletManagement: permissions.includes("walletManagement"),
     };
 
-    const updatedFields = {
-      fullName,
-      phoneNumber,
-      email,
-      idNumber,
-      dob,
-      authorities: { busOperatorAuthorities: permissions },
-      permissions: mappedPermissions,
-    };
-
-    const updatedUser = await BusOperatorModel.findByIdAndUpdate(
-      id,
-      updatedFields,
-      {
-        new: true,
-      }
-    );
-
-    if (!updatedUser) {
-      throw new ApiError(statusCode.NOT_FOUND, "User not found");
+    // Fetch the member
+    const member = await BusOperatorModel.findById(id);
+    if (!member) {
+      throw new ApiError(statusCode.NOT_FOUND, "Member not found");
     }
 
-    res
-      .status(statusCode.OK)
-      .json(
-        new ApiResponse(statusCode.OK, updatedUser, "Updated successfully")
-      );
+    // Only parent operator can update their member
+    if (member.parentUserId.toString() !== operatorId.toString()) {
+      throw new ApiError(statusCode.FORBIDDEN, "You are not allowed to update this member");
+    }
+
+    // Only update branch if provided, otherwise inherit
+    const branchToUpdate = branch || operatorBranch;
+
+    // Prepare updated fields
+    const updatedFields = {};
+    if (fullName) updatedFields.fullName = fullName;
+    if (phoneNumber) updatedFields.phoneNumber = phoneNumber;
+    if (email) updatedFields.email = email;
+    if (idNumber) updatedFields.idNumber = idNumber;
+    if (dob) updatedFields.dob = dob;
+    if (permissions) {
+      updatedFields.authorities = { busOperatorAuthorities: permissions };
+      updatedFields.permissions = mappedPermissions;
+    }
+    updatedFields.branch = branchToUpdate;
+
+    // Update the member
+    const updatedMember = await BusOperatorModel.findByIdAndUpdate(
+      id,
+      updatedFields,
+      { new: true }
+    );
+
+    res.status(statusCode.OK).json(
+      new ApiResponse(statusCode.OK, updatedMember, "Updated successfully")
+    );
   }
 );
 
@@ -164,7 +188,7 @@ const getAllMembersUnderBusOperator = catchAsyncError(
     const startIndex = (page - 1) * limit;
 
     const members = await BusOperatorModel.find({ parentUserId: busOperatorId })
-      .select("fullName phoneNumber email idNumber")
+      .select("fullName CompanyName phoneNumber email  idNumber")
       .sort({ createdAt: -1 })
       .limit(limit)
       .skip(startIndex);

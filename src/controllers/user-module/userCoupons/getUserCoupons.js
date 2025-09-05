@@ -6,8 +6,8 @@ const { CouponModel } = require("../../../models/admin-module/Admin-coupon/admin
 
 
 const getAllCoupons = catchAsyncError(async (req, res) => {
-const currentDate = new Date();
-console.log("Current Date:", currentDate);
+  const currentDate = new Date();
+  console.log("Current Date:", currentDate);
 
 
   // ✅ Fetch only valid coupons
@@ -26,32 +26,33 @@ console.log("Current Date:", currentDate);
       data: [],
     });
   }
- 
+
   // Step 1: Format coupons
-const formattedCoupons = coupons.map(coupon => {
-  let discountText = "";
+  const formattedCoupons = coupons.map(coupon => {
+    let discountText = "";
 
-  if (coupon.discountType === "Percentage") {
-    discountText = `${coupon.discountPercentage}% off`;
-  } else if (coupon.discountType === "Fixed Amount") {
-    discountText = `Flat ₹${coupon.discountAmount} off`;
-  }
+    if (coupon.discountType === "Percentage") {
+      discountText = `${coupon.discountPercentage}% off`;
+    } else if (coupon.discountType === "Fixed Amount") {
+      discountText = `Flat ₹${coupon.discountAmount} off`;
+    }
 
-  return {
-    couponId: coupon._id,
-    tilte: discountText,
-    description: ` Use ${coupon.couponCode} on Order above ${coupon.minOrderAmount}`,
-  };
-});
+    return {
+      couponId: coupon._id,
+      tilte: discountText,
+      couponCode: coupon.couponCode,
+      description: ` Use ${coupon.couponCode} on Order above ${coupon.minOrderAmount}`,
+    };
+  });
 
 
-return res.status(200).json({
+  return res.status(200).json({
     success: true,
     statusCode: 200,
     message: "Valid Coupons fetched successfully",
     data: formattedCoupons,
 
-});
+  });
 });
 
 

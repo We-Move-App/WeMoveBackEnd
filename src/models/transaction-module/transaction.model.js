@@ -28,16 +28,13 @@ const transactionSchema = new mongoose.Schema(
       default: null,
     },
 
-    // adminId: {
-    //   type: mongoose.Schema.Types.ObjectId,
-    //   ref: "Admin",
-    //   index: true,
-    //   default: null,
-    // },
-    adminCode: {
-  type: String,
-  unique: true
-},
+    adminId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
+      index: true,
+      default: null,
+    },
+
 
     driverId: {
       type: mongoose.Schema.Types.ObjectId,

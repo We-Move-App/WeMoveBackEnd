@@ -27,10 +27,10 @@ const busOperatorSchema = new mongoose.Schema(
       minlength: [3, "fullName must be at least 3 characters long"],
     },
     companyName: {
-      type: String, 
+      type: String,
     },
     companyAddress: {
-      type: String, 
+      type: String,
     },
     email: {
       type: String,
@@ -101,10 +101,10 @@ const busOperatorSchema = new mongoose.Schema(
       },
     },
     createdBy: {
-  type: mongoose.Schema.Types.ObjectId,
-  ref: "Admin", 
-  default: null,
-},
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
+      default: null,
+    },
 
     idNumber: { type: String },
     nationality: { type: String },
@@ -112,10 +112,10 @@ const busOperatorSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-      branch: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Branch",
-        },
+    branch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+    },
     nationIdExpiry: { type: Date },
     businessLicenseNumber: {
       type: String,
