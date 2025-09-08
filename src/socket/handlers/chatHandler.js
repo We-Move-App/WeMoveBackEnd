@@ -1,37 +1,54 @@
-// handlers/chatHandler.js
-const RideBookingDetail = require("../../models/new-driver-module/booking-details/booking-details.model");
+const { saveChatMessage } = require("../../utils/chats/saveChatMessage");
+const RideModel = require("../../models/new-driver-module/booking-details/booking-details.model");
 
 const chatHandler = (socket, io) => {
-  // 🚦 Listen for chat messages
   socket.on("chat:message", async (data, ack) => {
     try {
       const { rideId, message } = data;
-      console.log("data", data);
 
       if (!rideId || !message) {
         return ack?.({ success: false, error: "Invalid data" });
       }
 
-      // Get sender info (role + id)
+      // 🔍 get ride details to fetch driverId and userId
+      const ride = await RideModel.findOne({ bookingId: rideId }).select(
+        "driverId userId bookingId"
+      );
+      if (!ride) {
+        return ack?.({ success: false, error: "Ride not found" });
+      }
+
+      const { driverId, userId, bookingId } = ride;
+
       const sender = {
         id: socket.data.userId || socket.data.driverId,
-        role: socket.data.role,
+        role: socket.data.role, // "user" or "Driver"
       };
 
+      // 💾 save in DB
+      const chatDoc = await saveChatMessage(
+        bookingId, // ✅ use bookingId
+        driverId.toString(),
+        userId.toString(),
+        sender,
+        message
+      );
+
       const chatPayload = {
-        rideId,
-        from: sender,
+        rideId: bookingId,
+        from: {
+          id: sender.id,
+          role: sender.role,
+        },
         message,
         timestamp: new Date(),
       };
+      console.log(chatPayload);
 
-      // 🚕 Put both driver & user into the same room = rideId
-      io.to(rideId).emit("chat:message", chatPayload);
+      // 📢 broadcast to ride room
+      io.to(bookingId).emit("chat:message", chatPayload);
 
-      // optional: Save chat in DB (new Chat model if you want persistence)
-      // await ChatModel.create(chatPayload);
-
-      ack?.({ ...chatPayload });
+      ack?.({ success: true, chat: chatPayload });
     } catch (err) {
       console.error("❌ Chat error:", err);
       ack?.({ success: false, error: "Failed to send message" });

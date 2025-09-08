@@ -102,6 +102,7 @@ const userCouponsRoutes = require("./routes/user-module/userCoupons/userCoupons.
 const commissionRouter = require("./routes/admin-module/commission-management/commission-route");
 const dashBoardRouter = require("./routes/admin-module/dashboard/dashboard.routes");
 const adminWalletRoute = require("./routes/admin-module/wallet/admin-wallet.routes");
+const chatRouter = require("./routes/new-driver-module/chat-details/chat-details.routes");
 
 if (node_env !== "production") {
   require("dotenv").config();
@@ -223,6 +224,7 @@ app.use("/api/v1/driver/secure-pin", driverSecurePinRoutes);
 app.use("/api/v1/driver/vehicle", driverVehicleRoutes);
 app.use("/api/v1/driver/notifications", driverNotificationRoutes);
 app.use("/api/v1/driver/rides", driverRidesRoutes);
+app.use("/api/v1/chat", chatRouter);
 
 // Bus Operator Routes
 app.use("/api/v1/bus-management/auth", busOperatorAuthRoutes);
