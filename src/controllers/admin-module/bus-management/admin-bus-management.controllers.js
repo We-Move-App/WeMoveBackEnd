@@ -30,7 +30,7 @@ const BusModel = require("../../../models/bus-module/buses/buses.model");
 const BusRouteModel = require("../../../models/bus-module/bus-routes/bus-routes.model");
 const multer = require("../../../utils/uploadFiles/multer");
 const moment = require("moment");
-
+const BranchModel = require("../../admin-module/branches/branches.controllers")
 
 const { TypeOfUser } = require("../../../utils/constants/constants");
 const {
@@ -113,8 +113,26 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
     bankDetails,
     national_identity_card_front,
     national_identity_card_back,
+    branch
   } = req.body;
+  const existingOperator = await BusOperatorModel.findOne({
+    $or: [
+      { email: basicInfo?.email },
+      { phoneNumber: basicInfo?.phoneNumber },
+    ],
+  });
 
+  if (existingOperator) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Bus operator with this email or phone number already exists"
+    );
+  }
+
+  const branchDoc = await BranchModel.findById(branch);
+  if (!branchDoc) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
+  }
   // Step 1: Set defaults from backend
   const busOperatorData = {
     ...basicInfo,
@@ -131,6 +149,7 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
       ticketManagement: true,
       walletManagement: true,
     },
+    branch: branchDoc._id,
     role: "bus-operator",
     createdBy: req.user._id,
   };
@@ -223,7 +242,27 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
     national_identity_card_back,
     avatar,
     bankDocs,
+    branch
   } = req.body;
+
+  // Simple duplicate email/phone check
+  if (email || phoneNumber) {
+    const existingOperator = await BusOperatorModel.findOne({
+      _id: { $ne: userId },
+      $or: [
+        { email: email?.toLowerCase() },
+        { phoneNumber: phoneNumber?.trim() },
+      ],
+    });
+
+    if (existingOperator) {
+      throw new ApiError(
+        statusCode.CONFLICT,
+        "Email or phone number is already in use by another operator"
+      );
+    }
+  }
+
 
   const updateData = {};
   if (email) updateData.email = email.toLowerCase();
@@ -238,6 +277,14 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
   if (dob) updateData.dob = dob;
   if (nationality) updateData.nationality = nationality;
   if (nationIdExpiry) updateData.nationIdExpiry = nationIdExpiry;
+
+  if (branch) {
+    const branchDoc = await BranchModel.findById(branch);
+    if (!branchDoc) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
+    }
+    updateData.branch = branchDoc._id;
+  }
 
   const documentPayloads = [
     { key: "national_identity_card_front", data: national_identity_card_front },
@@ -271,7 +318,7 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
         documentIds: newDocIds,
       });
     } else {
-      existing.documentIds = newDocIds; // ✅ Replace, don’t append
+      existing.documentIds = newDocIds;
       await existing.save();
     }
   }

@@ -4,7 +4,7 @@ const statusCode = require("../../../utils/constants/statusCode");
 const logger = require("../../../utils/logger/logger");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const BusOperatorModel = require("../../../models/bus-module/bus-operator/bus-operator.model");
-const Wallet=require('../../../models/wallet-module/wallets.model')
+const Wallet = require('../../../models/wallet-module/wallets.model')
 const {
   validateRequestBody,
 } = require("../../../utils/reqFunctions/reqFunction");
