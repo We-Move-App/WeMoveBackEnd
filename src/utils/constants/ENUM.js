@@ -6,7 +6,10 @@ const DriverBasicStatus = {
 const EntityCodeEnum = {
   DRIVER: "driver",
   USER: "user",
-  HOTEL: "hotel",
+  HOTEL_MANAGER: "hotel_manager",
+  HOTEL_BOOKING: "hotel_booking",
+  BUS_OPERATOR: "bus_operator",
+  BUS_BOOKING: "bus_booking",
   ADMIN: "admin",
   RIDES: "rides",
   BUSDRIVER: "busDriver",
@@ -53,7 +56,7 @@ const RideBookStatusEnum = {
   STARTED: "started",
   COMPLETED: "completed",
   CANCELLED: "cancelled",
-  ONGOING:'ongoing'
+  ONGOING: "ongoing",
 };
 
 const PaymentStatusEnum = {
@@ -86,23 +89,23 @@ const WalletCurrencyEnum = {
   INR: "INR",
 };
 
-const CommissionServiceTypeEnum={
-  PLATFORM:'platform',
-  BUS:'bus',
-  HOTEL:'hotel',
-  TAXI:'taxi',
-  BIKE:'bike'
-}
+const CommissionServiceTypeEnum = {
+  PLATFORM: "platform",
+  BUS: "bus",
+  HOTEL: "hotel",
+  TAXI: "taxi",
+  BIKE: "bike",
+};
 
-const CommissionTypeEnum={
-  PERCENTAGE:'percentage',
-  FIXED:'fixed'
-}
+const CommissionTypeEnum = {
+  PERCENTAGE: "percentage",
+  FIXED: "fixed",
+};
 
-const CommissionStatusEnum={
-  ACTIVE:'active',
-  INACTIVE:'in_active'
-}
+const CommissionStatusEnum = {
+  ACTIVE: "active",
+  INACTIVE: "in_active",
+};
 
 module.exports = {
   DriverBasicStatus,
@@ -120,5 +123,5 @@ module.exports = {
   WalletCurrencyEnum,
   CommissionServiceTypeEnum,
   CommissionTypeEnum,
-  CommissionStatusEnum
+  CommissionStatusEnum,
 };

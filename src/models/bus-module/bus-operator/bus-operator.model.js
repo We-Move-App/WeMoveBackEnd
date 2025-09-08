@@ -21,6 +21,11 @@ const defaultPermissions = {
 
 const busOperatorSchema = new mongoose.Schema(
   {
+    operatorId: {
+      type: String,
+      unique: true,
+      index: true,
+    },
     fullName: {
       type: String,
       trim: true,

@@ -16,6 +16,11 @@ const hotelManagerSchema = new mongoose.Schema(
       trim: true,
       minlength: [3, "Full name must be at least 3 characters long"],
     },
+    managerId: {
+      type: String,
+      unique: true,
+      index: true,
+    },
     email: {
       type: String,
       unique: true,
@@ -43,14 +48,13 @@ const hotelManagerSchema = new mongoose.Schema(
     avatar: {
       type: ImageSchema,
     },
-    companyName:{
+    companyName: {
       type: String,
     },
-    companyAddress:{
-      type: String
+    companyAddress: {
+      type: String,
     },
-   
-    
+
     role: {
       type: String,
       default: "hotel-manager",

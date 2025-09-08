@@ -15,6 +15,7 @@ const VehicleDetails = require("../../models/new-driver-module/vehicle-details/v
 const DriverDocDetails = require("../../models/new-driver-module/documents/driver-documents.model");
 const activeAssignTimers = new Map();
 const DriverLocation = require("../../models/new-driver-module/location/driver-location.model");
+const ChatModel = require("../../models/new-driver-module/chat-details/chat-details.model");
 /**
  * Assigns ride sequentially to nearby drivers
  */
@@ -278,6 +279,33 @@ const rideHandler = (socket, io, role) => {
           });
         }
 
+        // Chat handling starts here
+        // Deactivate old chats for this booking
+        await ChatModel.updateMany(
+          { bookingId: data.bookingId },
+          { $set: { isActive: false } }
+        );
+
+        // Ensure a new active chat exists for this driver-user pair
+        await ChatModel.findOneAndUpdate(
+          {
+            bookingId: data.bookingId,
+            driverId: socket.data.driverId,
+            userId: updated.userId,
+          },
+          {
+            $setOnInsert: {
+              bookingId: data.bookingId,
+              driverId: socket.data.driverId,
+              userId: updated.userId,
+              chats: [],
+              isActive: true,
+            },
+          },
+          { upsert: true, new: true }
+        );
+        // Chat handling ends here
+
         // Make driver on trip
         await DriverLocation.findOneAndUpdate(
           { driverId: socket.data.driverId },
@@ -299,7 +327,6 @@ const rideHandler = (socket, io, role) => {
         }
 
         // Rest of your existing code remains unchanged...
-
         const driverDetails = await DriverBasicDetails.findOne({
           driverId: socket.data.driverId,
         });

@@ -25,6 +25,11 @@ const defaultPermissions = {
 // Admin Schema
 const AdminSchema = new mongoose.Schema(
   {
+    adminId: {
+      type: String,
+      unique: true,
+      index: true,
+    },
     userName: {
       type: String,
       trim: true,

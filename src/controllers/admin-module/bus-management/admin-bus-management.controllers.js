@@ -30,13 +30,15 @@ const BusModel = require("../../../models/bus-module/buses/buses.model");
 const BusRouteModel = require("../../../models/bus-module/bus-routes/bus-routes.model");
 const multer = require("../../../utils/uploadFiles/multer");
 const moment = require("moment");
-const BranchModel = require("../../admin-module/branches/branches.controllers")
+const BranchModel = require("../../admin-module/branches/branches.controllers");
 
 const { TypeOfUser } = require("../../../utils/constants/constants");
 const {
   validateRequestBody,
 } = require("../../../utils/reqFunctions/reqFunction");
 const generateUniqueCardNumber = require("../../../utils/customId/generateUniqueCardNumber");
+const generateCustomId = require("../../../utils/customId/generateCustomId");
+const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
 
 const getAllBusOperators = catchAsyncError(async (req, res, next) => {
   const results = await getAllUsersByAdmin({ req, model: BusOperatorModel });
@@ -113,13 +115,10 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
     bankDetails,
     national_identity_card_front,
     national_identity_card_back,
-    branch
+    branch,
   } = req.body;
   const existingOperator = await BusOperatorModel.findOne({
-    $or: [
-      { email: basicInfo?.email },
-      { phoneNumber: basicInfo?.phoneNumber },
-    ],
+    $or: [{ email: basicInfo?.email }, { phoneNumber: basicInfo?.phoneNumber }],
   });
 
   if (existingOperator) {
@@ -134,8 +133,13 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
   }
   // Step 1: Set defaults from backend
+  const busOperatorId = await generateCustomId(
+    EntityCodeEnum.BUS_OPERATOR,
+    "BO"
+  );
   const busOperatorData = {
     ...basicInfo,
+    operatorId: busOperatorId,
     password: "operator@123",
     verificationStatus: "approved",
     termAndCondition: true,
@@ -242,7 +246,7 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
     national_identity_card_back,
     avatar,
     bankDocs,
-    branch
+    branch,
   } = req.body;
 
   // Simple duplicate email/phone check
@@ -262,7 +266,6 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
       );
     }
   }
-
 
   const updateData = {};
   if (email) updateData.email = email.toLowerCase();
@@ -588,7 +591,6 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     })),
   });
 });
-
 
 const searchAllBusBookings = catchAsyncError(async (req, res, next) => {
   const {
