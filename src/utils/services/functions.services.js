@@ -38,14 +38,17 @@ const SecurePinModel = require("../../models/global-module/secure-pins/secure-pi
 const {
   HotelManagerBankModel,
 } = require("../../models/hotel-module/hotel-manager-banks/hotel-manager-banks.model");
-const { WalletCurrencyEnum } = require("../constants/ENUM");
+const { WalletCurrencyEnum, EntityCodeEnum } = require("../constants/ENUM");
 const {
   sendOtpToPhone,
   sendOtpToEmail,
   verifyEmailOtp,
   verifyPhoneOtp,
 } = require("../otpService/otpService");
-const {BranchModel }= require("../../models/admin-module/branch/branches.model")
+const {
+  BranchModel,
+} = require("../../models/admin-module/branch/branches.model");
+const generateCustomId = require("../../utils/customId/generateCustomId");
 
 // ==============================================
 const registerUserWithEmailAndPhoneNumber = async ({
@@ -63,13 +66,13 @@ const registerUserWithEmailAndPhoneNumber = async ({
     password,
     address,
     phoneNumber,
-    branch
+    branch,
   } = req.body;
 
   const branchDoc = await BranchModel.findById(branch);
-    if (!branchDoc) {
-      throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
-    }
+  if (!branchDoc) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
+  }
   if (createdByAdmin) {
     password = "operator@123";
   }
@@ -100,7 +103,6 @@ const registerUserWithEmailAndPhoneNumber = async ({
       );
     }
   }
-  
 
   const existingUser = await reqModel
     .findOne({
@@ -135,7 +137,10 @@ const registerUserWithEmailAndPhoneNumber = async ({
     return new ApiResponse(statusCode.OK, data, `Data found`);
   }
 
+  const operatorId = await generateCustomId(EntityCodeEnum.BUS_OPERATOR, "BO");
+
   const newUser = new reqModel({
+    operatorId,
     companyName,
     companyAddress,
     email,
@@ -160,7 +165,6 @@ const registerUserWithEmailAndPhoneNumber = async ({
       cardNumber: await generateUniqueCardNumber(),
     });
   }
-   
 
   const userObject = newUser.toObject();
   delete userObject.password;
@@ -781,7 +785,7 @@ const getAvatarFunc = async ({ req, res, reqModel }) => {
 const changePasswordFunc = async ({ req, res, reqModel }) => {
   const { oldPassword, newPassword, confirmPassword } = req.body;
   const _id = req?.user._id;
-  if (!oldPassword || !newPassword||!confirmPassword ){
+  if (!oldPassword || !newPassword || !confirmPassword) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
       "Please enter your old and new password"
@@ -793,7 +797,7 @@ const changePasswordFunc = async ({ req, res, reqModel }) => {
       "Both password are same. Please enter  different Password to proceed"
     );
   }
-    if (newPassword !== confirmPassword) {
+  if (newPassword !== confirmPassword) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
       "New password and confirm password do not match."
@@ -849,7 +853,7 @@ const setPasswordFieldFunc = async ({ req, res, reqModel }) => {
   return new ApiResponse(statusCode.OK, {}, `Password updated Successfully`);
 };
 
-const  resetPasswordFunc = async ({ req, res, reqModel }) => {
+const resetPasswordFunc = async ({ req, res, reqModel }) => {
   const { emailOrPhone, otp, newPassword } = req.body;
   const { _id } = req.user;
 
@@ -1117,9 +1121,11 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
     let user = await reqModel.findOne({ [userField]: emailOrPhone });
 
     if (!user) {
+      const userId = await generateCustomId(EntityCodeEnum.USER, "U");
+
       const userData = isEmail
-        ? { email: emailOrPhone }
-        : { phoneNumber: emailOrPhone };
+        ? { email: emailOrPhone, userId }
+        : { phoneNumber: emailOrPhone, userId };
 
       user = new reqModel(userData);
       await user.save();

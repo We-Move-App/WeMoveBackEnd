@@ -1,7 +1,11 @@
-const{ AdminModel} = require("../../models/admin-module/admin/admin.model")
-const config = require("../../config/config")
+const { AdminModel } = require("../../models/admin-module/admin/admin.model");
+const config = require("../../config/config");
 
-const { createSuperAdmin}  = require("../../controllers/admin-module/admin-auth/admin-auth.controllers");
+const {
+  createSuperAdmin,
+} = require("../../controllers/admin-module/admin-auth/admin-auth.controllers");
+const generateCustomId = require("../customId/generateCustomId");
+const { EntityCodeEnum } = require("../constants/ENUM");
 
 async function initSuperAdmin() {
   const existing = await AdminModel.findOne({ role: "SuperAdmin" });
@@ -12,8 +16,10 @@ async function initSuperAdmin() {
 
   console.log(" Creating SuperAdmin...");
 
+  const adminId = await generateCustomId(EntityCodeEnum.ADMIN, "A");
   const req = {
     body: {
+      adminId,
       email: config.superadmin_email,
       userName: config.superadmin_username,
       password: config.superadmin_password,
@@ -36,7 +42,7 @@ async function initSuperAdmin() {
     if (err) console.error("SuperAdmin creation failed:", err.message);
   };
 
-  await  createSuperAdmin (req, res, next);
+  await createSuperAdmin(req, res, next);
 }
 
 module.exports = { initSuperAdmin };

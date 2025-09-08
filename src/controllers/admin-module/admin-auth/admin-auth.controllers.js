@@ -40,7 +40,7 @@ const {
   updateAvatarFunc,
   resetPasswordFunc,
   changePasswordFunc,
-   getAvatarFunc
+  getAvatarFunc,
 } = require("../../../utils/services/functions.services");
 const bcrypt = require("bcrypt");
 const { hash_rounds } = process.env;
@@ -56,6 +56,8 @@ const {
 } = require("../../../models/admin-module/Admin-coupon/adminCouponModel");
 const { formatDistanceToNowStrict } = require("date-fns");
 const Transaction = require("../../../models/transaction-module/transaction.model");
+const generateCustomId = require("../../../utils/customId/generateCustomId");
+const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
 
 // Register Admin
 // const addAdmins = catchAsyncError(async (req, res, next) => {
@@ -206,8 +208,10 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
   }
 
   const defaultPassword = "Admin@123";
+  const adminId = await generateCustomId(EntityCodeEnum.ADMIN, "A");
 
   const newUser = new AdminModel({
+    adminId,
     email,
     userName,
     password: defaultPassword,
@@ -318,7 +322,9 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
   const defaultPassword = "subadmin@123";
 
   // Create user
+  const adminId = await generateCustomId(EntityCodeEnum.ADMIN, "A");
   const newUser = new AdminModel({
+    adminId,
     email,
     userName,
     phoneNumber,
@@ -676,14 +682,13 @@ const getProfile = catchAsyncError(async (req, res, next) => {
     .json(new ApiResponse(statusCode.OK, admin, "Data found successfully"));
 });
 const getAvatar = catchAsyncError(async (req, res, next) => {
-  const result = await getAvatarFunc ({
+  const result = await getAvatarFunc({
     req,
     reqModel: AdminModel,
   });
 
   return res.status(statusCode.OK).json({
     ...result,
-  
   });
 });
 const updateAvatar = catchAsyncError(async (req, res, next) => {
@@ -1170,7 +1175,7 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     .lean();
 
   const data = coupons.map((c) => ({
-    couponId : c._id,
+    couponId: c._id,
     couponName: c.couponName,
     couponCode: c.couponCode,
     serviceType: c.serviceType,
@@ -1181,7 +1186,6 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     startDate: c.startDate,
     expiryDate: c.expiryDate,
     status: c.status,
- 
   }));
 
   res.status(200).json({
@@ -1223,7 +1227,6 @@ const getCouponById = catchAsyncError(async (req, res) => {
       startDate: coupon.startDate,
       expiryDate: coupon.expiryDate,
       status: coupon.status,
-  
     },
   ];
 
