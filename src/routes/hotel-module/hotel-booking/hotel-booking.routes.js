@@ -42,6 +42,7 @@ hotelBookingRoutes
 // hotelBookingRoutes
 //   .route("/get-booking")
 //   .get(isUserAuthenticated, getBookingById);
+
 hotelBookingRoutes
   .route("/pay/:bookingId")
   .post(isUserAuthenticated, payHotelBookingPayment);
