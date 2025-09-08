@@ -49,8 +49,6 @@ const createBooking = catchAsyncError(async (req, res) => {
     checkOutDate,
     checkInTime,
     checkOutTime,
-    totalAmount,
-    paymentStatus,
     noOfAdults,
     noOfKids,
     noOfRoom,
@@ -60,12 +58,10 @@ const createBooking = catchAsyncError(async (req, res) => {
   // Format dates and times
   const formattedCheckIn = new Date(checkInDate);
   const formattedCheckOut = new Date(checkOutDate);
-  const checkInDateTime = new Date(
-    `${checkInDate}T${HotelPolicyModel.checkInTime || "12:00"}:00`
-  );
-  const checkOutDateTime = new Date(
-    `${checkOutDate}T${HotelPolicyModel.checkOutTime || "11:00"}:00`
-  );
+  const hotelPolicy = await HotelPolicyModel.findOne({ hotelId });
+  const checkInDateTime = new Date(`${checkInDate}T${hotelPolicy?.checkInTime || "12:00"}:00`);
+  const checkOutDateTime = new Date(`${checkOutDate}T${hotelPolicy?.checkOutTime || "11:00"}:00`);
+
 
   if (
     !bookedBy ||
@@ -92,6 +88,26 @@ const createBooking = catchAsyncError(async (req, res) => {
   if (!hotelExists) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
   }
+  const now = new Date();
+  const checkIn = new Date(checkInDate);
+  const checkOut = new Date(checkOutDate);
+
+  if (checkIn < now) throw new ApiError(statusCode.BAD_REQUEST, "Check-in cannot be in past");
+  if (checkOut <= checkIn) throw new ApiError(statusCode.BAD_REQUEST, "Check-out must be after check-in");
+
+  const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+  if (nights > 30) throw new ApiError(statusCode.BAD_REQUEST, "Stay cannot exceed 30 nights");
+
+  const totalGuests = (noOfAdults || 0) + (noOfKids || 0);
+  const allowedGuests = noOfRoom * 2;
+
+  if (totalGuests > allowedGuests) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      `Max 2 persons per room allowed. You booked ${noOfRoom} rooms so only ${allowedGuests} guests allowed`
+    );
+  }
+
 
   const hotelManagerId = hotelExists.ownerId.toString();
 
@@ -130,11 +146,18 @@ const createBooking = catchAsyncError(async (req, res) => {
       `Only ${trulyAvailableRooms.length} rooms are available during your selected time. Requested: ${noOfRoom}`
     );
   }
+  const room = await Room.findById(roomTypeId);
+  if (!room) throw new ApiError(statusCode.NOT_FOUND, "Invalid room type");
+  console.log(room.roomPrice)
+
+  let totalAmount = room.roomPrice * noOfRoom * nights;
+  console.log("totalAmount===", totalAmount)
 
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
+
     let finalAmount = totalAmount;
     let appliedCoupon = null;
 
@@ -189,12 +212,20 @@ const createBooking = catchAsyncError(async (req, res) => {
 
       appliedCoupon = coupon;
     }
+    let priceBreakup = {
+      noOfRooms: noOfRoom,
+      nights,
+      basePricePerRoom: room.roomPrice,
+      baseAmount: totalAmount,
+      discount: appliedCoupon ? totalAmount - finalAmount : 0,
+      finalAmount,
+    };
 
     // Step 1: Check wallet balance
     const userWallet = await WalletModel.findOne({ userId: bookedBy }).session(
       session
     );
-
+    console.log(userWallet)
     if (!userWallet || userWallet.balance < finalAmount) {
       await TransactionModel.create(
         [
@@ -214,7 +245,11 @@ const createBooking = catchAsyncError(async (req, res) => {
 
       throw new ApiError(statusCode.BAD_REQUEST, "Insufficient wallet balance");
     }
+    let paymentStatus = "PENDING";
 
+    if (userWallet.balance >= finalAmount) {
+      paymentStatus = "PAID";
+    }
     // Step 2: Create booking
     const booking = await HotelBooking.create(
       [
@@ -230,7 +265,7 @@ const createBooking = catchAsyncError(async (req, res) => {
           totalAmount,
           finalAmount,
           couponUsed: appliedCoupon ? appliedCoupon._id : null,
-          paymentStatus: "PAID",
+          paymentStatus,
           noOfAdults,
           noOfKids,
           noOfRoom,
@@ -343,8 +378,11 @@ const createBooking = catchAsyncError(async (req, res) => {
       .status(statusCode.CREATED)
       .json(
         new ApiResponse(
-          statusCode.CREATED,
-          newBooking,
+          statusCode.CREATED, {
+          ...newBooking.toObject(),
+          priceBreakup
+        },
+
           "Hotel booking created successfully"
         )
       );
@@ -354,6 +392,109 @@ const createBooking = catchAsyncError(async (req, res) => {
     throw error;
   }
 });
+
+const getTotalAmount = catchAsyncError(async (req, res) => {
+  let { hotelId, roomTypeId, checkInDate, checkOutDate, noOfRoom, noOfAdults, noOfKids } = req.body;
+
+  // ✅ Convert to numbers safely
+  noOfRoom = Number(noOfRoom);
+  noOfAdults = Number(noOfAdults);
+  noOfKids = Number(noOfKids);
+
+  // ✅ Required field validation
+  if (!hotelId || !roomTypeId || !checkInDate || !checkOutDate || !noOfRoom) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Missing required fields.");
+  }
+
+  // ✅ Date parsing
+  const now = new Date();
+  const checkIn = new Date(checkInDate);
+  const checkOut = new Date(checkOutDate);
+
+  // ✅ Date format validation
+  if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid date format. Please use YYYY-MM-DD.");
+  }
+
+  // ✅ Check-in cannot be in the past
+  if (checkIn < now.setHours(0, 0, 0, 0)) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Check-in cannot be in the past.");
+  }
+
+  // ✅ Checkout must be after check-in
+  if (checkOut <= checkIn) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Check-out must be after check-in date.");
+  }
+
+  // ✅ Nights validation
+  const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+  if (nights <= 0) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Stay must be at least 1 night.");
+  }
+  if (nights > 30) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Stay cannot exceed 30 nights.");
+  }
+
+  // ✅ Guest validation
+  const maxAdultsAllowed = noOfRoom * 2;
+  const maxKidsAllowed = noOfRoom * 2;
+  const maxGuestsAllowed = noOfRoom * 4;
+  const totalGuests = noOfAdults + noOfKids;
+
+  if (noOfAdults > maxAdultsAllowed) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      `Maximum ${maxAdultsAllowed} adults allowed for ${noOfRoom} room(s).`
+    );
+  }
+
+  if (noOfKids > maxKidsAllowed) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      `Maximum ${maxKidsAllowed} children allowed for ${noOfRoom} room(s).`
+    );
+  }
+
+  if (totalGuests > maxGuestsAllowed) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      `Maximum ${maxGuestsAllowed} total guests allowed for ${noOfRoom} room(s).`
+    );
+  }
+
+  // ✅ Validate hotel
+  const hotelExists = await Hotel.findById(hotelId);
+  if (!hotelExists) {
+    throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
+  }
+
+  // ✅ Validate room type and fetch price
+  const roomType = await Room.findById(roomTypeId).select("roomPrice");
+  if (!roomType) {
+    throw new ApiError(statusCode.NOT_FOUND, "Invalid room type.");
+  }
+
+  // ✅ Price calculation
+  const totalAmount = roomType.roomPrice * noOfRoom * nights;
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        totalAmount,
+        nights,
+        noOfRooms: noOfRoom,
+        perRoomPrice: roomType.roomPrice,
+        adults: noOfAdults,
+        children: noOfKids,
+      },
+      "Price calculated successfully"
+    )
+  );
+});
+
+
+
 
 const payHotelBookingPayment = catchAsyncError(async (req, res, next) => {
   const { securePin } = req.body;
@@ -436,17 +577,36 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
     requiredRooms,
     checkInDate,
     checkOutDate,
+    noOfAdults,
+    noOfKids = 0,
     page = 1,
     limit = 10,
   } = req.query;
 
   const requiredRoomCount = parseInt(requiredRooms);
+  const adultsCount = parseInt(noOfAdults);
+  const kidsCount = parseInt(noOfKids);
   const pageNum = parseInt(page);
   const limitNum = parseInt(limit);
   if (isNaN(requiredRoomCount) || requiredRoomCount <= 0) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
       "requiredRooms must be a positive integer."
+    );
+  }
+  if (isNaN(adultsCount) || adultsCount <= 0) {
+    throw new ApiError(statusCode.BAD_REQUEST, "At least 1 adult is required.");
+  }
+
+  // 3. Children must be >= 0
+  if (isNaN(kidsCount) || kidsCount < 0) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Number of children cannot be negative.");
+  }
+  const totalGuests = adultsCount + kidsCount;
+  if (totalGuests > requiredRoomCount * 2) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Total guests exceed maximum allowed occupancy (2 per room)."
     );
   }
 
@@ -466,6 +626,17 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
 
   const checkIn = new Date(checkInDate);
   const checkOut = new Date(checkOutDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  // Prevent searching in the past
+  if (checkIn < today) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Check-in date cannot be in the past."
+    );
+  }
+
 
   if (checkOut <= checkIn) {
     throw new ApiError(
@@ -813,11 +984,11 @@ const getHotelById = catchAsyncError(async (req, res) => {
         roomTypes: roomTypesWithAvailability,
         ...(checkIn && checkOut
           ? {
-              dateFilter: {
-                checkInDate: checkIn.toISOString(),
-                checkOutDate: checkOut.toISOString(),
-              },
-            }
+            dateFilter: {
+              checkInDate: checkIn.toISOString(),
+              checkOutDate: checkOut.toISOString(),
+            },
+          }
           : {}),
       },
       "Hotel details fetched successfully."
@@ -1166,6 +1337,7 @@ module.exports = {
   payHotelBookingPayment,
   getHotelsByLocation,
   getHotelById,
+  getTotalAmount,
   getUpcomingBookings,
   getPastBookings,
   getCancelReasons,

@@ -6,12 +6,13 @@ const {
   // getBookingById,
   getBookings,
   payHotelBookingPayment,
+  getTotalAmount,
   getHotelsByLocation,
   getHotelById,
   getUpcomingBookings,
   getPastBookings,
-   cancelHotelBooking,
-   getCancelReasons
+  cancelHotelBooking,
+  getCancelReasons
 
 
 
@@ -29,6 +30,11 @@ const hotelBookingRoutes = express.Router();
 hotelBookingRoutes
   .route("/create-booking")
   .post(isUserAuthenticated, createBooking);
+
+hotelBookingRoutes
+  .route("/totalAmount")
+  .post(isUserAuthenticated, getTotalAmount)
+
 hotelBookingRoutes
   .route("/bookings")
   .get(isUserAuthenticated, getBookings);
@@ -53,12 +59,12 @@ hotelBookingRoutes
   .get(isUserAuthenticated, getPastBookings);
 
 
-  hotelBookingRoutes
+hotelBookingRoutes
   .route("/cancel-reasons")
-  .get(isUserAuthenticated, getCancelReasons);  
+  .get(isUserAuthenticated, getCancelReasons);
 
 
-  hotelBookingRoutes
+hotelBookingRoutes
   .route("/cancel-booking/:bookingId")
   .put(isUserAuthenticated, cancelHotelBooking);
 module.exports = hotelBookingRoutes;

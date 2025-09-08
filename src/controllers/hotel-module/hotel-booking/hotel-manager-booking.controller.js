@@ -14,6 +14,8 @@ const { deleteImageFromAws } = require("../../../utils/uploadFiles/uploadFilesto
 const { uploadMultipleImagesToAws } = require("../../../utils/uploadFiles/images/uploadImages");
 const UserModel = require("../../../models/user-module/users/user.model");
 const HotelPolicyModel = require("../../../models/hotel-module/hotel-registration/hotel-policy.model");
+
+
 const createBookingByHotelManager = catchAsyncError(async (req, res) => {
   const bookedBy = req.user._id;
   const {
@@ -24,11 +26,12 @@ const createBookingByHotelManager = catchAsyncError(async (req, res) => {
     totalAmount,
     paymentStatus,
     noOfAdults,
-    noOfKids,
-
+    noOfKids = 0,
     user,
   } = req.body;
 const noOfRoom = parseInt(req.body.noOfRoom) || 1;
+const adultsCount = parseInt(noOfAdults);
+const kidsCount = parseInt(noOfKids);
 
   // Parse user data
   let parsedUser = {};
@@ -538,7 +541,7 @@ const getBookingsByHotelManager = catchAsyncError(async (req, res) => {
 
     return {
       ...b.toObject(),
-      bookedBy: populatedBookedBy || b.bookedBy, // fallback just in case
+      bookedBy: populatedBookedBy || b.bookedBy, 
     };
   });
 
