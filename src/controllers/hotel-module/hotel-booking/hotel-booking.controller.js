@@ -197,7 +197,7 @@ const createBooking = catchAsyncError(async (req, res) => {
   if (!room) throw new ApiError(statusCode.NOT_FOUND, "Invalid room type");
   console.log(room.roomPrice)
 
-  let totalAmount = room.roomPrice * noOfRoom * nights;
+
   console.log("totalAmount===", totalAmount)
 
   const session = await mongoose.startSession();
@@ -501,9 +501,9 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
   }
 
   // ✅ Guest validation
-  const maxAdultsAllowed = noOfRoom * 2;
-  const maxKidsAllowed = noOfRoom * 2;
-  const maxGuestsAllowed = noOfRoom * 4;
+  const maxAdults = noOfRoom * 2;
+  const maxKids = noOfRoom * 2;
+  const maxTotal = noOfRoom * 4;
   const totalGuests = noOfAdults + noOfKids;
 
   if (noOfAdults > maxAdults) {
