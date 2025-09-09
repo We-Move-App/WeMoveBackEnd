@@ -9,8 +9,8 @@ const {
   getBusBookingDetails,
   payBusBookingPayment,
   cancelBusBooking,
-  UpcomingBusBookings ,
-  OldBusBookings 
+  UpcomingBusBookings,
+  OldBusBookings
 } = require("../../../controllers/user-module/user-bus-bookings/user-bus-bookings.controllers");
 
 const userBusBookingsRoutes = express.Router();
@@ -18,9 +18,9 @@ userBusBookingsRoutes
   .route("/upcomingbooking")
   .get(isUserAuthenticated, authorizeRole(["user"]), UpcomingBusBookings);
 
- userBusBookingsRoutes
- .route("/oldbookingbus")
- .get(isUserAuthenticated, authorizeRole(["user"]), OldBusBookings )
+userBusBookingsRoutes
+  .route("/oldbookingbus")
+  .get(isUserAuthenticated, authorizeRole(["user"]), OldBusBookings)
 
 userBusBookingsRoutes
   .route("/my-bookings")

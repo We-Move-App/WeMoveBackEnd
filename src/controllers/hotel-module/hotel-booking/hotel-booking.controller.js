@@ -65,19 +65,13 @@ const createBooking = catchAsyncError(async (req, res) => {
   if (isNaN(totalAmount) || totalAmount < 0) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid totalAmount provided.");
   }
-
   noOfRoom = Number(noOfRoom);
   noOfAdults = Number(noOfAdults);
   noOfKids = Number(noOfKids);
 
-
-
-
   if (noOfRoom <= 0 || noOfAdults <= 0 || noOfKids < 0) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid number of rooms/adults/kids.");
   }
-
-
   // Format dates and times
   const formattedCheckIn = new Date(checkInDate);
   const formattedCheckOut = new Date(checkOutDate);
@@ -102,26 +96,26 @@ const createBooking = catchAsyncError(async (req, res) => {
       "Missing required booking details."
     );
   }
-
   // Check if user exists
   const userExists = await User.findById(bookedBy);
   if (!userExists) {
     throw new ApiError(statusCode.NOT_FOUND, "User not registered.");
   }
-
   // Check if hotel exists
   const hotelExists = await Hotel.findById(hotelId);
   if (!hotelExists) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
   }
   const now = new Date();
+  console.log()
   const checkIn = new Date(checkInDate);
+  console.log(checkIn)
   const checkOut = new Date(checkOutDate);
+  console.log(checkOut)
 
-  if (checkIn < now) throw new ApiError(statusCode.BAD_REQUEST, "Check-in cannot be in past");
-  if (checkOut <= checkIn) throw new ApiError(statusCode.BAD_REQUEST, "Check-out must be after check-in");
 
-  if (checkIn < now)
+
+  if (checkIn <= now)
     throw new ApiError(statusCode.BAD_REQUEST, "Check-in cannot be in past");
   if (checkOut <= checkIn)
     throw new ApiError(
