@@ -25,7 +25,9 @@ const { getFinalPrice } = require("../../../utils/services/prices.services");
 const {
   PaymentStatusEnum,
   TransactionTypeEnum,
+  EntityCodeEnum,
 } = require("../../../utils/constants/ENUM");
+const generateCustomId = require("../../../utils/customId/generateCustomId");
 
 const getAllBusBookings = catchAsyncError(async (req, res, next) => {
   const {
@@ -90,7 +92,6 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     query.to = { $regex: drop, $options: "i" };
   }
 
-  
   if (routeId) {
     query.routeId = routeId;
   }
@@ -99,7 +100,6 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
   const pageSize = parseInt(limit) || 10;
   const skip = (pageNumber - 1) * pageSize;
 
- 
   const sortField = sortBy || "createdAt";
   const sortOrder = order === "desc" ? 1 : -1;
 
@@ -132,8 +132,6 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     )
   );
 });
-
-
 
 const createBusBooking = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
@@ -246,10 +244,13 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       seatNumber: assignedSeats[index],
     }));
 
+    const bookingId = await generateCustomId(EntityCodeEnum.BUS_BOOKING, "BB");
+
     // Create a new booking entry
     const newBooking = await BusBookingModel.create(
       [
         {
+          bookingId,
           busId,
           bookedByOperator: userId,
           routeId,
@@ -333,7 +334,7 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
 
 const cancelBooking = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
-    const  cancelReason  = req.body;
+  const cancelReason = req.body;
 
   const booking = await BusBookingModel.findById(bookingId).select(
     "paymentStatus status routeId busId journeyDate bookedBy busOperatorId price"
@@ -356,7 +357,10 @@ const cancelBooking = catchAsyncError(async (req, res, next) => {
     // Refund 50% to user
     const userWallet = await Wallet.findOne({ userId: booking.bookedBy });
     if (!userWallet) {
-      throw new ApiError(statusCode.NOT_FOUND, "Wallet not found for this user");
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        "Wallet not found for this user"
+      );
     }
 
     userWallet.balance += refundAmount;
@@ -373,9 +377,14 @@ const cancelBooking = catchAsyncError(async (req, res, next) => {
     });
 
     // Deduct 50% from bus operator
-    const operatorWallet = await Wallet.findOne({ busOperatorId: booking.busOperatorId });
+    const operatorWallet = await Wallet.findOne({
+      busOperatorId: booking.busOperatorId,
+    });
     if (!operatorWallet) {
-      throw new ApiError(statusCode.NOT_FOUND, "Wallet not found for bus operator");
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        "Wallet not found for bus operator"
+      );
     }
 
     if (operatorWallet.balance < refundAmount) {
@@ -436,15 +445,16 @@ const cancelBooking = catchAsyncError(async (req, res, next) => {
 
   await Promise.all([booking.save(), bookedSeat.save()]);
 
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      booking,
-      "Booking cancelled successfully. 50% refunded to user and deducted from bus operator."
-    )
-  );
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        booking,
+        "Booking cancelled successfully. 50% refunded to user and deducted from bus operator."
+      )
+    );
 });
-
 
 const updateBooking = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;

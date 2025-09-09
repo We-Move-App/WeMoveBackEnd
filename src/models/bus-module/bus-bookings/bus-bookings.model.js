@@ -15,6 +15,11 @@ const passengerSchema = new Schema({
 
 const bookingSchema = new Schema(
   {
+    bookingId: {
+      type: String,
+      unique: true,
+      index: true,
+    },
     busId: { type: Schema.Types.ObjectId, ref: "Bus", required: true },
     bookedBy: { type: Schema.Types.ObjectId, ref: "User" },
     bookedByOperator: { type: Schema.Types.ObjectId, ref: "BusOperator" },
@@ -71,13 +76,13 @@ const bookingSchema = new Schema(
       default: "user",
     },
     coupon: {
-  couponId: { type: Schema.Types.ObjectId, ref: "Coupon" },
-  couponCode: { type: String },
-  discountType: { type: String, enum: ["Percentage", "Fixed Amount"] },
-  discountValue: { type: Number }, // percentage or amount applied
-  discountApplied: { type: Number, default: 0 }, // actual ₹ discount
-},
-finalAmount: { type: Number, required: true, min: 0 },
+      couponId: { type: Schema.Types.ObjectId, ref: "Coupon" },
+      couponCode: { type: String },
+      discountType: { type: String, enum: ["Percentage", "Fixed Amount"] },
+      discountValue: { type: Number }, // percentage or amount applied
+      discountApplied: { type: Number, default: 0 }, // actual ₹ discount
+    },
+    finalAmount: { type: Number, required: true, min: 0 },
 
     status: {
       type: String,
@@ -91,13 +96,12 @@ finalAmount: { type: Number, required: true, min: 0 },
     cancelReason: {
       type: String,
     },
-    isUseronboarded:{
-      type: Boolean,    
+    isUseronboarded: {
+      type: Boolean,
       default: false,
     },
   },
-  { timestamps: true },
-
+  { timestamps: true }
 );
 
 const BusBookingModel = mongoose.model("BusBooking", bookingSchema);
