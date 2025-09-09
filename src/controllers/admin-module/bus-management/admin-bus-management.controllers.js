@@ -505,7 +505,7 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     paymentStatus,
     from,
     to,
-  } = req.query; // ✅ use query instead of body
+  } = req.query;
 
   page = parseInt(page);
   limit = parseInt(limit);
@@ -578,17 +578,34 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     data: validBookings.map((booking) => ({
       bookingId: booking._id,
       busRegNumber: booking.busId?.busRegNumber || "N/A",
-      customerName: booking.passengers.map((p) => p.name).join(", "),
-      phone: booking.phoneNumber,
-      email: booking.email,
+
+      // bookedBy details
+      bookedBy: booking.bookedBy
+        ? {
+          fullName: booking.bookedBy.fullName,
+          email: booking.bookedBy.email,
+          phoneNumber: booking.bookedBy.phoneNumber,
+        }
+        : null,
+
       from: booking.from,
       to: booking.to,
       journeyDate: booking.journeyDate,
       amount: booking.price || 0,
+      finalAmount: booking.finalAmount || booking.price || 0,
       paymentStatus: booking.paymentStatus,
       status: booking.status,
       createdAt: booking.createdAt,
+      passengers: booking.passengers.map((p) => ({
+        name: p.name,
+        age: p.age,
+        gender: p.gender,
+        contactNumber: p.contactNumber,
+        seatNumber: p.seatNumber,
+        email: p.email,
+      })),
     })),
+
   });
 });
 

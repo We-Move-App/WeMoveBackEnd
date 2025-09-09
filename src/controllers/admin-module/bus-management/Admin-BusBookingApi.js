@@ -90,7 +90,7 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     query.to = { $regex: drop, $options: "i" };
   }
 
-  
+
   if (routeId) {
     query.routeId = routeId;
   }
@@ -99,7 +99,7 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
   const pageSize = parseInt(limit) || 10;
   const skip = (pageNumber - 1) * pageSize;
 
- 
+
   const sortField = sortBy || "createdAt";
   const sortOrder = order === "desc" ? 1 : -1;
 
