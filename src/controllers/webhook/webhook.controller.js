@@ -29,8 +29,8 @@ const momoStatus = catchAsyncError(async (req, res) => {
     const wallet = await Wallet.findOne({ userId: transaction.userId });
     if (!wallet) throw new ApiError(statusCode.NOT_FOUND, "Wallet not found");
 
-    const roundedAmount = roundToTwo(transaction.amount);
-    wallet.balance = roundToTwo(wallet.balance + roundedAmount);
+    // const roundedAmount = roundToTwo(transaction.amount);
+    wallet.balance = wallet.balance + transaction.amount;
     await wallet.save();
   }
 
