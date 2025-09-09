@@ -536,6 +536,7 @@ const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
     bankDetails = {},
     vehicleDetails = {},
     documents = [],
+    branch
   } = req.body;
 
   if (!driverId || !vehicleType) {
@@ -881,6 +882,7 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
     bankDetails = {},
     vehicleDetails = {},
     documents = [],
+    branch
   } = req.body;
 
   if (!driverId || !vehicleType) {
