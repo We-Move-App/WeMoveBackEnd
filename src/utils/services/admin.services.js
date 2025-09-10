@@ -7,13 +7,21 @@ const { HostAddress } = require("mongodb");
 
 
 const getAllUsersByAdmin = async ({ req, model }) => {
-  const {
-    page = 1,
-    limit = 10,
+  let {
+    page,
+    limit,
     sortBy = "createdAt",
     order = "desc",
     search = ""
-  } = req.body;
+  } = req.query;
+  console.log("req.query", req.query);
+
+
+  page = parseInt(page, 10);
+  limit = parseInt(limit, 10);
+
+  if (!page || page < 1) page = 1;       // default page = 1
+  if (!limit || limit < 1) limit = 10;
 
   const skip = (page - 1) * limit;
 
@@ -28,7 +36,7 @@ const getAllUsersByAdmin = async ({ req, model }) => {
     ];
   }
 
-  
+
   const users = await model
     .find(query)
     .sort({ [sortBy]: order === "asc" ? 1 : -1 })
@@ -72,10 +80,13 @@ const getUserByIdByAdmin = async ({
 
 }) => {
   const { userId } = req.params;
-  const [user, userDocs, userBank,] = await Promise.all([
+  console.log("userId", userId);
+
+  const [user, userDocs, userBank] = await Promise.all([
     userModel
       .findOne({ _id: userId })
-      .populate("verifiedBy.admin", "userName phoneNumber email"),
+      .populate("verifiedBy.admin", "userName phoneNumber email")
+      .populate("branch", "name location"), //
     userDocsModel.findOne({ userId }).populate("documentIds"),
     userBankModel.findOne({ userId }),
   ]);

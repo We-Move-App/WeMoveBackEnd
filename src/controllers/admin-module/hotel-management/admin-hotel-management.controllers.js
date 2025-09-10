@@ -44,6 +44,7 @@ const {
 } = require("../../../utils/uploadFiles/uploadFilestoAws");
 const generateCustomId = require("../../../utils/customId/generateCustomId");
 const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
+const { BranchModel } = require("../../../models/admin-module/branch/branches.model");
 
 const getAllHotelManagers = catchAsyncError(async (req, res, next) => {
   const results = await getAllUsersByAdmin({ req, model: HotelManagerModel });
@@ -72,8 +73,11 @@ const getHotelByManagerId = catchAsyncError(async (req, res, next) => {
   const { ownerId } = req.params;
 
   try {
-    // 1) Fetch manager (owner)
-    const manager = await HotelManagerModel.findById(ownerId);
+
+    const manager = await HotelManagerModel.findById(ownerId)
+      .populate("branch", "name location") // ✅ populate branch with name & location
+      .lean();
+
     if (!manager) throw new ApiError(404, "Manager not found");
 
     // 2) Fetch bank info
@@ -244,11 +248,7 @@ const registerHotelManagerFromAdmin = catchAsyncError(
           statusCode.BAD_REQUEST,
           "Profile info is incomplete"
         );
-      if (!bankInfo?.accountNumber)
-        throw new ApiError(
-          statusCode.BAD_REQUEST,
-          "Bank account number required"
-        );
+
       if (
         !hotelInfo?.hotelName ||
         !hotelInfo?.businessLicense ||
@@ -271,6 +271,12 @@ const registerHotelManagerFromAdmin = catchAsyncError(
           "Email or phone already exists"
         );
 
+      const branchDoc = await BranchModel.findById(profileInfo.branch);
+      if (!branchDoc) {
+        throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
+      }
+
+
       // Create manager with all verification fields true by default
       const managerId = await generateCustomId(
         EntityCodeEnum.HOTEL_MANAGER,
@@ -288,23 +294,24 @@ const registerHotelManagerFromAdmin = catchAsyncError(
         termAndCondition: true,
         emailVerified: true,
         phoneNumberVerified: true,
+        branch: branchDoc._id,
       });
       createdDocs.push({ model: HotelManagerModel, id: manager._id });
 
-      if (!bankInfo?.accountNumber) {
-        throw new ApiError(400, "Account number is required");
-      }
+      // if (!bankInfo?.accountNumber) {
+      //   throw new ApiError(400, "Account number is required");
+      // }
       const bankAccount = await HotelManagerBankModel.create({
         ...bankInfo,
         userId: manager._id,
         createdBy: adminId,
         bankDocs: bankInfo.bankDocs
           ? {
-              public_id: bankInfo.bankDocs.public_id || null,
-              url: bankInfo.bankDocs.url || bankInfo.bankDocs.fileUrl || null,
-              fileName: bankInfo.bankDocs.fileName || null,
-              fileType: bankInfo.bankDocs.fileType || null,
-            }
+            public_id: bankInfo.bankDocs.public_id || null,
+            url: bankInfo.bankDocs.url || bankInfo.bankDocs.fileUrl || null,
+            fileName: bankInfo.bankDocs.fileName || null,
+            fileType: bankInfo.bankDocs.fileType || null,
+          }
           : null,
       });
 
@@ -742,6 +749,13 @@ const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
     const existingManager = await HotelManagerModel.findById(managerId);
     if (!existingManager) throw new ApiError(404, "Manager not found");
 
+    const branchDoc = profileInfo?.branch
+      ? await BranchModel.findById(profileInfo.branch)
+      : null;
+    if (profileInfo?.branch && !branchDoc) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
+    }
+
     const updateManagerData = {};
     if (profileInfo?.fullName)
       updateManagerData.fullName = profileInfo.fullName;
@@ -755,6 +769,8 @@ const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
       updateManagerData.companyAddress = profileInfo.companyAddress;
     if (profileInfo?.businessLicense)
       updateManagerData.businessLicense = profileInfo.businessLicense;
+    if (branchDoc) updateManagerData.branch = branchDoc._id;
+
 
     // Verified & status
     updateManagerData.isverified = true;

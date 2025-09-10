@@ -8,25 +8,28 @@ const HotelManagerBankSchema = new mongoose.Schema(
       required: true,
       ref: "Hotel-Manager",
     },
-     
+
     bankDocs: {
+
+      required: false,
       type: ImageSchema,
+
     },
-     bankName: {
+    bankName: {
       type: String,
       required: false,
-     },
+    },
     accountHolderName: {
       type: String,
       trim: true,
     },
     accountNumber: {
       type: String,
-      required: true,
+      required: false,
       unique: true,
       match: [/^\d{10,18}$/, "Please provide a valid account number"],
     },
-   
+
     // ifscCode: {
     //   type: String,
     //   required: true,
@@ -46,7 +49,7 @@ const HotelManagerBankSchema = new mongoose.Schema(
     },
   },
   {
-    timestamps: true, 
+    timestamps: true,
   }
 );
 

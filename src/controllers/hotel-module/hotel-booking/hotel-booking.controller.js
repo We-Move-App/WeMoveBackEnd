@@ -606,64 +606,34 @@ const payHotelBookingPayment = catchAsyncError(async (req, res, next) => {
 });
 
 const getBookings = catchAsyncError(async (req, res) => {
-  const { bookingId, hotelId, page = 1, limit = 10 } = req.query;
+  const { bookingId } = req.query;
 
-  const query = {};
-
-  if (bookingId) {
-    query._id = bookingId;
-  } else if (hotelId) {
-    query.hotelId = hotelId;
-
-    if (startDate || endDate) {
-      query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
-      if (endDate) query.createdAt.$lte = new Date(endDate);
-    }
-
-    if (roomTypeId) {
-      query.roomTypeId = roomTypeId;
-    }
-
-    if (userId) {
-      query.bookedBy = userId;
-    }
-  } else {
+  if (!bookingId) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Please provide bookingId or hotelId in query params."
+      "Please provide bookingId in query params."
     );
   }
 
-  const skip = (parseInt(page) - 1) * parseInt(limit);
-
-  const bookings = await HotelBooking.find(query)
-
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(parseInt(limit))
+  const booking = await HotelBooking.findById(bookingId)
     .populate({ path: "hotelId", model: Hotel, select: "-__v" })
     .populate({ path: "roomTypeId", model: Room, select: "-__v" })
     .populate({ path: "bookedBy", model: User, select: "-password -__v" })
     .populate({ path: "assignedRooms", model: individualRoom, select: "-__v" });
 
-  const totalBookings = await HotelBooking.countDocuments(query);
-  const totalPages = Math.ceil(totalBookings / parseInt(limit));
+  if (!booking) {
+    throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
+  }
 
   return res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
-      {
-        totalBookings,
-        totalPages,
-        currentPage: parseInt(page),
-        limit: parseInt(limit),
-        bookings,
-      },
-      "Booking(s) fetched successfully"
+      booking,
+      "Booking fetched successfully"
     )
   );
 });
+
 
 const getHotelsByLocation = catchAsyncError(async (req, res) => {
   const {

@@ -7,10 +7,9 @@ function validateFullName(fullName) {
   return regex.test(fullName);
 }
 
-function validateIfscCode()
-{
- const regex =[/^[A-Z]{4}0[A-Z0-9]{6}$/, "Please provide a valid IFSC code"]
- return regex
+function validateIfscCode() {
+  const regex = [/^[A-Z]{4}0[A-Z0-9]{6}$/, "Please provide a valid IFSC code"]
+  return regex
 }
 
 // Validation for email

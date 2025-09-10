@@ -30,7 +30,7 @@ const BusModel = require("../../../models/bus-module/buses/buses.model");
 const BusRouteModel = require("../../../models/bus-module/bus-routes/bus-routes.model");
 const multer = require("../../../utils/uploadFiles/multer");
 const moment = require("moment");
-const BranchModel = require("../../admin-module/branches/branches.controllers");
+const { BranchModel } = require("../../../models/admin-module/branch/branches.model");
 
 const { TypeOfUser } = require("../../../utils/constants/constants");
 const {
@@ -115,8 +115,10 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
     bankDetails,
     national_identity_card_front,
     national_identity_card_back,
-    branch,
   } = req.body;
+
+  console.log("basicInfo", req.body);
+
   const existingOperator = await BusOperatorModel.findOne({
     $or: [{ email: basicInfo?.email }, { phoneNumber: basicInfo?.phoneNumber }],
   });
@@ -127,8 +129,8 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
       "Bus operator with this email or phone number already exists"
     );
   }
-
-  const branchDoc = await BranchModel.findById(branch);
+  const branchDoc = await BranchModel.findById(basicInfo.branch);
+  console.log("branchDoc", branchDoc);
   if (!branchDoc) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
   }
