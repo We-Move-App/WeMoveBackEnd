@@ -103,6 +103,7 @@ const commissionRouter = require("./routes/admin-module/commission-management/co
 const dashBoardRouter = require("./routes/admin-module/dashboard/dashboard.routes");
 const adminWalletRoute = require("./routes/admin-module/wallet/admin-wallet.routes");
 const chatRouter = require("./routes/new-driver-module/chat-details/chat-details.routes");
+const fcmRouter = require("./routes/firebase/fcm-token.routes");
 
 if (node_env !== "production") {
   require("dotenv").config();
@@ -276,6 +277,9 @@ app.use("/api/v1/admin/wallet", adminWalletRoute);
 app.use("/api/v1/google-search", googleSearchRoutes);
 app.use("/api/v1/verification", verificationRoutes);
 app.use("/api/v1/amenities", amenititesRoutes);
+
+// Fcm
+app.use("/api/v1/fcm", fcmRouter);
 
 app.use((req, res, next) => {
   console.log("Incoming:", req.method, req.url);

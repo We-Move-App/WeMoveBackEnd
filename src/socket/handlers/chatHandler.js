@@ -1,5 +1,8 @@
 const { saveChatMessage } = require("../../utils/chats/saveChatMessage");
 const RideModel = require("../../models/new-driver-module/booking-details/booking-details.model");
+const {
+  sendPushNotification,
+} = require("../../controllers/firebase/fcm-token.controller");
 
 const chatHandler = (socket, io) => {
   socket.on("chat:message", async (data, ack) => {
@@ -47,6 +50,13 @@ const chatHandler = (socket, io) => {
 
       // 📢 broadcast to ride room
       io.to(bookingId).emit("chat:message", chatPayload);
+      const targetUserId =
+        sender.role === "user" ? driverId.toString() : userId.toString();
+
+      console.log("Chat Push Notifi...");
+      await sendPushNotification(targetUserId, "New Message", message, {
+        rideId: bookingId,
+      });
 
       ack?.({ success: true, chat: chatPayload });
     } catch (err) {
