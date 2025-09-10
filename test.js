@@ -104,7 +104,3 @@ const getTransaction = async () => {
 
 sendMoneyToAdmin();
 getTransaction()
-
-// test
-//1
-//2
