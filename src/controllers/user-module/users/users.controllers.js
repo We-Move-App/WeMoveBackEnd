@@ -209,7 +209,7 @@ const getBeneficiary = catchAsyncError(async (req, res, next) => {
   const user = await UserModel.findById(userId);
 
   if (!user) {
-    throw new ApiError(statusCode.NOT_FOUND, `User Not found`);
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid QR");
   }
 
   return res

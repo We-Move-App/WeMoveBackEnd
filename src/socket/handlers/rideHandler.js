@@ -16,6 +16,9 @@ const DriverDocDetails = require("../../models/new-driver-module/documents/drive
 const activeAssignTimers = new Map();
 const DriverLocation = require("../../models/new-driver-module/location/driver-location.model");
 const ChatModel = require("../../models/new-driver-module/chat-details/chat-details.model");
+const {
+  sendPushNotification,
+} = require("../../controllers/firebase/fcm-token.controller");
 /**
  * Assigns ride sequentially to nearby drivers
  */
@@ -141,6 +144,13 @@ const assignRideToDrivers = async (
       distanceToPickup,
       timeToPickup,
     });
+    console.log("Ride:Incoming Push Notifi...");
+    await sendPushNotification(
+      driver.driverId,
+      "New Ride Request",
+      `Pickup at ${booking.pickupLocation?.address || "Unknown location"}`,
+      { rideId: bookingId }
+    );
   }
 
   // ---- Accept handler (atomic DB winner)
@@ -369,6 +379,13 @@ const rideHandler = (socket, io, role) => {
             ].reverse(),
           },
         });
+        console.log("Ride:Accept Push Notifi...");
+        await sendPushNotification(
+          updated.userId,
+          "Ride Accepted",
+          "Your driver is on the way",
+          { rideId: data.bookingId }
+        );
 
         const rideData = {
           rideId: updated?.bookingId ?? null,
@@ -434,6 +451,13 @@ const rideHandler = (socket, io, role) => {
         io.to(booking.userId).emit("ride:arrived", {
           bookingId: data.bookingId,
         });
+        console.log("Ride:Arrived Push Notifi...");
+        await sendPushNotification(
+          booking.userId,
+          "Driver Arrived",
+          "Your driver has arrived at pickup location",
+          { rideId: data.bookingId }
+        );
         ack({ success: true });
       } catch (err) {
         console.error("Arrived error:", err);
@@ -466,6 +490,13 @@ const rideHandler = (socket, io, role) => {
           bookingId: data.bookingId,
           success: isOtpValid,
         });
+        console.log("ride:verifyOTP Push Notifi...");
+        await sendPushNotification(
+          booking.userId,
+          "Ride Started",
+          "Happy Journey",
+          { rideId: data.bookingId }
+        );
 
         ack({ success: isOtpValid, error: isOtpValid ? null : "Invalid OTP" });
       } catch (err) {
@@ -514,7 +545,15 @@ const rideHandler = (socket, io, role) => {
         });
         io.to(booking.userId).emit("ride:completed", {
           bookingId: data.bookingId,
+          fare: booking.fare,
         });
+        console.log("ride:complete Push Notifi...");
+        await sendPushNotification(
+          booking.userId,
+          "Ride Completed",
+          "Your trip has ended. Please check fare details.",
+          { rideId: data.bookingId }
+        );
         ack({ success: true });
       } catch (err) {
         console.error("Complete ride error:", err);
