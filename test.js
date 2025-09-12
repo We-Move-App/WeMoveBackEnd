@@ -81,7 +81,9 @@ const getBalancess = async () => {
 };
 const getTransaction = async () => {
   try {
-    const balance = await getTransactionStatus("caeaaea6-c6cb-43d9-af68-e10166500e65");
+    const balance = await getTransactionStatus(
+      "caeaaea6-c6cb-43d9-af68-e10166500e65"
+    );
     console.log("Updated Transacriton:", balance);
   } catch (error) {
     console.error("Error Transacriton:", error.message);
@@ -103,9 +105,8 @@ const getTransaction = async () => {
 // getAdminBalancess()
 
 sendMoneyToAdmin();
-getTransaction()
+getTransaction();
 
 // test
 //1
-//22
-//3
+//2
