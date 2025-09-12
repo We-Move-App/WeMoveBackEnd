@@ -21,16 +21,14 @@ const addBasicDetailsValidation = Joi.object({
   termsAccepted: Joi.boolean().valid(true).required().messages({
     "any.only": "Terms must be accepted.",
   }),
-  branch: Joi.string()
-    .required()
-    .custom((value, helpers) => {
-      if (!mongoose.Types.ObjectId.isValid(value)) {
-        return helpers.error("any.invalid", {
-          message: "Invalid branch ObjectId",
-        });
-      }
-      return value;
-    }, "ObjectId validation"),
+  branch: Joi.string().custom((value, helpers) => {
+    if (!mongoose.Types.ObjectId.isValid(value)) {
+      return helpers.error("any.invalid", {
+        message: "Invalid branch ObjectId",
+      });
+    }
+    return value;
+  }, "ObjectId validation"),
   documents: Joi.array()
     .length(2)
     .items(
