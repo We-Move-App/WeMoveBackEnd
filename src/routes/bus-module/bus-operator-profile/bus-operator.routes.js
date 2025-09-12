@@ -44,7 +44,9 @@ busOperatorRoutes
   .route("/reset-password")
   .put(isBusOperatorAuthenticated, resetPassword);
 
-busOperatorRoutes.route("/reset-password-new").put(resetPassword2);
+
+busOperatorRoutes.route("/reset-password-new")
+.put(resetPassword2);
 
 busOperatorRoutes
   .route("/update-avatar")

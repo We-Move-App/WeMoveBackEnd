@@ -544,7 +544,6 @@ const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
     bankDetails = {},
     vehicleDetails = {},
     documents = [],
-    branch
   } = req.body;
 
   if (!driverId || !vehicleType) {
@@ -898,7 +897,6 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
     bankDetails = {},
     vehicleDetails = {},
     documents = [],
-    branch
   } = req.body;
 
   if (!driverId || !vehicleType) {
@@ -931,13 +929,17 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
 
 
 
-  if (branch) {
-    const branchDoc = await BranchModel.findById(branch);
-    if (!branchDoc) {
-      throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
+  if (basicDriverDetails.branch) {
+    // Convert to ObjectId
+    basicDriverDetails.branch = new ObjectId(basicDriverDetails.branch);
+
+    // Check if branch exists in DB
+    const branchExists = await BranchModel.findById(basicDriverDetails.branch);
+    if (!branchExists) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch ID");
     }
-    basicDriverDetails.branch = branchDoc._id; // assign to driver basic details
   }
+
 
   // 2️⃣ Update driver basic details
   await DriverBasicDetails.updateOne(

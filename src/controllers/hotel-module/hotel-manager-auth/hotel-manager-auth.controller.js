@@ -178,6 +178,7 @@ const registerHotelManager = catchAsyncError(async (req, res, next) => {
 // =====================|| LOGIN USER ||=====================================
 const loginHotelManager = catchAsyncError(async (req, res, next) => {
   const { emailOrPhone, password } = req.body;
+  console.log("emailOrPhone, password", emailOrPhone, password);
 
   if (!emailOrPhone) {
     throw new ApiError(statusCode.BAD_REQUEST, "Please enter email or phone");
@@ -226,6 +227,7 @@ const loginHotelManager = catchAsyncError(async (req, res, next) => {
   }
 
   const isPasswordMatch = await existingUser.comparePassword(password);
+  console.log("isPasswordMatch", isPasswordMatch);
 
   if (!isPasswordMatch) {
     throw new ApiError(statusCode.BAD_REQUEST, `Invalid Credentials`);
@@ -414,8 +416,7 @@ const resendOtp = catchAsyncError(async (req, res, next) => {
       new ApiResponse(
         statusCode.OK,
         {},
-        `OTP is sent to ${
-          emailOrPhone ? "provided" : "registered"
+        `OTP is sent to ${emailOrPhone ? "provided" : "registered"
         } ${isEmail ? "email" : "phone number"}: ${targetEmailOrPhone}`
       )
     );

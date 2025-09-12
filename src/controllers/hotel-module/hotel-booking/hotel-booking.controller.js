@@ -625,14 +625,39 @@ const getBookings = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
   }
 
+  // 🔹 Populate address separately
+  const hotelAddress = await HotelAddressModel.findOne({
+    hotelId: booking.hotelId?._id,
+  })
+    .populate("address") // populate actual Address document
+    .lean();
+
+  // 🔹 Calculate total nights
+  let totalNights = 0;
+  if (booking.checkInDate && booking.checkOutDate) {
+    const checkIn = new Date(booking.checkInDate);
+    const checkOut = new Date(booking.checkOutDate);
+    totalNights = Math.ceil(
+      (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24)
+    );
+  }
+
+  // Merge response
+  const bookingWithExtras = {
+    ...booking.toObject(),
+    hotelAddress: hotelAddress?.address || null,
+    totalNights,
+  };
+
   return res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
-      booking,
+      bookingWithExtras,
       "Booking fetched successfully"
     )
   );
 });
+
 
 
 const getHotelsByLocation = catchAsyncError(async (req, res) => {

@@ -6,6 +6,7 @@ const { HostAddress } = require("mongodb");
 
 
 
+
 const getAllUsersByAdmin = async ({ req, model }) => {
   let {
     page,
@@ -14,49 +15,44 @@ const getAllUsersByAdmin = async ({ req, model }) => {
     order = "desc",
     search = ""
   } = req.query;
-  console.log("req.query", req.query);
 
-
-  page = parseInt(page, 10);
-  limit = parseInt(limit, 10);
-
-  if (!page || page < 1) page = 1;       // default page = 1
-  if (!limit || limit < 1) limit = 10;
+  page = page ? Math.max(parseInt(page, 10), 1) : 1;
+  limit = limit ? Math.max(parseInt(limit, 10), 1) : 10;
 
   const skip = (page - 1) * limit;
 
   const query = {};
-
-  if (search) {
+  if (search && search.trim() !== "") {
+    const regex = new RegExp(search, "i");
     query.$or = [
-      { email: { $regex: search, $options: "i" } },
-      { phoneNumber: { $regex: search, $options: "i" } },
-      { fullName: { $regex: search, $options: "i" } },
-      { verificationStatus: { $regex: search, $options: "i" } }
+      { email: regex },
+      { phoneNumber: regex },
+      { fullName: regex },
+      { verificationStatus: regex }
     ];
   }
 
+  const totalUser = await model.countDocuments(query);
 
-  const users = await model
+  if (skip >= totalUser && totalUser > 0) {
+    return {
+      success: true,
+      message: "No users found on this page",
+      total: totalUser,
+      page,
+      limit,
+      sortBy,
+      order,
+      data: [],
+    };
+  }
+
+  const user = await model
     .find(query)
-    .sort({ [sortBy]: order === "asc" ? 1 : -1 })
-    .limit(limit)
+    .sort({ [sortBy]: order.toLowerCase() === "asc" ? 1 : -1 })
     .skip(skip)
+    .limit(limit)
     .select("avatar email phoneNumber fullName verificationStatus");
-
-  // Attach bus count
-  const usersWithBusCount = await Promise.all(
-    users.map(async (user) => {
-      const busCount = await busModel.countDocuments({ ownerId: user._id });
-      return {
-        ...user.toObject(),
-        busCount,
-      };
-    })
-  );
-
-  // Total count
-  const totalUser = await model.countDocuments(query).exec();
 
   return {
     success: true,
@@ -66,11 +62,9 @@ const getAllUsersByAdmin = async ({ req, model }) => {
     limit,
     sortBy,
     order,
-    data: usersWithBusCount,
+    data: user,
   };
 };
-
-
 
 const getUserByIdByAdmin = async ({
   req,
@@ -103,7 +97,6 @@ const getUserByIdByAdmin = async ({
   };
   return new ApiResponse(statusCode.OK, result, `Data found Successfully`);
 };
-
 const userVerifiedByAdmin = async ({ req, model }) => {
   const { status } = req.body;
   const { userId } = req.params;

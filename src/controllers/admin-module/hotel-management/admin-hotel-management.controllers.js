@@ -796,43 +796,48 @@ const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
 
     // 2) Update Bank Info
     // Fetch existing bank account
-    const existingBank = await HotelManagerBankModel.findOne({
-      userId: manager._id,
-    });
-    if (!existingBank) throw new ApiError(404, "Bank account not found");
+    // 2) Update Bank Info (defensive)
 
-    const updateBankData = {
-      bankName: bankInfo.bankName || existingBank.bankName,
-      accountHolderName:
-        bankInfo.accountHolderName || existingBank.accountHolderName,
-      accountNumber: bankInfo.accountNumber || existingBank.accountNumber,
-      isPrimary:
-        bankInfo.isPrimary !== undefined
-          ? bankInfo.isPrimary
-          : existingBank.isPrimary,
-    };
+    let bankAccount = null;
 
-    // Replace bankDocs if provided
-    if (bankInfo.bankDocs?.url) {
-      // Delete old doc if exists
-      if (existingBank.bankDocs?.public_id) {
-        await deleteImageFromAws(existingBank.bankDocs.public_id);
+    if (bankInfo && typeof bankInfo === "object") {
+      const existingBank = await HotelManagerBankModel.findOne({ userId: manager._id });
+
+      if (existingBank) {
+        const updateBankData = {
+          bankName: bankInfo.bankName || existingBank.bankName,
+          accountHolderName: bankInfo.accountHolderName || existingBank.accountHolderName,
+          accountNumber: bankInfo.accountNumber || existingBank.accountNumber,
+          isPrimary:
+            bankInfo.isPrimary !== undefined
+              ? bankInfo.isPrimary
+              : existingBank.isPrimary,
+        };
+
+        // Replace bankDocs if provided
+        if (bankInfo.bankDocs?.url) {
+          if (existingBank.bankDocs?.public_id) {
+            await deleteImageFromAws(existingBank.bankDocs.public_id);
+          }
+
+          updateBankData.bankDocs = {
+            public_id: bankInfo.bankDocs.public_id || null,
+            url: bankInfo.bankDocs.url,
+            fileName: bankInfo.bankDocs.fileName || null,
+            fileType: bankInfo.bankDocs.fileType || null,
+          };
+        }
+
+        // Update bank account
+        bankAccount = await HotelManagerBankModel.findOneAndUpdate(
+          { userId: manager._id },
+          { ...updateBankData, updatedBy: adminId },
+          { new: true }
+        );
       }
-
-      updateBankData.bankDocs = {
-        public_id: bankInfo.bankDocs.public_id || null,
-        url: bankInfo.bankDocs.url,
-        fileName: bankInfo.bankDocs.fileName || null,
-        fileType: bankInfo.bankDocs.fileType || null,
-      };
+      // if no existing bank → skip silently (no error)
     }
 
-    // Update the bank account
-    const bankAccount = await HotelManagerBankModel.findOneAndUpdate(
-      { userId: manager._id },
-      { ...updateBankData, updatedBy: adminId },
-      { new: true }
-    );
 
     // 3) Update Hotel Info
     const existingHotel = await Hotel.findOne({ ownerId: manager._id });

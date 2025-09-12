@@ -12,7 +12,7 @@ const individualRoomSchema = new mongoose.Schema(
             default: 'available',
         },
         isAvailable: { type: Boolean, default: true },
-        roomNumber: { type: Number, required: true },
+        roomNumber: { type: String, required: true },
         bookingReference: {
             type: Schema.Types.ObjectId,
             ref: "HotelBooking",

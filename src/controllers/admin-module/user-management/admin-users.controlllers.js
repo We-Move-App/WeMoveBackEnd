@@ -16,32 +16,39 @@ const HotelBookingModel = require("../../../models/hotel-module/hotel-bookings/h
 const BusBookingModel = require("../../../models/bus-module/bus-bookings/bus-bookings.model")
 const RideBookingDetail = require("../../../models/new-driver-module/booking-details/booking-details.model");
 const BusModel = require("../../../models/bus-module/buses/buses.model")
+
 const getAllUsers = catchAsyncError(async (req, res) => {
   const {
-    name,
-    email,
-    mobile,
-    page = 1,
-    limit = 20,
-    sortBy = "createdAt", // default sort by creation date
-    order = "desc",       // default descending (recent first)
+    search,              // one global search input
+    page,
+    limit,
+    sortBy = "createdAt",
+    order = "desc",
   } = req.query;
 
-  // Build dynamic filter
-  const filter = {};
-  if (name) filter.fullName = new RegExp(name, "i");
-  if (email) filter.email = new RegExp(email, "i");
-  if (mobile) filter.phoneNumber = new RegExp(mobile, "i");
-
-  const pageNum = Math.max(parseInt(page, 10), 1);
-  const limitNum = Math.max(parseInt(limit, 10), 1);
+  // 🔹 Dynamic page & limit (default if UI doesn’t send)
+  const pageNum = page ? Math.max(parseInt(page, 10), 1) : 1;
+  const limitNum = limit ? Math.max(parseInt(limit, 10), 1) : 20;
   const skip = (pageNum - 1) * limitNum;
 
+  // 🔍 Build filter
+  const filter = {};
+  if (search) {
+    const regex = new RegExp(search, "i");
+    filter.$or = [
+      { fullName: regex },
+      { email: regex },
+      { phoneNumber: regex },
+      { verificationStatus: regex }   // ✅ added status search
+    ];
+  }
+
   const total = await UserModel.countDocuments(filter);
+
   if (total === 0) {
     return res.status(404).json({
       success: false,
-      message: "User not found",
+      message: "No users found",
       total: 0,
       page: pageNum,
       limit: limitNum,
@@ -51,12 +58,12 @@ const getAllUsers = catchAsyncError(async (req, res) => {
     });
   }
 
-  // Sorting
+  // 🔹 Sorting
   const sortOrder = order.toLowerCase() === "desc" ? -1 : 1;
   const sort = {};
   sort[sortBy] = sortOrder;
 
-  // Fetch users with pagination and sorting
+  // 🔹 Fetch with pagination + sorting
   const data = await UserModel.find(
     filter,
     "fullName phoneNumber email verificationStatus createdAt"
@@ -65,7 +72,6 @@ const getAllUsers = catchAsyncError(async (req, res) => {
     .limit(limitNum)
     .sort(sort);
 
-  // Return flat response
   res.status(200).json({
     success: true,
     message: "Users fetched successfully",
@@ -77,6 +83,8 @@ const getAllUsers = catchAsyncError(async (req, res) => {
     data,
   });
 });
+
+
 const getSingleUser = catchAsyncError(async (req, res) => {
   const { userId } = req.params;
   const { page = 1, limit = 10, sortBy = "date", order = "desc" } = req.query;
@@ -130,8 +138,8 @@ const getSingleUser = catchAsyncError(async (req, res) => {
     route: b.routeId
       ? `${b.routeId.startLocation} → ${b.routeId.endLocation}`
       : b.busId?.routes
-      ? `${b.busId.routes.startLocation} → ${b.busId.routes.endLocation}`
-      : null,
+        ? `${b.busId.routes.startLocation} → ${b.busId.routes.endLocation}`
+        : null,
     date: b.journeyDate,
     amount: b.price,
     status: b.status,
