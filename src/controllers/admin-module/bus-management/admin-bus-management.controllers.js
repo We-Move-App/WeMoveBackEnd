@@ -30,7 +30,8 @@ const BusModel = require("../../../models/bus-module/buses/buses.model");
 const BusRouteModel = require("../../../models/bus-module/bus-routes/bus-routes.model");
 const multer = require("../../../utils/uploadFiles/multer");
 const moment = require("moment");
-const BranchModel = require("../../admin-module/branches/branches.controllers");
+const { BranchModel } = require("../../../models/admin-module/branch/branches.model");
+const busModel = require("../../../models/bus-module/buses/buses.model");
 
 const { TypeOfUser } = require("../../../utils/constants/constants");
 const {
@@ -41,7 +42,24 @@ const generateCustomId = require("../../../utils/customId/generateCustomId");
 const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
 
 const getAllBusOperators = catchAsyncError(async (req, res, next) => {
-  const results = await getAllUsersByAdmin({ req, model: BusOperatorModel });
+  let results = await getAllUsersByAdmin({ req, model: BusOperatorModel });
+  const dataWithBusCount = await Promise.all(
+    results.data.map(async (operator) => {
+      const busCount = await busModel.countDocuments({ ownerId: operator._id });
+      return {
+        _id: operator._id,
+        fullName: operator.fullName,
+        email: operator.email,
+        phoneNumber: operator.phoneNumber,
+        verificationStatus: operator.verificationStatus,
+        avatar: operator.avatar,
+        busCount,
+      };
+    })
+  );
+
+
+  results.data = dataWithBusCount;
 
   return res.status(statusCode.OK).json(results);
 });
@@ -115,8 +133,10 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
     bankDetails,
     national_identity_card_front,
     national_identity_card_back,
-    branch,
   } = req.body;
+
+  console.log("basicInfo", req.body);
+
   const existingOperator = await BusOperatorModel.findOne({
     $or: [{ email: basicInfo?.email }, { phoneNumber: basicInfo?.phoneNumber }],
   });
@@ -127,8 +147,8 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
       "Bus operator with this email or phone number already exists"
     );
   }
-
-  const branchDoc = await BranchModel.findById(branch);
+  const branchDoc = await BranchModel.findById(basicInfo.branch);
+  console.log("branchDoc", branchDoc);
   if (!branchDoc) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
   }
@@ -505,69 +525,96 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     paymentStatus,
     from,
     to,
-  } = req.query; // ✅ use query instead of body
+    createdBy,
+  } = req.query;
 
   page = parseInt(page);
   limit = parseInt(limit);
   const skip = (page - 1) * limit;
 
-  const query = {};
-  let busRegMatch = {};
+  const matchStage = {};
 
-  // ✅ Filters
-  if (status) {
-    query.status = status;
-  }
-  if (paymentStatus) {
-    query.paymentStatus = paymentStatus;
-  }
-  if (from) {
-    query.from = new RegExp(from, "i");
-  }
-  if (to) {
-    query.to = new RegExp(to, "i");
-  }
+  if (status) matchStage.status = status;
+  if (paymentStatus) matchStage.paymentStatus = paymentStatus;
+  if (from) matchStage.from = new RegExp(from, "i");
+  if (to) matchStage.to = new RegExp(to, "i");
+  if (createdBy) matchStage.bookedBy = createdBy;
 
-  // ✅ Universal Search
+  const bookingsPipeline = [
+    { $match: matchStage },
+    {
+      $lookup: {
+        from: "buses",
+        localField: "busId",
+        foreignField: "_id",
+        as: "bus",
+      },
+    },
+    { $unwind: { path: "$bus", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: "users",
+        localField: "bookedBy",
+        foreignField: "_id",
+        as: "bookedBy",
+      },
+    },
+    { $unwind: { path: "$bookedBy", preserveNullAndEmptyArrays: true } },
+    {
+      $lookup: {
+        from: "users",
+        localField: "bookedByOperator",
+        foreignField: "_id",
+        as: "bookedByOperator",
+      },
+    },
+    { $unwind: { path: "$bookedByOperator", preserveNullAndEmptyArrays: true } },
+  ];
+
+  // ✅ Global search including busRegNumber
   if (search) {
     const regex = new RegExp(search, "i");
     const isDate = !isNaN(Date.parse(search));
-
-    query.$or = [
-      { from: regex },
-      { to: regex },
-      { email: regex },
-      { phoneNumber: regex },
-      { status: regex },
-      { paymentStatus: regex },
-      { "bookedBy.fullName": regex },
-      { "passengers.name": regex },
-      { "passengers.email": regex },
-      { "passengers.contactNumber": regex },
-      isDate ? { journeyDate: new Date(search) } : null,
-    ].filter(Boolean);
-
-    // ✅ handle busRegNumber via populate match
-    busRegMatch = { busRegNumber: regex };
+    bookingsPipeline.push({
+      $match: {
+        $or: [
+          { from: regex },
+          { to: regex },
+          { email: regex },
+          { phoneNumber: regex },
+          { status: regex },
+          { paymentStatus: regex },
+          { "bookedBy.fullName": regex },
+          { "passengers.name": regex },
+          { "passengers.email": regex },
+          { "passengers.contactNumber": regex },
+          { "bus.busRegNumber": regex }, // ✅ include busRegNumber here
+          isDate ? { journeyDate: new Date(search) } : null,
+        ].filter(Boolean),
+      },
+    });
   }
 
-  const bookings = await BusBookingModel.find(query)
-    .populate({
-      path: "busId",
-      select: "busRegNumber",
-      match: busRegMatch,
-    })
-    .populate("bookedBy", "fullName email phoneNumber")
-    .populate("bookedByOperator", "fullName email phoneNumber")
-    .sort({ [sortBy]: order === "asc" ? 1 : -1 })
-    .skip(skip)
-    .limit(limit);
+  bookingsPipeline.push({ $sort: { [sortBy]: order === "asc" ? 1 : -1 } });
+  bookingsPipeline.push({ $skip: skip }, { $limit: limit });
 
-  const validBookings = bookings;
+  const bookings = await BusBookingModel.aggregate(bookingsPipeline);
+  const totalBookings = await BusBookingModel.countDocuments(matchStage);
 
-  const totalBookings = await BusBookingModel.countDocuments(query).exec();
+  if (!bookings.length) {
+    return res.status(404).json({
+      success: false,
+      message: "No bus bookings found",
+      total: 0,
+      page,
+      limit,
+      sortBy,
+      order,
+      data: [],
+    });
+  }
 
-  return res.status(statusCode.OK).json({
+  return res.status(200).json({
     success: true,
     message: "Bus bookings retrieved successfully",
     total: totalBookings,
@@ -575,22 +622,37 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     limit,
     sortBy,
     order,
-    data: validBookings.map((booking) => ({
+    data: bookings.map((booking) => ({
       bookingId: booking._id,
-      busRegNumber: booking.busId?.busRegNumber || "N/A",
-      customerName: booking.passengers.map((p) => p.name).join(", "),
-      phone: booking.phoneNumber,
-      email: booking.email,
+      busRegNumber: booking.bus?.busRegNumber || "N/A",
+      bookedBy: booking.bookedBy
+        ? {
+          fullName: booking.bookedBy.fullName,
+          email: booking.bookedBy.email,
+          phoneNumber: booking.bookedBy.phoneNumber,
+        }
+        : null,
       from: booking.from,
       to: booking.to,
       journeyDate: booking.journeyDate,
       amount: booking.price || 0,
+      finalAmount: booking.finalAmount || booking.price || 0,
       paymentStatus: booking.paymentStatus,
       status: booking.status,
       createdAt: booking.createdAt,
+      passengers: booking.passengers.map((p) => ({
+        name: p.name,
+        age: p.age,
+        gender: p.gender,
+        contactNumber: p.contactNumber,
+        seatNumber: p.seatNumber,
+        email: p.email,
+      })),
     })),
   });
 });
+
+
 
 const searchAllBusBookings = catchAsyncError(async (req, res, next) => {
   const {

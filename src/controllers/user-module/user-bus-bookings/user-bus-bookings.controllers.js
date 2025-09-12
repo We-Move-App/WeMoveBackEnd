@@ -402,18 +402,18 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       ],
       { session }
     );
-  
+
 
     if (appliedCoupon) {
-  await CouponModel.findByIdAndUpdate(
-    appliedCoupon._id,
-    {
-      $inc: { usedCount: 1 },
-      $push: { usageHistory: { userId, bookingId: newBooking._id, usedAt: new Date() } },
-    },
-    { session }
-  );
-}
+      await CouponModel.findByIdAndUpdate(
+        appliedCoupon._id,
+        {
+          $inc: { usedCount: 1 },
+          $push: { usageHistory: { userId, bookingId: newBooking._id, usedAt: new Date() } },
+        },
+        { session }
+      );
+    }
 
     await session.commitTransaction();
     session.endSession();

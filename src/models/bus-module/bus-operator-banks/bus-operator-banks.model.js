@@ -14,7 +14,7 @@ const BusOperatorBankSchema = new mongoose.Schema(
     },
     accountNumber: {
       type: String,
-      required: true,
+      required: false,
       unique: true,
       match: [/^\d{8,18}$/, "Please provide a valid account number"],
     },
@@ -40,6 +40,7 @@ const BusOperatorBankSchema = new mongoose.Schema(
       default: false,
     },
     bankDocs: {
+      required: false,
       type: ImageSchema,
     },
   },

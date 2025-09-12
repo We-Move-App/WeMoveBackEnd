@@ -6,49 +6,53 @@ const { HostAddress } = require("mongodb");
 
 
 
+
 const getAllUsersByAdmin = async ({ req, model }) => {
-  const {
-    page = 1,
-    limit = 10,
+  let {
+    page,
+    limit,
     sortBy = "createdAt",
     order = "desc",
     search = ""
-  } = req.body;
+  } = req.query;
+
+  page = page ? Math.max(parseInt(page, 10), 1) : 1;
+  limit = limit ? Math.max(parseInt(limit, 10), 1) : 10;
 
   const skip = (page - 1) * limit;
 
   const query = {};
-
-  if (search) {
+  if (search && search.trim() !== "") {
+    const regex = new RegExp(search, "i");
     query.$or = [
-      { email: { $regex: search, $options: "i" } },
-      { phoneNumber: { $regex: search, $options: "i" } },
-      { fullName: { $regex: search, $options: "i" } },
-      { verificationStatus: { $regex: search, $options: "i" } }
+      { email: regex },
+      { phoneNumber: regex },
+      { fullName: regex },
+      { verificationStatus: regex }
     ];
   }
 
-  
-  const users = await model
+  const totalUser = await model.countDocuments(query);
+
+  if (skip >= totalUser && totalUser > 0) {
+    return {
+      success: true,
+      message: "No users found on this page",
+      total: totalUser,
+      page,
+      limit,
+      sortBy,
+      order,
+      data: [],
+    };
+  }
+
+  const user = await model
     .find(query)
-    .sort({ [sortBy]: order === "asc" ? 1 : -1 })
-    .limit(limit)
+    .sort({ [sortBy]: order.toLowerCase() === "asc" ? 1 : -1 })
     .skip(skip)
+    .limit(limit)
     .select("avatar email phoneNumber fullName verificationStatus");
-
-  // Attach bus count
-  const usersWithBusCount = await Promise.all(
-    users.map(async (user) => {
-      const busCount = await busModel.countDocuments({ ownerId: user._id });
-      return {
-        ...user.toObject(),
-        busCount,
-      };
-    })
-  );
-
-  // Total count
-  const totalUser = await model.countDocuments(query).exec();
 
   return {
     success: true,
@@ -58,11 +62,9 @@ const getAllUsersByAdmin = async ({ req, model }) => {
     limit,
     sortBy,
     order,
-    data: usersWithBusCount,
+    data: user,
   };
 };
-
-
 
 const getUserByIdByAdmin = async ({
   req,
@@ -72,10 +74,13 @@ const getUserByIdByAdmin = async ({
 
 }) => {
   const { userId } = req.params;
-  const [user, userDocs, userBank,] = await Promise.all([
+  console.log("userId", userId);
+
+  const [user, userDocs, userBank] = await Promise.all([
     userModel
       .findOne({ _id: userId })
-      .populate("verifiedBy.admin", "userName phoneNumber email"),
+      .populate("verifiedBy.admin", "userName phoneNumber email")
+      .populate("branch", "name location"), //
     userDocsModel.findOne({ userId }).populate("documentIds"),
     userBankModel.findOne({ userId }),
   ]);
@@ -92,7 +97,6 @@ const getUserByIdByAdmin = async ({
   };
   return new ApiResponse(statusCode.OK, result, `Data found Successfully`);
 };
-
 const userVerifiedByAdmin = async ({ req, model }) => {
   const { status } = req.body;
   const { userId } = req.params;

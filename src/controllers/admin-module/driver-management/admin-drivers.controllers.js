@@ -43,7 +43,7 @@ const { generateTokens } = require("../../../utils/jwtToken/generateTokens");
 const UserModel = require("../../../models/user-module/users/user.model");
 const WalletModel = require("../../../models/wallet-module/wallets.model");
 const TransactionModel = require("../../../models/transaction-module/transaction.model");
-const BranchModel = require("../../../models/admin-module/branch/branches.model")
+const { BranchModel } = require("../../../models/admin-module/branch/branches.model")
 
 const getAllDrivers = async (req, res) => {
   try {
@@ -229,6 +229,7 @@ const getdriverDetailsById = catchAsyncError(async (req, res) => {
         experience: basicDetails.experience || 0,
         createdById: basicDetails.createdById, // populated { _id, email, role }
         updatedById: basicDetails.updatedAtById,
+        branch: basicDetails.branch || null, // ✅ add branch here
       },
       documents: {
         idCard: findDoc(DriverDocEnum.IDCARD),
@@ -407,6 +408,12 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
 
   if (basicDriverDetails.branch) {
     basicDriverDetails.branch = new ObjectId(basicDriverDetails.branch);
+
+    const branchDoc = await BranchModel.findById(basicDriverDetails.branch);
+    if (!branchDoc) {
+
+      throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
+    }
   }
 
   const driverId = await generateCustomId("driver", "D");
@@ -471,7 +478,8 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
   const driverToken = await generateTokens({ driverId });
   const populatedDriver = await DriverBasicDetails.findOne({
     driverId,
-  }).populate("createdById", "name email role");
+  }).populate("createdById", "name email role")
+    .populate("branch", "name location");
   const allDocuments = {
     vehicleBikePhotos: [],
   };
@@ -730,9 +738,15 @@ const createTaxiDriverFromAdmin = catchAsyncError(async (req, res) => {
       throw new ApiError(statusCode.BAD_REQUEST, "Email already exists");
     }
   }
-
   if (basicDriverDetails.branch) {
+    // Convert to ObjectId
     basicDriverDetails.branch = new ObjectId(basicDriverDetails.branch);
+
+    // Optional: Check if branch exists in your Branch collection
+    const branchExists = await BranchModel.findById(basicDriverDetails.branch);
+    if (!branchExists) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch ID");
+    }
   }
 
   const phoneExists = await DriverBasicDetails.findOne({
@@ -815,7 +829,8 @@ const createTaxiDriverFromAdmin = catchAsyncError(async (req, res) => {
   // Populate createdById
   const populatedDriver = await DriverBasicDetails.findOne({
     driverId,
-  }).populate("createdById", "name email role");
+  }).populate("createdById", "name email role")
+    .populate("branch", "name location");
 
   // Build response documents
   const allDocuments = {};
@@ -862,6 +877,7 @@ const createTaxiDriverFromAdmin = catchAsyncError(async (req, res) => {
           status: savedDriver.status,
           experience: savedDriver.experience,
           createdById: populatedDriver.createdById,
+          branch: populatedDriver.branch,
         },
         documents: allDocuments, // ✅ vehicleTaxiPhotos array
         taxiDetails: cleanTaxiDetails, // ✅ no nested photos
@@ -913,13 +929,17 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
 
 
 
-  if (branch) {
-    const branchDoc = await BranchModel.findById(branch);
-    if (!branchDoc) {
-      throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
+  if (basicDriverDetails.branch) {
+    // Convert to ObjectId
+    basicDriverDetails.branch = new ObjectId(basicDriverDetails.branch);
+
+    // Check if branch exists in DB
+    const branchExists = await BranchModel.findById(basicDriverDetails.branch);
+    if (!branchExists) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch ID");
     }
-    basicDriverDetails.branch = branchDoc._id; // assign to driver basic details
   }
+
 
   // 2️⃣ Update driver basic details
   await DriverBasicDetails.updateOne(
@@ -1131,6 +1151,7 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
         experience: basicDetails.experience || 0,
         createdById: basicDetails.createdById,
         updatedById: basicDetails.updatedAtById,
+        branch: basicDetails.branch || null, // ✅ add branch here
       },
       documents: {
         idCard: findDoc(DriverDocEnum.IDCARD),

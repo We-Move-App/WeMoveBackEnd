@@ -65,19 +65,13 @@ const createBooking = catchAsyncError(async (req, res) => {
   if (isNaN(totalAmount) || totalAmount < 0) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid totalAmount provided.");
   }
-
   noOfRoom = Number(noOfRoom);
   noOfAdults = Number(noOfAdults);
   noOfKids = Number(noOfKids);
 
-
-
-
   if (noOfRoom <= 0 || noOfAdults <= 0 || noOfKids < 0) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid number of rooms/adults/kids.");
   }
-
-
   // Format dates and times
   const formattedCheckIn = new Date(checkInDate);
   const formattedCheckOut = new Date(checkOutDate);
@@ -102,26 +96,26 @@ const createBooking = catchAsyncError(async (req, res) => {
       "Missing required booking details."
     );
   }
-
   // Check if user exists
   const userExists = await User.findById(bookedBy);
   if (!userExists) {
     throw new ApiError(statusCode.NOT_FOUND, "User not registered.");
   }
-
   // Check if hotel exists
   const hotelExists = await Hotel.findById(hotelId);
   if (!hotelExists) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
   }
   const now = new Date();
+  console.log()
   const checkIn = new Date(checkInDate);
+  console.log(checkIn)
   const checkOut = new Date(checkOutDate);
+  console.log(checkOut)
 
-  if (checkIn < now) throw new ApiError(statusCode.BAD_REQUEST, "Check-in cannot be in past");
-  if (checkOut <= checkIn) throw new ApiError(statusCode.BAD_REQUEST, "Check-out must be after check-in");
 
-  if (checkIn < now)
+
+  if (checkIn <= now)
     throw new ApiError(statusCode.BAD_REQUEST, "Check-in cannot be in past");
   if (checkOut <= checkIn)
     throw new ApiError(
@@ -612,64 +606,59 @@ const payHotelBookingPayment = catchAsyncError(async (req, res, next) => {
 });
 
 const getBookings = catchAsyncError(async (req, res) => {
-  const { bookingId, hotelId, page = 1, limit = 10 } = req.query;
+  const { bookingId } = req.query;
 
-  const query = {};
-
-  if (bookingId) {
-    query._id = bookingId;
-  } else if (hotelId) {
-    query.hotelId = hotelId;
-
-    if (startDate || endDate) {
-      query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
-      if (endDate) query.createdAt.$lte = new Date(endDate);
-    }
-
-    if (roomTypeId) {
-      query.roomTypeId = roomTypeId;
-    }
-
-    if (userId) {
-      query.bookedBy = userId;
-    }
-  } else {
+  if (!bookingId) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Please provide bookingId or hotelId in query params."
+      "Please provide bookingId in query params."
     );
   }
 
-  const skip = (parseInt(page) - 1) * parseInt(limit);
-
-  const bookings = await HotelBooking.find(query)
-
-    .sort({ createdAt: -1 })
-    .skip(skip)
-    .limit(parseInt(limit))
+  const booking = await HotelBooking.findById(bookingId)
     .populate({ path: "hotelId", model: Hotel, select: "-__v" })
     .populate({ path: "roomTypeId", model: Room, select: "-__v" })
     .populate({ path: "bookedBy", model: User, select: "-password -__v" })
     .populate({ path: "assignedRooms", model: individualRoom, select: "-__v" });
 
-  const totalBookings = await HotelBooking.countDocuments(query);
-  const totalPages = Math.ceil(totalBookings / parseInt(limit));
+  if (!booking) {
+    throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
+  }
+
+  // 🔹 Populate address separately
+  const hotelAddress = await HotelAddressModel.findOne({
+    hotelId: booking.hotelId?._id,
+  })
+    .populate("address") // populate actual Address document
+    .lean();
+
+  // 🔹 Calculate total nights
+  let totalNights = 0;
+  if (booking.checkInDate && booking.checkOutDate) {
+    const checkIn = new Date(booking.checkInDate);
+    const checkOut = new Date(booking.checkOutDate);
+    totalNights = Math.ceil(
+      (checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24)
+    );
+  }
+
+  // Merge response
+  const bookingWithExtras = {
+    ...booking.toObject(),
+    hotelAddress: hotelAddress?.address || null,
+    totalNights,
+  };
 
   return res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
-      {
-        totalBookings,
-        totalPages,
-        currentPage: parseInt(page),
-        limit: parseInt(limit),
-        bookings,
-      },
-      "Booking(s) fetched successfully"
+      bookingWithExtras,
+      "Booking fetched successfully"
     )
   );
 });
+
+
 
 const getHotelsByLocation = catchAsyncError(async (req, res) => {
   const {

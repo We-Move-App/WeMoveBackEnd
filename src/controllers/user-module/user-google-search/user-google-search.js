@@ -40,4 +40,4 @@ const userGoogleSearch = catchAsyncError(async (req, res, next) => {
   return res.json(new ApiResponse(statusCode.OK, data, "Searches found"));
 });
 
-module.exports = {userGoogleSearch };
+module.exports = { userGoogleSearch };

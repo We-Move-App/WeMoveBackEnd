@@ -53,9 +53,11 @@ hotelManagerRoutes
 hotelManagerRoutes
   .route("/update-avatar")
   .put(isHotelManagerAuthenticated, uploadAvatar, updateAvatar);
+  
   hotelManagerRoutes
   .route("/reset-password2")
   .put(resetPassword2);
+
   hotelManagerRoutes
   .route("/delete-account")     
   .delete(isHotelManagerAuthenticated, deleteAccount);
