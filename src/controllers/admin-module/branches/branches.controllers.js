@@ -12,8 +12,7 @@ const {
 const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
-const {logActivity} = require("../../../utils/ActivityLog/ActivityLog")
-
+const { logActivity } = require("../../../utils/ActivityLog/ActivityLog");
 
 const addBranch = catchAsyncError(async (req, res, next) => {
   const { name, location } = req.body;
@@ -73,32 +72,24 @@ const addBranch = catchAsyncError(async (req, res, next) => {
       )
     );
 });
+
 const getAllBranches = catchAsyncError(async (req, res, next) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const startIndex = (page - 1) * limit;
-  const { name, location } = req.query;
+  const filter = req.query.filter ? String(req.query.filter).trim() : "";
 
   const query = {};
-  if (name) {
-    query.$or.push({
-      name: { $regex: name, $options: "i" },
-    });
-  }
-  if (location) {
-    query.$or.push({
-      location: { $regex: location, $options: "i" },
-    });
+
+  if (filter) {
+    const escaped = filter.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    query.name = { $regex: `^${escaped}`, $options: "i" };
   }
 
   const branches = await BranchModel.find(query)
     .sort({ createdAt: -1 })
     .limit(limit)
     .skip(startIndex);
-
-  if (!branches || branches.length === 0) {
-    throw new ApiError(statusCode.NOT_FOUND, "Branches not found");
-  }
 
   const totalData = await BranchModel.countDocuments(query).exec();
 
@@ -136,19 +127,21 @@ const deleteBranchById = catchAsyncError(async (req, res, next) => {
   }
 
   // Log activity
-    const activityLog = await logActivity({
-  userId: req.user._id,   // logged-in admin, not branch id
-  activity: `Delete branch: ${deletedBranch.name}`,
-  performedBy: req.user._id,
-});
+  const activityLog = await logActivity({
+    userId: req.user._id, // logged-in admin, not branch id
+    activity: `Delete branch: ${deletedBranch.name}`,
+    performedBy: req.user._id,
+  });
 
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      { branch: deletedBranch, UserActivity: activityLog },
-      "Branch deleted successfully"
-    )
-  );
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { branch: deletedBranch, UserActivity: activityLog },
+        "Branch deleted successfully"
+      )
+    );
 });
 const updateBranchById = catchAsyncError(async (req, res, next) => {
   const { branchId } = req.params;
@@ -176,21 +169,21 @@ const updateBranchById = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.NOT_FOUND, "Not found");
   }
 
- 
-    const activityLog = await logActivity({
-  userId: req.user._id,   // logged-in admin, not branch id
-  activity: `Updated branch: ${updatedBranch.name}`,
-  performedBy: req.user._id,
-});
+  const activityLog = await logActivity({
+    userId: req.user._id, // logged-in admin, not branch id
+    activity: `Updated branch: ${updatedBranch.name}`,
+    performedBy: req.user._id,
+  });
 
-
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      { branch: updatedBranch  , activityLog},
-      "Branch updated successfully"
-    )
-  );
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { branch: updatedBranch, activityLog },
+        "Branch updated successfully"
+      )
+    );
 });
 
 module.exports = {

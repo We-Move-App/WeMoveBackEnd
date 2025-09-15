@@ -6,7 +6,7 @@ const {
 const ApiError = require("../../utils/response/ApiError");
 const ApiResponse = require("../../utils/response/ApiResponse");
 const catchAsyncError = require("../../utils/response/catchAsyncError");
-const messaging = require("../../config/firebase");
+const { messaging } = require("../../config/firebase");
 
 const addFcmToken = catchAsyncError(async (req, res) => {
   let userId = null;
@@ -78,7 +78,6 @@ const addFcmToken = catchAsyncError(async (req, res) => {
 
 async function sendPushNotification(userId, title, body, data = {}) {
   try {
-    // Fetch all FCM tokens for this user
     const tokens = await FcmTokenModel.find({ userId }).select("fcmToken -_id");
 
     if (!tokens?.length) {
@@ -92,18 +91,14 @@ async function sendPushNotification(userId, title, body, data = {}) {
     const message = {
       notification: { title, body },
       data: { ...data, click_action: "FLUTTER_NOTIFICATION_CLICK" },
-
-      // ✅ Android push settings
       android: {
         priority: "high",
         notification: {
           sound: "default",
-          channelId: "high_importance_channel", // must exist in client app
+          channelId: "high_importance_channel",
           notificationPriority: "PRIORITY_MAX",
         },
       },
-
-      // ✅ iOS push settings
       apns: {
         payload: {
           aps: {
@@ -113,18 +108,16 @@ async function sendPushNotification(userId, title, body, data = {}) {
           },
         },
       },
-
       tokens: deviceTokens,
     };
 
-    // Send to all devices
+    // 🔥 FIX: use sendEachForMulticast instead of sendMulticast
     const response = await messaging.sendEachForMulticast(message);
 
     console.log(
       `✅ Push sent: ${response.successCount} success, ${response.failureCount} failed`
     );
 
-    // Remove invalid/unregistered tokens
     if (response.failureCount > 0) {
       response.responses.forEach(async (resp, idx) => {
         if (!resp.success) {
@@ -133,7 +126,6 @@ async function sendPushNotification(userId, title, body, data = {}) {
             resp.error
           );
 
-          // If token is invalid or unregistered, delete it from DB
           if (
             resp.error.code === "messaging/registration-token-not-registered" ||
             resp.error.code === "messaging/invalid-argument"
