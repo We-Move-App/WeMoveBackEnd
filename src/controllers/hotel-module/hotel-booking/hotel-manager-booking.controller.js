@@ -2,8 +2,6 @@ const HotelBooking = require("../../../models/hotel-module/hotel-bookings/hotel-
 const Room = require("../../../models/hotel-module/hotel-registration/hotel-room-amenities.model");
 const Hotel = require("../../../models/hotel-module/hotel-registration/hotel-details.model");
 const individualRoom = require("../../../models/hotel-module/single-room/individual-room.module");
-
-
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const statusCode = require("../../../utils/constants/statusCode");
 const ApiError = require("../../../utils/response/ApiError");

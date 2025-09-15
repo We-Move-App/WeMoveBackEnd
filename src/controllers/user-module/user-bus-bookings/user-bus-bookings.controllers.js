@@ -23,12 +23,16 @@ const ValidateSecurePin = require("../../../utils/services/securePin.services");
 const {
   PaymentStatusEnum,
   TransactionTypeEnum,
+  EntityCodeEnum
 } = require("../../../utils/constants/ENUM");
 const Commission = require("../../../models/admin-module/commission-management/commission.model");
 const { CouponModel } = require("../../../models/admin-module/Admin-coupon/adminCouponModel");
 const {
   AdminModel,
 } = require("../../../models/admin-module/admin/admin.model");
+const generateCustomId = require("../../../utils/customId/generateCustomId");
+
+
 
 const getUserBusBookings = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
@@ -88,6 +92,7 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
       )
     );
 });
+
 const createBusBooking = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
 
@@ -140,10 +145,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
 
   const session = await mongoose.startSession();
   session.startTransaction();
-
   try {
-
-
     let finalAmount = price;
     let appliedCoupon = null;
     let discountApplied = 0;
@@ -190,15 +192,10 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
         finalAmount = price - discountApplied;
       }
 
-
       if (finalAmount < 0) finalAmount = 0;
-
 
       appliedCoupon = coupon;
     }
-
-
-
     // Step 1: Check user wallet balance
     const userWallet = await WalletModel.findOne({ userId }).session(session);
 
@@ -273,10 +270,18 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     }));
 
     // Step 3: Create booking
+
+
+    const bookingId = await generateCustomId(
+      EntityCodeEnum.BUS_BOOKING,
+      "BB"
+    );
+
     const [newBooking] = await BusBookingModel.create(
       [
         {
           busId,
+          bookingId,
           bookedBy: userId,
           routeId,
           passengers: assignSeatToPassenger,
