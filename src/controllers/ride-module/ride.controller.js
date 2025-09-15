@@ -1285,9 +1285,10 @@ const getTripHistory = catchAsyncError(async (req, res) => {
       from: trip.pickupLocation?.address,
       to: trip.dropLocation?.address,
       requestedAt: trip.timestamps?.requestedAt,
-      vehicleType: trip.vehicleType, // Include vehicle type in response
+      vehicleType: trip.vehicleType,
       price: trip.fare,
       currency: process.env.MOMO_CURRENCY || "EUR",
+      tripRating: trip.tripRating || null,
     };
 
     if (entity === "driver") {
