@@ -588,7 +588,7 @@ const completeRide = catchAsyncError(async (req, res, next) => {
           status: PaymentStatusEnum.SUCCESS,
           amount: booking.fare,
           currency: process.env.MOMO_CURRENCY,
-          description: `Ride fare from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
+          description: `${booking.vehicleType} Ride from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
         },
         {
           transactionId: uuidv4(),
@@ -598,7 +598,7 @@ const completeRide = catchAsyncError(async (req, res, next) => {
           status: PaymentStatusEnum.SUCCESS,
           amount: driverShare,
           currency: process.env.MOMO_CURRENCY,
-          description: `Ride fare from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
+          description: `${booking.vehicleType} Ride from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
         },
         {
           transactionId: uuidv4(),
@@ -608,7 +608,7 @@ const completeRide = catchAsyncError(async (req, res, next) => {
           status: PaymentStatusEnum.SUCCESS,
           amount: platformFee,
           currency: process.env.MOMO_CURRENCY,
-          description: "Platform commission from ride",
+          description: `Platform commission from ${booking.vehicleType} ride`,
         },
       ],
       { session }

@@ -25,7 +25,9 @@ const {
   TransactionTypeEnum,
 } = require("../../../utils/constants/ENUM");
 const Commission = require("../../../models/admin-module/commission-management/commission.model");
-const { CouponModel } = require("../../../models/admin-module/Admin-coupon/adminCouponModel");
+const {
+  CouponModel,
+} = require("../../../models/admin-module/Admin-coupon/adminCouponModel");
 const {
   AdminModel,
 } = require("../../../models/admin-module/admin/admin.model");
@@ -142,8 +144,6 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
   session.startTransaction();
 
   try {
-
-
     let finalAmount = price;
     let appliedCoupon = null;
     let discountApplied = 0;
@@ -158,7 +158,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
         serviceType: { $in: ["Bus", "All Services"] },
         startDate: { $lte: currentDate },
         expiryDate: { $gte: currentDate },
-        $expr: { $lt: ["$usedCount", "$maxUsage"] }
+        $expr: { $lt: ["$usedCount", "$maxUsage"] },
       });
 
       if (!coupon) {
@@ -170,7 +170,10 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
         (u) => u.userId.toString() === userId.toString()
       );
       if (alreadyUsed) {
-        throw new ApiError(statusCode.BAD_REQUEST, "You have already used this coupon.");
+        throw new ApiError(
+          statusCode.BAD_REQUEST,
+          "You have already used this coupon."
+        );
       }
 
       // ✅ Check min order amount
@@ -190,14 +193,10 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
         finalAmount = price - discountApplied;
       }
 
-
       if (finalAmount < 0) finalAmount = 0;
-
 
       appliedCoupon = coupon;
     }
-
-
 
     // Step 1: Check user wallet balance
     const userWallet = await WalletModel.findOne({ userId }).session(session);
@@ -291,15 +290,15 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           seatNumbers: assignedSeats,
           coupon: appliedCoupon
             ? {
-              couponId: appliedCoupon._id,
-              couponCode: appliedCoupon.couponCode,
-              discountType: appliedCoupon.discountType,
-              discountValue:
-                appliedCoupon.discountType === "Percentage"
-                  ? appliedCoupon.discountPercentage
-                  : appliedCoupon.discountAmount,
-              discountApplied,
-            }
+                couponId: appliedCoupon._id,
+                couponCode: appliedCoupon.couponCode,
+                discountType: appliedCoupon.discountType,
+                discountValue:
+                  appliedCoupon.discountType === "Percentage"
+                    ? appliedCoupon.discountPercentage
+                    : appliedCoupon.discountAmount,
+                discountApplied,
+              }
             : null,
         },
       ],
@@ -397,19 +396,24 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           status: PaymentStatusEnum.SUCCESS,
           amount: platformFee,
           currency: process.env.MOMO_CURRENCY,
-          description: "Commission from booking",
+          description: `Commission from bus booking ${busId}`,
         },
       ],
       { session }
     );
-
 
     if (appliedCoupon) {
       await CouponModel.findByIdAndUpdate(
         appliedCoupon._id,
         {
           $inc: { usedCount: 1 },
-          $push: { usageHistory: { userId, bookingId: newBooking._id, usedAt: new Date() } },
+          $push: {
+            usageHistory: {
+              userId,
+              bookingId: newBooking._id,
+              usedAt: new Date(),
+            },
+          },
         },
         { session }
       );
@@ -458,16 +462,14 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       delete bookingWithBusDetails.routeId.endLocation;
     }
 
-    return res
-      .status(statusCode.CREATED)
-      .json(
-        new ApiResponse(
-          statusCode.CREATED,
-          bookingWithBusDetails,
+    return res.status(statusCode.CREATED).json(
+      new ApiResponse(
+        statusCode.CREATED,
+        bookingWithBusDetails,
 
-          "Bus booked successfully"
-        )
-      );
+        "Bus booked successfully"
+      )
+    );
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
