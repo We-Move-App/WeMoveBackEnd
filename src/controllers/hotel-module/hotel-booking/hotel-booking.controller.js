@@ -109,12 +109,11 @@ const createBooking = catchAsyncError(async (req, res) => {
   if (!hotelExists) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
   }
-  const now = new Date();
-  console.log();
+  const now = new Date().setHours(0, 0, 0, 0);
+
   const checkIn = new Date(checkInDate);
-  console.log(checkIn);
+
   const checkOut = new Date(checkOutDate);
-  console.log(checkOut);
 
   if (checkIn <= now)
     throw new ApiError(statusCode.BAD_REQUEST, "Check-in cannot be in past");
@@ -289,7 +288,7 @@ const createBooking = catchAsyncError(async (req, res) => {
     if (userWallet.balance >= finalAmount) {
       paymentStatus = "PAID";
     }
-
+    //customBookingId
     const bookingId = await generateCustomId(
       EntityCodeEnum.HOTEL_BOOKING,
       "HB"
@@ -495,7 +494,6 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
       "Check-in cannot be in the past."
     );
   }
-
   // ✅ Checkout must be after check-in
   if (checkOut <= checkIn) {
     throw new ApiError(
@@ -503,7 +501,6 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
       "Check-out must be after check-in date."
     );
   }
-
   const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
   if (nights <= 0) {
     throw new ApiError(
