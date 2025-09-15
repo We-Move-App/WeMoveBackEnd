@@ -21,6 +21,18 @@ const securePinSchema = new Schema(
       type: Date,
       default: Date.now,
     },
+    failedAttempts: {
+      type: Number,
+      default: 0,
+    },
+    blockUntil: {
+      type: Date,
+      default: null,
+    },
+    blockStage: {
+      type: Number,
+      default: 0, // 0 → normal, 1 → after 5 attempts, 2 → after 3 attempts, 3 → blocked 1 day
+    },
   },
   { timestamps: true }
 );

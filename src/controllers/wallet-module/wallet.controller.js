@@ -712,20 +712,66 @@ const validatePin = catchAsyncError(async (req, res) => {
     );
   }
 
-  const isValid = await securePinRecord.verifyPin(pin);
-  if (!isValid) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Invalid PIN");
+  if (securePinRecord.blockUntil && securePinRecord.blockUntil > new Date()) {
+    const remaining = Math.ceil(
+      (securePinRecord.blockUntil - new Date()) / 1000
+    );
+    throw new ApiError(
+      statusCode.FORBIDDEN,
+      `Too many invalid attempts. Try again after ${remaining} seconds.`
+    );
   }
 
-  return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(
-        statusCode.OK,
-        { isValid: true },
-        "PIN verified successfully"
-      )
-    );
+  const isValid = await securePinRecord.verifyPin(pin);
+
+  if (isValid) {
+    securePinRecord.failedAttempts = 0;
+    securePinRecord.blockUntil = null;
+    securePinRecord.blockStage = 0;
+    await securePinRecord.save();
+
+    return res
+      .status(statusCode.OK)
+      .json(
+        new ApiResponse(
+          statusCode.OK,
+          { isValid: true },
+          "PIN verified successfully"
+        )
+      );
+  }
+
+  securePinRecord.failedAttempts += 1;
+
+  let blockDuration = null;
+
+  if (securePinRecord.blockStage === 0 && securePinRecord.failedAttempts >= 5) {
+    blockDuration = 60 * 1000; // 1 min
+    securePinRecord.blockStage = 1;
+    securePinRecord.failedAttempts = 0;
+  } else if (
+    securePinRecord.blockStage === 1 &&
+    securePinRecord.failedAttempts >= 3
+  ) {
+    blockDuration = 5 * 60 * 1000; // 5 min
+    securePinRecord.blockStage = 2;
+    securePinRecord.failedAttempts = 0;
+  } else if (
+    securePinRecord.blockStage === 2 &&
+    securePinRecord.failedAttempts >= 3
+  ) {
+    blockDuration = 24 * 60 * 60 * 1000; // 1 day
+    securePinRecord.blockStage = 3;
+    securePinRecord.failedAttempts = 0;
+  }
+
+  if (blockDuration) {
+    securePinRecord.blockUntil = new Date(Date.now() + blockDuration);
+  }
+
+  await securePinRecord.save();
+
+  throw new ApiError(statusCode.BAD_REQUEST, "Invalid PIN");
 });
 
 module.exports = {
