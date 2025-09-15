@@ -20,6 +20,9 @@ const BusOperatorModel = require("../../models/bus-module/bus-operator/bus-opera
 const HotelManagerModel = require("../../models/hotel-module/hotel-manager/hotel-manager.model");
 const DriverDetails = require("../../models/new-driver-module/basic-details/basic-details.model");
 const { AdminModel } = require("../../models/admin-module/admin/admin.model");
+const {
+  generateTransactionPDFBase64,
+} = require("../../utils/services/invoice.service");
 
 const deductfromUserWallet = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -362,6 +365,28 @@ const getTransactions = catchAsyncError(async (req, res) => {
         },
       },
       "Transactions fetched successfully"
+    )
+  );
+});
+
+const getTransactionInvoice = catchAsyncError(async (req, res) => {
+  const { transactionId } = req.params;
+
+  const transaction = await Transaction.findOne({ transactionId });
+  if (!transaction) {
+    throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
+  }
+
+  // Generate Base64 PDF
+  const pdfBase64 = await generateTransactionPDFBase64(transaction);
+
+  return res.status(200).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        pdfBase64,
+      },
+      "Transaction details fetched successfully"
     )
   );
 });
@@ -712,4 +737,5 @@ module.exports = {
   getAnalytics,
   userInternalTransaction,
   getWalletAdmin,
+  getTransactionInvoice,
 };

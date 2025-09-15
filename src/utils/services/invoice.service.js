@@ -328,4 +328,104 @@ const generateHotelBookingInvoiceBase64 = async (booking) => {
   return Buffer.from(pdfBytes).toString("base64");
 };
 
-module.exports = { getBusInvoice, getHotelInvoice };
+function sanitizeText(text) {
+  if (!text) return "";
+  return text.replace(/→/g, "->");
+}
+
+function sanitizeText(text) {
+  if (!text) return "";
+  return text.replace(/→/g, "->");
+}
+
+async function generateTransactionPDFBase64(transaction) {
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([600, 800]);
+  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const { height } = page.getSize();
+
+  let y = height - 50;
+
+  // Dynamic heading
+  let heading = "Transaction Receipt";
+  const desc = transaction.description?.toLowerCase() || "";
+
+  if (desc.startsWith("bus booking")) heading = "Bus Booking";
+  else if (desc.startsWith("hotel booking")) heading = "Hotel Booking";
+  else if (desc.startsWith("bike ride from")) heading = "Bike Ride";
+  else if (desc.startsWith("taxi ride from")) heading = "Taxi Booking";
+  else if (desc.startsWith("sent to")) heading = "Internal Wallet Transaction";
+  else if (desc.startsWith("received from"))
+    heading = "Internal Wallet Transaction";
+  else if (desc.startsWith("wallet top-up")) heading = "Wallet Top-up";
+
+  // Heading
+  page.drawText(heading, {
+    x: 200,
+    y,
+    size: 20,
+    font,
+    color: rgb(0, 0, 0),
+  });
+  y -= 50;
+
+  // Transaction ID
+  page.drawText(`Transaction ID: ${transaction.transactionId}`, {
+    x: 50,
+    y,
+    size: 12,
+    font,
+  });
+  y -= 20;
+
+  // Purpose (auto-wrap long text)
+  const purposeText = `Purpose: ${sanitizeText(transaction.description)}`;
+  page.drawText(purposeText, {
+    x: 50,
+    y,
+    size: 12,
+    font,
+    maxWidth: 500,
+    lineHeight: 16,
+  });
+  const purposeLines = Math.ceil(font.widthOfTextAtSize(purposeText, 12) / 500);
+  y -= purposeLines * 16;
+
+  // Date & Time
+  page.drawText(
+    `Date & Time: ${new Date(transaction.createdAt).toLocaleString()}`,
+    { x: 50, y, size: 12, font }
+  );
+  y -= 40;
+
+  // Transaction details
+  page.drawText(`Amount: ${transaction.amount} ${transaction.currency}`, {
+    x: 50,
+    y,
+    size: 12,
+    font,
+  });
+  y -= 20;
+
+  page.drawText(`Status: ${transaction.status}`, { x: 50, y, size: 12, font });
+  y -= 20;
+
+  page.drawText(`Type: ${transaction.type}`, { x: 50, y, size: 12, font });
+  y -= 20;
+
+  page.drawText(`Booking ID: ${transaction.bookingId || "-"}`, {
+    x: 50,
+    y,
+    size: 12,
+    font,
+  });
+
+  const pdfBytes = await pdfDoc.save();
+  return Buffer.from(pdfBytes).toString("base64");
+}
+
+module.exports = {
+  getBusInvoice,
+  getHotelInvoice,
+  generateTransactionPDFBase64,
+};

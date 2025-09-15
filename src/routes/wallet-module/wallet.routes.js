@@ -9,6 +9,7 @@ const {
   userInternalTransaction,
   getWalletAdmin,
   getTransactionsSuperAdmin,
+  getTransactionInvoice,
 } = require("../../controllers/wallet-module/wallet.controller");
 const walletRouter = express.Router();
 
@@ -20,5 +21,6 @@ walletRouter.get("/details/admin", getWalletAdmin);
 walletRouter.post("/verify-pin", validatePin);
 walletRouter.get("/analytics", getAnalytics);
 walletRouter.post("/send-to-user", userInternalTransaction);
+walletRouter.get("/transaction-invoice/:transactionId", getTransactionInvoice);
 
 module.exports = walletRouter;
