@@ -38,7 +38,10 @@ const decodeAccessToken = (token) => {
     const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
     return decoded;
   } catch (err) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid or expired access token");
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Invalid or expired access token"
+    );
   }
 };
 

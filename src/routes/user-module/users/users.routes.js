@@ -12,6 +12,7 @@ const {
   assignBranch,
   resetPassword2,
   getAvailableModules,
+  deleteProfile,
 } = require("../../../controllers/user-module/users/users.controllers");
 const { isUserAuthenticated } = require("../../../middlewares/authUser");
 const {
@@ -38,6 +39,7 @@ userRoutes.route("/reset-password").put(isUserAuthenticated, resetPassword);
 userRoutes.route("/reset-password-without-auth").put(resetPassword2);
 userRoutes.route("/beneficiary").post(getBeneficiary);
 userRoutes.route("/available-modules").get(getAvailableModules);
+userRoutes.route("/delete-profile").delete(deleteProfile);
 
 userRoutes
   .route("/update-avatar")

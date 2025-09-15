@@ -22,6 +22,7 @@ const {
 const {
   getDriverBasicWithDocs,
 } = require("../aggregations/basic-details.aggregations");
+const InactiveDriverModel = require("../../../models/new-driver-module/basic-details/inactive-drivers.model");
 
 const addDriverBasicDetails = catchAsyncError(async (req, res) => {
   const { error, value } = addBasicDetailsValidation.validate(req.body, {
@@ -433,6 +434,55 @@ const verifyPin = catchAsyncError(async (req, res) => {
     );
 });
 
+const deleteDriverProfile = catchAsyncError(async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token missing or invalid"
+    );
+  }
+
+  const token = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(token);
+  const driverId = decoded?.driverId;
+
+  if (!driverId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  const driver = await DriverBasicDetails.findOne({ driverId });
+  if (!driver) {
+    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+  }
+
+  await InactiveDriverModel.create({
+    originalDriverId: driver._id,
+    driverId: driver.driverId,
+    fullName: driver.fullName,
+    phoneNo: driver.phoneNo,
+    email: driver.email,
+    gender: driver.gender,
+    dob: driver.dob,
+    branch: driver.branch,
+    createdBy: driver.createdBy,
+    createdById: driver.createdById,
+    reason: "Driver requested account deletion",
+  });
+
+  await DriverBasicDetails.findOneAndDelete({ driverId });
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        null,
+        "Driver deleted and archived successfully"
+      )
+    );
+});
+
 module.exports = {
   addDriverBasicDetails,
   getDriverBasicDetails,
@@ -440,4 +490,5 @@ module.exports = {
   addPin,
   verifyPin,
   updatePin,
+  deleteDriverProfile,
 };
