@@ -133,6 +133,116 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
   );
 
 });
+
+const calculateBusBooking = catchAsyncError(async (req, res, next) => {
+  const { _id: userId } = req.user;
+
+  const {
+    from,
+    to,
+    busId,
+    routeId,
+    passengers,
+    noOfPassengers,
+    price,
+    couponCode,
+    journeyDate,
+    termAndConditions,
+  } = req.body;
+
+  // ✅ Basic validations
+  validateRequestBody(
+    ["from", "to", "busId", "routeId", "passengers", "price", "journeyDate", "termAndConditions"],
+    req.body
+  );
+
+  if (noOfPassengers !== passengers.length) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Passenger count does not match the number of selected seats"
+    );
+  }
+
+  isValidFutureDate(journeyDate);
+
+  // ✅ Check if bus & route exist
+  const [findBus, route] = await Promise.all([
+    BusModel.findById(busId).lean(),
+    BusRouteModel.findById(routeId, "_id"),
+  ]);
+  if (!findBus) throw new ApiError(statusCode.NOT_FOUND, "Bus data not found");
+  if (!route) throw new ApiError(statusCode.NOT_FOUND, "Route not found");
+
+  let finalAmount = price;
+  let appliedCoupon = null;
+  let discountApplied = 0;
+
+  // ✅ Coupon Validation
+  if (couponCode) {
+    const currentDate = new Date();
+
+    const coupon = await CouponModel.findOne({
+      couponCode,
+      status: "Active",
+      serviceType: { $in: ["Bus", "All Services"] },
+      startDate: { $lte: currentDate },
+      expiryDate: { $gte: currentDate },
+      $expr: { $lt: ["$usedCount", "$maxUsage"] }
+    });
+
+    if (!coupon) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Coupon not found.");
+    }
+
+    const alreadyUsed = coupon.usageHistory.some(
+      (u) => u.userId.toString() === userId.toString()
+    );
+    if (alreadyUsed) {
+      throw new ApiError(statusCode.BAD_REQUEST, "You have already used this coupon.");
+    }
+
+    if (price < coupon.minOrderAmount) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        `Coupon valid only on orders above ₹${coupon.minOrderAmount}`
+      );
+    }
+
+    if (coupon.discountType === "Percentage") {
+      discountApplied = (price * coupon.discountPercentage) / 100;
+      finalAmount = price - discountApplied;
+    } else if (coupon.discountType === "Fixed Amount") {
+      discountApplied = coupon.discountAmount;
+      finalAmount = price - discountApplied;
+    }
+
+    if (finalAmount < 0) finalAmount = 0;
+
+    appliedCoupon = {
+      couponId: coupon._id,
+      couponCode: coupon.couponCode,
+      discountType: coupon.discountType,
+      discountValue:
+        coupon.discountType === "Percentage"
+          ? coupon.discountPercentage
+          : coupon.discountAmount,
+      discountApplied,
+    };
+  }
+
+  // ✅ Just return calculation, no wallet/seat updates
+  return res.status(statusCode.OK).json(
+    new ApiResponse(statusCode.OK, {
+      passengersCount: noOfPassengers,
+      baseFare: price,
+      discountApplied,
+      finalAmount,
+      appliedCoupon,
+    }, "Fare calculated successfully")
+  );
+});
+
+
 const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
   if (!bookingId) {
@@ -162,3 +272,4 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
       )
     );
 });
+

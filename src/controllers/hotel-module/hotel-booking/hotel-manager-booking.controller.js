@@ -12,6 +12,14 @@ const { deleteImageFromAws } = require("../../../utils/uploadFiles/uploadFilesto
 const { uploadMultipleImagesToAws } = require("../../../utils/uploadFiles/images/uploadImages");
 const UserModel = require("../../../models/user-module/users/user.model");
 const HotelPolicyModel = require("../../../models/hotel-module/hotel-registration/hotel-policy.model");
+const {
+  PaymentStatusEnum,
+  TransactionTypeEnum,
+  CommissionServiceTypeEnum,
+  EntityCodeEnum,
+} = require("../../../utils/constants/ENUM");
+const { v4: uuidv4 } = require("uuid");
+const generateCustomId = require("../../../utils/customId/generateCustomId");
 
 
 const createBookingByHotelManager = catchAsyncError(async (req, res) => {
@@ -21,15 +29,15 @@ const createBookingByHotelManager = catchAsyncError(async (req, res) => {
     roomTypeId,
     checkInDate,
     checkOutDate,
-    totalAmount,
     paymentStatus,
     noOfAdults,
     noOfKids = 0,
     user,
   } = req.body;
-const noOfRoom = parseInt(req.body.noOfRoom) || 1;
-const adultsCount = parseInt(noOfAdults);
-const kidsCount = parseInt(noOfKids);
+
+  const noOfRoom = parseInt(req.body.noOfRoom) || 1;
+  const adultsCount = parseInt(noOfAdults);
+  const kidsCount = parseInt(noOfKids);
 
   // Parse user data
   let parsedUser = {};
@@ -40,31 +48,30 @@ const kidsCount = parseInt(noOfKids);
   }
 
   // Check for required fields
-  if (
-    !bookedBy || !hotelId || !roomTypeId ||
-    !checkInDate || !checkOutDate
-  ) {
+  if (!bookedBy || !hotelId || !roomTypeId || !checkInDate || !checkOutDate) {
     throw new ApiError(statusCode.BAD_REQUEST, "Missing required booking details.");
   }
 
-  // Get policy times and hotel manager validation
+  // Get policy times
   const hotelPolicy = await HotelPolicyModel.findOne({ hotelId }).select("checkInTime checkOutTime");
   if (!hotelPolicy) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel policy not found.");
   }
 
+  // Validate hotel manager
   const userExists = await HotelManagerModel.findById(bookedBy);
   if (!userExists) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel manager not found.");
   }
 
+  // Validate hotel
   const hotelExists = await Hotel.findById(hotelId);
   if (!hotelExists) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
   }
 
-  // Format dates and times
-  const currentDate = new Date();
+  // Format dates
+  const currentDate = new Date().setHours(0, 0, 0, 0);
   const formattedCheckIn = new Date(checkInDate);
   const formattedCheckOut = new Date(checkOutDate);
 
@@ -84,6 +91,19 @@ const kidsCount = parseInt(noOfKids);
     throw new ApiError(statusCode.BAD_REQUEST, "Check-out date must be after check-in date.");
   }
 
+  // Calculate nights
+  const nights = Math.ceil((formattedCheckOut - formattedCheckIn) / (1000 * 60 * 60 * 24));
+  if (nights <= 0) throw new ApiError(statusCode.BAD_REQUEST, "Stay must be at least 1 night.");
+
+  // Fetch room type price
+  const roomType = await Room.findById(roomTypeId).select("roomPrice");
+  if (!roomType || !roomType.roomPrice || roomType.roomPrice <= 0) {
+    throw new ApiError(statusCode.NOT_FOUND, "Invalid room type or price.");
+  }
+
+  // Calculate total amount internally
+  const totalAmount = roomType.roomPrice * noOfRoom * nights;
+
   // Find all available rooms
   const allHotelRooms = await individualRoom.find({
     hotelId,
@@ -92,7 +112,7 @@ const kidsCount = parseInt(noOfKids);
     isAvailable: true,
   });
 
-  // Check for overlapping bookings
+  // Check overlapping bookings
   const overlappingBookings = await HotelBooking.find({
     hotelId,
     checkInDate: { $lt: formattedCheckOut },
@@ -131,8 +151,14 @@ const kidsCount = parseInt(noOfKids);
     };
   }
 
+  const bookingId = await generateCustomId(
+    EntityCodeEnum.HOTEL_BOOKING,
+    "HB"
+  );
+
   // Create booking
   const booking = await HotelBooking.create({
+    bookingId,
     bookedBy,
     roomTypeId,
     hotelId,
@@ -143,8 +169,8 @@ const kidsCount = parseInt(noOfKids);
     assignedRooms: [],
     totalAmount,
     paymentStatus,
-    noOfAdults,
-    noOfKids,
+    noOfAdults: adultsCount,
+    noOfKids: kidsCount,
     noOfRoom,
     bookingBy: "Hotel-Manager",
     user: {
@@ -218,236 +244,6 @@ const getRoomsstatus = catchAsyncError(async (req, res) => {
     new ApiResponse(statusCode.OK, Object.values(roomTypeMap), "Filtered available rooms")
   );
 });
-
-// Get bookings with filters and pagination
-// const getBookingsByHotelManager = catchAsyncError(async (req, res) => {
-
-//   const hotelManagerId = req.user._id;
-//   const hotelManager = await HotelManagerModel.findById(hotelManagerId);
-//   if (!hotelManager) {
-//     throw new ApiError(statusCode.NOT_FOUND, "Hotel Manager not found.");
-//   }
-//   const {
-//     hotelId,
-//     bookingId,
-//     roomTypeId,
-//     startDate,
-//     endDate,
-//     page = 1,
-//     limit = 10,
-//   } = req.query;
-
-//   const query = {};
-
-//   if (bookingId) {
-//     query._id = bookingId;
-//   } else if (hotelId) {
-//     query.hotelId = hotelId;
-
-//     if (startDate || endDate) {
-//       query.createdAt = {};
-//       if (startDate) query.createdAt.$gte = new Date(startDate);
-//       if (endDate) query.createdAt.$lte = new Date(endDate);
-//     }
-
-//     if (roomTypeId) {
-//       query.roomTypeId = roomTypeId;
-//     }
-//   } else {
-//     throw new ApiError(
-//       statusCode.BAD_REQUEST,
-//       "Please provide bookingId or hotelId in query params."
-//     );
-//   }
-
-//   const skip = (parseInt(page) - 1) * parseInt(limit);
-
-//   const bookings = await HotelBooking.find(query)
-//     .sort({ createdAt: -1 })
-//     .skip(skip)
-//     .limit(parseInt(limit))
-//     .populate({ path: "hotelId", model: Hotel, select: "-__v" })
-//     .populate({ path: "roomTypeId", model: Room, select: "-__v" })
-//     // .populate({ path: "bookedBy", model: UserModel, select: "-password -__v" })
-//     // .populate({ path: "bookedBy", model: HotelManagerModel, select: "-password -__v" })
-//     .populate({ path: "assignedRooms", model: individualRoom, select: "-v" });
-
-//   const filterBookings = bookings.filter((b) => b.bookedBy == hotelManagerId);
-//   const usersBookings = bookings.filter((b) => b.bookedBy !== hotelManagerId);
-
-//   const mappedBookings = [...filterBookings, ...usersBookings];
-//   const totalBookings = await HotelBooking.countDocuments(query);
-//   const totalPages = Math.ceil(totalBookings / parseInt(limit));
-
-//   return res.status(statusCode.OK).json(
-//     new ApiResponse(
-//       statusCode.OK,
-//       {
-//         totalBookings,
-//         totalPages,
-//         currentPage: parseInt(page),
-//         limit: parseInt(limit),
-//         bookings: mappedBookings,
-//       },
-//       "Booking(s) fetched successfully"
-//     )
-//   );
-// });
-
-// by chatgpt
-// const getBookingsByHotelManager = catchAsyncError(async (req, res) => {
-//   const hotelManagerId = req.user._id;
-
-//   const hotelManager = await HotelManagerModel.findById(hotelManagerId);
-//   if (!hotelManager) {
-//     throw new ApiError(statusCode.NOT_FOUND, "Hotel Manager not found.");
-//   }
-
-//   const {
-//     hotelId,
-//     bookingId,
-//     roomTypeId,
-//     startDate,
-//     endDate,
-//     page = 1,
-//     limit = 10,
-//   } = req.query;
-
-//   const query = {};
-
-//   if (bookingId) {
-//     query._id = bookingId;
-//   } else if (hotelId) {
-//     query.hotelId = hotelId;
-
-//     if (startDate || endDate) {
-//       query.createdAt = {};
-//       if (startDate) query.createdAt.$gte = new Date(startDate);
-//       if (endDate) query.createdAt.$lte = new Date(endDate);
-//     }
-
-//     if (roomTypeId) {
-//       query.roomTypeId = roomTypeId;
-//     }
-//   } else {
-//     throw new ApiError(
-//       statusCode.BAD_REQUEST,
-//       "Please provide bookingId or hotelId in query params."
-//     );
-//   }
-
-//   const skip = (parseInt(page) - 1) * parseInt(limit);
-
-//   // STEP 1: Fetch all bookings without populating bookedBy
-//   let bookings = await HotelBooking.find(query)
-//     .sort({ createdAt: -1 })
-//     .skip(skip)
-//     .limit(parseInt(limit))
-//     .populate({ path: "hotelId", model: Hotel, select: "-__v" })
-//     .populate({ path: "roomTypeId", model: Room, select: "-__v" })
-//     .populate({ path: "assignedRooms", model: individualRoom, select: "-__v" });
-
-//   // STEP 2: Manually populate `bookedBy` for users who are NOT the hotel manager
-//   const bookingsToPopulate = bookings.filter(
-//     (booking) => String(booking.bookedBy) !== String(hotelManagerId)
-//   );
-
-//   const populatedUsers = await UserModel.find({
-//     _id: { $in: bookingsToPopulate.map((b) => b.bookedBy) },
-//   }).select("-password -__v");
-
-//   // Map populated users to their ID for easy lookup
-//   const userMap = {};
-//   populatedUsers.forEach((user) => {
-//     userMap[user._id.toString()] = user;
-//   });
-
-//   // STEP 3: Attach populated `bookedBy` only for user bookings
-//   bookings = bookings.map((booking) => {
-//     const isManagerBooking = String(booking.bookedBy) === String(hotelManagerId);
-//     const bookedByUser = userMap[booking.bookedBy.toString()];
-//     return {
-//       ...booking.toObject(),
-//       bookedBy: isManagerBooking ? booking.bookedBy : bookedByUser || booking.bookedBy,
-//     };
-//   });
-
-//   const totalBookings = await HotelBooking.countDocuments(query);
-//   const totalPages = Math.ceil(totalBookings / parseInt(limit));
-
-//   return res.status(statusCode.OK).json(
-//     new ApiResponse(
-//       statusCode.OK,
-//       {
-//         totalBookings,
-//         totalPages,
-//         currentPage: parseInt(page),
-//         limit: parseInt(limit),
-//         bookings,
-//       },
-//       "Booking(s) fetched successfully"
-//     )
-//   );
-// });
-
-// const getBookingsByHotelManager = catchAsyncError(async (req, res) => {
-//   const hotelManagerId = req.user._id;
-
-//   const hotelManager = await HotelManagerModel.findById(hotelManagerId).select("-password -__v");
-//   if (!hotelManager) {
-//     throw new ApiError(statusCode.NOT_FOUND, "Hotel Manager not found.");
-//   }
-
-//   const {
-//     hotelId,
-//     bookingId,
-//     roomTypeId,
-//     startDate,
-//     endDate,
-//     page = 1,
-//     limit = 10,
-//   } = req.query;
-
-//   if (!bookingId && !hotelId) {
-//     throw new ApiError(statusCode.BAD_REQUEST, "Please provide bookingId or hotelId.");
-//   }
-
-//   const query = bookingId ? { _id: bookingId } : { hotelId };
-//   if (startDate || endDate) {
-//     query.createdAt = {};
-//     if (startDate) query.createdAt.$gte = new Date(startDate);
-//     if (endDate) query.createdAt.$lte = new Date(endDate);
-//   }
-//   if (roomTypeId) query.roomTypeId = roomTypeId;
-
-//   const skip = (parseInt(page) - 1) * parseInt(limit);
-
-//   const bookings = await HotelBooking.find(query)
-//     .sort({ createdAt: -1 })
-//     .skip(skip)
-//     .limit(parseInt(limit))
-//     .populate("hotelId", "-__v")
-//     .populate("roomTypeId", "-__v")
-//     .populate("assignedRooms", "-__v")
-//     .populate("bookedBy"); // populated using refPath (bookingBy)
-
-//   const totalBookings = await HotelBooking.countDocuments(query);
-//   const totalPages = Math.ceil(totalBookings / parseInt(limit));
-
-//   return res.status(statusCode.OK).json(
-//     new ApiResponse(
-//       statusCode.OK,
-//       {
-//         totalBookings,
-//         totalPages,
-//         currentPage: parseInt(page),
-//         limit: parseInt(limit),
-//         bookings,
-//       },
-//       "Booking(s) fetched successfully"
-//     )
-//   );
-// });
 
 
 const getBookingsByHotelManager = catchAsyncError(async (req, res) => {
@@ -539,7 +335,7 @@ const getBookingsByHotelManager = catchAsyncError(async (req, res) => {
 
     return {
       ...b.toObject(),
-      bookedBy: populatedBookedBy || b.bookedBy, 
+      bookedBy: populatedBookedBy || b.bookedBy,
     };
   });
 
@@ -560,9 +356,11 @@ const getBookingsByHotelManager = catchAsyncError(async (req, res) => {
     )
   );
 });
+
+
 const allotRoomToBooking = catchAsyncError(async (req, res) => {
-  const { bookingId,roomId }= req.query;
-  
+  const { bookingId, roomId } = req.query;
+
   if (!bookingId || !roomId) {
     throw new ApiError(statusCode.BAD_REQUEST, "Booking ID and room ID are required.");
   }

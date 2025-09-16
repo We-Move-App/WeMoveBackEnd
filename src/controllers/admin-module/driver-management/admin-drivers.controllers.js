@@ -51,8 +51,10 @@ const getAllDrivers = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const { status, mobile, registrationNo, vehicleType } = req.query;
+    const { vehicleType, search } = req.query;
+    console.log("Query Params:", req.query);
 
+    // ✅ Validate vehicleType
     if (!vehicleType) {
       return res.status(400).json({
         success: false,
@@ -67,21 +69,25 @@ const getAllDrivers = async (req, res) => {
       });
     }
 
-    // Driver filter
-    const driverFilter = {};
-    if (status) driverFilter.status = status;
-    if (mobile) driverFilter.phoneNo = { $regex: mobile, $options: "i" };
-
-    // Vehicle filter
+    // ✅ Vehicle filter
     const vehicleMatch = { "vehicleInfo.vehicleType": vehicleType };
-    if (registrationNo) {
-      vehicleMatch["vehicleInfo.registrationNo"] = {
-        $regex: registrationNo,
-        $options: "i",
+
+    // ✅ Search across multiple fields (case-insensitive, partial)
+    let searchFilter = {};
+    if (search) {
+      const regex = { $regex: search, $options: "i" };
+      searchFilter = {
+        $or: [
+          { fullName: regex },                  // driver name
+          { email: regex },                     // driver email
+          { phoneNo: regex },                   // driver mobile
+          { status: regex },                    // driver status
+          { "vehicleInfo.registrationNo": regex } // vehicle registration
+        ],
       };
     }
 
-    // Fetch drivers with pagination
+    // ✅ Fetch drivers with pagination
     const drivers = await DriverBasicDetails.aggregate([
       {
         $lookup: {
@@ -94,11 +100,11 @@ const getAllDrivers = async (req, res) => {
       { $unwind: { path: "$vehicleInfo", preserveNullAndEmptyArrays: true } },
       {
         $match: {
-          ...driverFilter,
           ...vehicleMatch,
+          ...searchFilter,
         },
       },
-      { $sort: { createdAt: -1 } }, // recent first
+      { $sort: { createdAt: -1 } },
       { $skip: skip },
       { $limit: limit },
       {
@@ -116,7 +122,7 @@ const getAllDrivers = async (req, res) => {
       },
     ]);
 
-    // Total count (unique drivers only ✅)
+    // ✅ Count total results
     const totalCount = await DriverBasicDetails.aggregate([
       {
         $lookup: {
@@ -129,13 +135,11 @@ const getAllDrivers = async (req, res) => {
       { $unwind: { path: "$vehicleInfo", preserveNullAndEmptyArrays: true } },
       {
         $match: {
-          ...driverFilter,
           ...vehicleMatch,
+          ...searchFilter,
         },
       },
-      {
-        $group: { _id: "$driverId" }, // avoid duplicates
-      },
+      { $group: { _id: "$driverId" } },
       { $count: "total" },
     ]);
 
@@ -160,6 +164,9 @@ const getAllDrivers = async (req, res) => {
     });
   }
 };
+
+
+
 const getdriverDetailsById = catchAsyncError(async (req, res) => {
   const { driverId } = req.params;
   const { vehicleType } = req.query;
@@ -261,6 +268,8 @@ const getdriverDetailsById = catchAsyncError(async (req, res) => {
 
   return res.status(statusCode.OK).json(response);
 });
+
+
 const verifyUserProfile = catchAsyncError(async (req, res) => {
   const { driverId } = req.params;
   const { status } = req.body;
@@ -699,6 +708,7 @@ const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
     )
   );
 });
+
 const createTaxiDriverFromAdmin = catchAsyncError(async (req, res) => {
   const {
     basicDriverDetails = {},
@@ -889,6 +899,7 @@ const createTaxiDriverFromAdmin = catchAsyncError(async (req, res) => {
     )
   );
 });
+
 const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
   const { driverId } = req.params;
   const { vehicleType } = req.query;
@@ -1183,13 +1194,11 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
 
   return res.status(statusCode.OK).json(response);
 });
+
 const getAllBikeBookings = catchAsyncError(async (req, res) => {
   const {
-    status,
-    bookingId,
-    from,
-    to,
     vehicleType, // required
+    search,
     page = 1,
     limit = 10,
   } = req.query;
@@ -1201,11 +1210,22 @@ const getAllBikeBookings = catchAsyncError(async (req, res) => {
     );
   }
 
-  const matchConditions = {};
-  if (status) matchConditions.rideStatus = status;
-  if (bookingId) matchConditions.bookingId = bookingId;
-  if (from) matchConditions.fromCity = { $regex: from, $options: "i" };
-  if (to) matchConditions.toCity = { $regex: to, $options: "i" };
+  // ✅ Search filter across multiple fields
+  let searchFilter = {};
+  if (search) {
+    const regex = { $regex: search, $options: "i" };
+    searchFilter = {
+      $or: [
+        { bookingId: regex },                // booking id
+        { rideStatus: regex },               // booking status
+        { fromCity: regex },                 // from city
+        { toCity: regex },                   // to city
+        { "user.fullName": regex },          // customer name
+        { "driver.fullName": regex },        // rider name
+        { "vehicle.registrationNo": regex }, // vehicle registration
+      ],
+    };
+  }
 
   // Common pipeline before pagination
   const basePipeline = [
@@ -1249,40 +1269,18 @@ const getAllBikeBookings = catchAsyncError(async (req, res) => {
     },
     {
       $match: {
-        ...matchConditions,
         "vehicle.vehicleType": vehicleType,
+        ...searchFilter,
       },
     },
   ];
 
-  // Total count (without skip & limit)
+  // ✅ Total count
   const totalCountPipeline = [...basePipeline, { $count: "total" }];
   const totalResult = await RideBookingDetail.aggregate(totalCountPipeline);
   const totalBookings = totalResult[0]?.total || 0;
 
-  // Paginated pipeline
-  const pipeline = [
-    ...basePipeline,
-    {
-      $project: {
-        bookingId: 1,
-        customerName: { $ifNull: ["$user.fullName", "N/A"] },
-        riderName: { $ifNull: ["$driver.fullName", "N/A"] },
-        from: "$fromCity",
-        to: "$toCity",
-        rideDate: { $ifNull: ["$timestamps.requestedAt", "$createdAt"] },
-        vehicleType: "$vehicle.vehicleType",
-        amount: "$fare",
-        status: "$rideStatus",
-      },
-    },
-    { $sort: { rideDate: -1 } },
-    { $skip: (parseInt(page) - 1) * parseInt(limit) },
-    { $limit: parseInt(limit) },
-  ];
-
-  const bookings = await RideBookingDetail.aggregate(pipeline);
-
+  // ❌ No bookings found
   if (totalBookings === 0) {
     return res.status(404).json({
       success: false,
@@ -1295,6 +1293,30 @@ const getAllBikeBookings = catchAsyncError(async (req, res) => {
     });
   }
 
+  // ✅ Paginated pipeline
+  const pipeline = [
+    ...basePipeline,
+    {
+      $project: {
+        bookingId: 1,
+        customerName: { $ifNull: ["$user.fullName", "N/A"] },
+        riderName: { $ifNull: ["$driver.fullName", "N/A"] },
+        from: "$fromCity",
+        to: "$toCity",
+        rideDate: { $ifNull: ["$timestamps.requestedAt", "$createdAt"] },
+        vehicleType: "$vehicle.vehicleType",
+        registrationNumber: "$vehicle.registrationNo",
+        amount: "$fare",
+        status: "$rideStatus",
+      },
+    },
+    { $sort: { rideDate: -1 } },
+    { $skip: (parseInt(page) - 1) * parseInt(limit) },
+    { $limit: parseInt(limit) },
+  ];
+
+  const bookings = await RideBookingDetail.aggregate(pipeline);
+
   return res.status(200).json({
     success: true,
     statusCode: 200,
@@ -1305,6 +1327,8 @@ const getAllBikeBookings = catchAsyncError(async (req, res) => {
     data: bookings,
   });
 });
+
+
 const getBookingDetailsById = catchAsyncError(async (req, res) => {
   const { bookingId } = req.params;
 

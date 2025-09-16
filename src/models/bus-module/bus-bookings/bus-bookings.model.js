@@ -63,7 +63,7 @@ const bookingSchema = new Schema(
 
     noOfPassengers: { type: Number, required: true },
     price: { type: Number, required: true, min: 0 },
-    // totalAmount: { type: Number, required: true, min: 0 },
+
     journeyDate: { type: Date, required: true },
     createdAt: { type: Date, default: Date.now },
     termAndConditions: { type: Boolean, required: true, default: false },
