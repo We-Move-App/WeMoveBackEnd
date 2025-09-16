@@ -98,7 +98,7 @@ const requestTopay = catchAsyncError(async (req, res) => {
     type: TransactionTypeEnum.CREDIT,
     amount,
     currency,
-    description: description || "Top-up via MoMo",
+    description: "Wallet Top-up",
     status: PaymentStatusEnum.PENDING,
   });
 

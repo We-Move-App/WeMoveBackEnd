@@ -23,16 +23,16 @@ const ValidateSecurePin = require("../../../utils/services/securePin.services");
 const {
   PaymentStatusEnum,
   TransactionTypeEnum,
-  EntityCodeEnum
+  EntityCodeEnum,
 } = require("../../../utils/constants/ENUM");
 const Commission = require("../../../models/admin-module/commission-management/commission.model");
-const { CouponModel } = require("../../../models/admin-module/Admin-coupon/adminCouponModel");
+const {
+  CouponModel,
+} = require("../../../models/admin-module/Admin-coupon/adminCouponModel");
 const {
   AdminModel,
 } = require("../../../models/admin-module/admin/admin.model");
 const generateCustomId = require("../../../utils/customId/generateCustomId");
-
-
 
 const getUserBusBookings = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
@@ -248,7 +248,60 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       throw new ApiError(statusCode.BAD_REQUEST, "Insufficient wallet balance");
     }
 
+    // Step 2: Seat availability
+    let seatAvailability = await BusSeatsLayoutModel.findOne({
+      busId,
+      journeyDate: journeyDateNormalized,
+      routeId,
+    }).session(session);
+
+    if (!seatAvailability) {
+      let busSeats = [];
+      for (let i = 0; i < findBus.noOfSeats; i++) {
+        busSeats.push({
+          seatNumber: `S${i + 1}`,
+          isAvailable: true,
+          seatType: "regular",
+          status: "available",
+        });
+      }
+      seatAvailability = await BusSeatsLayoutModel.create(
+        [
+          {
+            busId,
+            seats: busSeats,
+            noOfSeats: findBus.noOfSeats,
+            journeyDate: journeyDateNormalized,
+            bookedSeats: 0,
+            availableSeats: findBus.noOfSeats,
+            routeId,
+          },
+        ],
+        { session }
+      );
+      seatAvailability = seatAvailability[0];
+    }
+
+    const availableSeats = seatAvailability.seats.filter(
+      (seat) => seat.isAvailable
+    );
+    if (availableSeats.length < noOfPassengers) {
+      throw new ApiError(statusCode.CONFLICT, "Not enough available seats");
+    }
+
+    const assignedSeats = availableSeats
+      .slice(0, noOfPassengers)
+      .map((s) => s.seatNumber);
+
+    const assignSeatToPassenger = passengers.map((p, i) => ({
+      ...p,
+      seatNumber: assignedSeats[i],
+    }));
+
+    // Step 3: Create booking
+
     const bookingId = await generateCustomId(EntityCodeEnum.BUS_BOOKING, "BB");
+
     const [newBooking] = await BusBookingModel.create(
       [{
         busId,
@@ -357,7 +410,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           status: PaymentStatusEnum.SUCCESS,
           amount: platformFee,
           currency: process.env.MOMO_CURRENCY,
-          description: "Commission from booking",
+          description: `Commission from bus booking ${busId}`,
         },
       ],
       { session }
@@ -369,7 +422,13 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
         appliedCoupon._id,
         {
           $inc: { usedCount: 1 },
-          $push: { usageHistory: { userId, bookingId: newBooking._id, usedAt: new Date() } },
+          $push: {
+            usageHistory: {
+              userId,
+              bookingId: newBooking._id,
+              usedAt: new Date(),
+            },
+          },
         },
         { session }
       );

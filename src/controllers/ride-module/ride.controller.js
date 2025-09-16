@@ -588,7 +588,7 @@ const completeRide = catchAsyncError(async (req, res, next) => {
           status: PaymentStatusEnum.SUCCESS,
           amount: booking.fare,
           currency: process.env.MOMO_CURRENCY,
-          description: `Ride fare from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
+          description: `${booking.vehicleType} Ride from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
         },
         {
           transactionId: uuidv4(),
@@ -598,7 +598,7 @@ const completeRide = catchAsyncError(async (req, res, next) => {
           status: PaymentStatusEnum.SUCCESS,
           amount: driverShare,
           currency: process.env.MOMO_CURRENCY,
-          description: `Ride fare from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
+          description: `${booking.vehicleType} Ride from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
         },
         {
           transactionId: uuidv4(),
@@ -608,7 +608,7 @@ const completeRide = catchAsyncError(async (req, res, next) => {
           status: PaymentStatusEnum.SUCCESS,
           amount: platformFee,
           currency: process.env.MOMO_CURRENCY,
-          description: "Platform commission from ride",
+          description: `Platform commission from ${booking.vehicleType} ride`,
         },
       ],
       { session }
@@ -1285,9 +1285,10 @@ const getTripHistory = catchAsyncError(async (req, res) => {
       from: trip.pickupLocation?.address,
       to: trip.dropLocation?.address,
       requestedAt: trip.timestamps?.requestedAt,
-      vehicleType: trip.vehicleType, // Include vehicle type in response
+      vehicleType: trip.vehicleType,
       price: trip.fare,
       currency: process.env.MOMO_CURRENCY || "EUR",
+      tripRating: trip.tripRating || null,
     };
 
     if (entity === "driver") {

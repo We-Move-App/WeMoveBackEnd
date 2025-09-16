@@ -30,6 +30,9 @@ const {
 const {
   uploadImageOnAws,
 } = require("../../../utils/uploadFiles/uploadFilestoAws");
+const {
+  decodeAccessToken,
+} = require("../../../utils/jwtToken/customTokenService");
 
 const getProfile = catchAsyncError(async (req, res, next) => {
   const result = await getUserProfileFunc({
@@ -198,6 +201,7 @@ const assignBranch = catchAsyncError(async (req, res, next) => {
 });
 
 const mongoose = require("mongoose");
+const InactiveUserModel = require("../../../models/user-module/users/inactive-users.model");
 
 const getBeneficiary = catchAsyncError(async (req, res, next) => {
   const { userId } = req.body;
@@ -235,6 +239,57 @@ const getAvailableModules = catchAsyncError(async (req, res, next) => {
     );
 });
 
+const deleteProfile = catchAsyncError(async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token missing or invalid"
+    );
+  }
+
+  const token = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(token);
+  const userId = decoded?._id;
+
+  if (!userId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  const user = await UserModel.findById(userId);
+  if (!user) {
+    throw new ApiError(statusCode.NOT_FOUND, "User not found");
+  }
+
+  await InactiveUserModel.create({
+    originalUserId: user._id,
+    userId: user.userId,
+    fullName: user.fullName,
+    email: user.email,
+    phoneNumber: user.phoneNumber,
+    dob: user.dob,
+    nationality: user.nationality,
+    gender: user.gender,
+    idNumber: user.idNumber,
+    branch: user.branch,
+    parentUserId: user.parentUserId,
+    deletedAt: new Date(),
+    reason: "User requested account deletion",
+  });
+
+  await UserModel.findByIdAndDelete(userId);
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        null,
+        "User deleted and archived successfully"
+      )
+    );
+});
+
 module.exports = {
   getProfile,
   getAvatar,
@@ -247,4 +302,5 @@ module.exports = {
   resetPassword2,
   getBeneficiary,
   getAvailableModules,
+  deleteProfile,
 };

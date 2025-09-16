@@ -78,7 +78,7 @@ const bookingDetailsSchema = new mongoose.Schema(
     },
 
     feedbackFromUser: { type: String },
-    tripRating: { type: Number, min: 1, max: 5 },
+    tripRating: { type: Number, min: 1, max: 5, default: 5 },
   },
   { timestamps: true }
 );

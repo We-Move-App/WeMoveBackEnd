@@ -54,6 +54,17 @@ const addBasicDetailsValidation = Joi.object({
       }
       return value;
     }, "Documents validation"),
-});
+})
+  .custom((obj, helpers) => {
+    if (obj.experience >= obj.age) {
+      return helpers.error("any.custom", {
+        message: "Experience cannot exceed or equal to age",
+      });
+    }
+    return obj;
+  }, "Experience vs Age validation")
+  .messages({
+    "any.custom": "{{#message}}",
+  });
 
 module.exports = { addBasicDetailsValidation };
