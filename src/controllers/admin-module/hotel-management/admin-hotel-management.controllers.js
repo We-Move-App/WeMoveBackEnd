@@ -400,7 +400,7 @@ const registerHotelManagerFromAdmin = catchAsyncError(
         Array.from({ length: roomInfo.standardRoomCount }, (_, i) => ({
           roomTypeId: standardRoom._id,
           hotelId: hotel._id,
-          roomNumber: `S-${i + 1}`,
+          roomNumber: `G-${i + 1}`,
           createdBy: adminId,
         }))
       );
@@ -430,7 +430,7 @@ const registerHotelManagerFromAdmin = catchAsyncError(
         Array.from({ length: roomInfo.luxuryRoomCount }, (_, i) => ({
           roomTypeId: luxuryRoom._id,
           hotelId: hotel._id,
-          roomNumber: `L-${i + 1}`,
+          roomNumber: `T-${i + 1}`,
           createdBy: adminId,
         }))
       );
@@ -1048,31 +1048,52 @@ const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
 const getAllHotelBookings = async (req, res) => {
   try {
     const {
+      search,   // 🔎 single search param
       page = 1,
       limit = 10,
-      sortBy = "createdAt",
-      sortOrder = "desc",
-      status, // optional filter
-      hotelId, // optional filter
-      customerName, // optional filter
-      phone, // optional filter
     } = req.query;
 
     const query = {};
 
-    if (status) query.status = { $regex: new RegExp(status, "i") };
-    if (hotelId) query.hotelId = hotelId;
-    if (customerName)
-      query["user.name"] = { $regex: new RegExp(customerName, "i") };
-    if (phone) query["user.phoneNumber"] = { $regex: new RegExp(phone, "i") };
+    if (search) {
+      const regex = new RegExp(search, "i");
+
+      // Handle ObjectId search (bookingId / hotelId)
+      const isValidObjectId = mongoose.Types.ObjectId.isValid(search);
+
+      // Try parsing dates for checkIn/checkOut search
+      const date = !isNaN(Date.parse(search)) ? new Date(search) : null;
+      let dateRange = null;
+      if (date) {
+        const start = new Date(date);
+        const end = new Date(date);
+        end.setHours(23, 59, 59, 999);
+        dateRange = { $gte: start, $lte: end };
+      }
+
+      query.$or = [
+        { status: regex },
+        { "user.name": regex },
+        { "user.phoneNumber": regex },
+        { "user.email": regex },
+      ];
+
+      if (isValidObjectId) {
+        query.$or.push({ _id: search }, { hotelId: search });
+      }
+
+      if (dateRange) {
+        query.$or.push({ checkInDate: dateRange }, { checkOutDate: dateRange });
+      }
+    }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const sortOption = { [sortBy]: sortOrder === "asc" ? 1 : -1 };
+    const sortOption = { createdAt: -1 }; // ✅ always recent first
 
     const [bookings, total] = await Promise.all([
       HotelBookingModel.find(query)
-        .select("hotelId checkInDate checkOutDate totalAmount status user")
-        .populate("hotelId", "_id") // only hotel ID, can add "name" if required
+        .select("hotelId checkInDate checkOutDate totalAmount status user createdAt")
+        .populate("hotelId", "_id name")
         .sort(sortOption)
         .skip(skip)
         .limit(parseInt(limit))
@@ -1080,21 +1101,37 @@ const getAllHotelBookings = async (req, res) => {
       HotelBookingModel.countDocuments(query),
     ]);
 
-    // Format the response
-    const formattedBookings = bookings.map((booking) => ({
-      bookingId: booking._id,
-      hotelId: booking.hotelId?._id || null,
-      customerName: booking.user?.[0]?.name || null,
-      phone: booking.user?.[0]?.phoneNumber || null,
-      email: booking.user?.[0]?.email || null,
-      checkInDate: booking.checkInDate,
-      checkOutDate: booking.checkOutDate,
-      amount: booking.totalAmount,
-      status: booking.status,
+    if (total === 0) {
+      return res.status(404).json({
+        success: false,
+        statusCode: 404,
+        message: "No hotel bookings found",
+        data: [],
+        pagination: {
+          total: 0,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          totalPages: 0,
+        },
+      });
+    }
+
+    const formattedBookings = bookings.map((b) => ({
+      bookingId: b._id,
+      hotelId: b.hotelId?._id || null,
+      hotelName: b.hotelId?.name || null,
+      customerName: b.user?.[0]?.name || null,
+      phone: b.user?.[0]?.phoneNumber || null,
+      email: b.user?.[0]?.email || null,
+      checkInDate: b.checkInDate,
+      checkOutDate: b.checkOutDate,
+      amount: b.totalAmount,
+      status: b.status,
     }));
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
+      statusCode: 200,
       message: "Hotel bookings fetched successfully",
       data: {
         bookings: formattedBookings,
@@ -1107,13 +1144,15 @@ const getAllHotelBookings = async (req, res) => {
       },
     });
   } catch (error) {
-    console.error("Error fetching bookings:", error);
+    console.error("Error fetching hotel bookings:", error);
     res.status(500).json({
       success: false,
+      statusCode: 500,
       message: "Internal server error",
     });
   }
 };
+
 
 const getBookingDetailsById = async (req, res) => {
   try {

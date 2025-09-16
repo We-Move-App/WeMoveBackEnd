@@ -45,8 +45,8 @@ const HotelBookingSchema = new mongoose.Schema(
     checkOutDate: { type: Date, required: true },
     checkInTime: { type: Date, required: true },
     checkOutTime: { type: Date, required: true },
-    totalAmount: { type: Number, required: true },
-    finalAmount: { type: Number, required: true },
+    totalAmount: { type: Number, required: false },
+    finalAmount: { type: Number, required: false },
 
     couponUsed: {
       type: mongoose.Schema.Types.ObjectId,

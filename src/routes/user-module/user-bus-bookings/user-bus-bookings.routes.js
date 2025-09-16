@@ -6,6 +6,7 @@ const {
 const {
   getUserBusBookings,
   createBusBooking,
+  calculateBusBooking,
   getBusBookingDetails,
   payBusBookingPayment,
   cancelBusBooking,
@@ -29,6 +30,10 @@ userBusBookingsRoutes
 userBusBookingsRoutes
   .route("/")
   .post(isUserAuthenticated, authorizeRole(["user"]), createBusBooking);
+
+userBusBookingsRoutes
+  .route("/priceDeatails")
+  .post(isUserAuthenticated, authorizeRole(["user"]), calculateBusBooking); 
 
 userBusBookingsRoutes
   .route("/pay/:bookingId")
