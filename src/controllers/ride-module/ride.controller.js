@@ -1091,7 +1091,7 @@ const getDriverAnalytics = catchAsyncError(async (req, res, next) => {
   }
 
   // Calculate totalEarnings / totalLoss (90% to driver)
-  const totalFare = rides.reduce((sum, ride) => sum + ride.fare * 0.9, 0);
+  const totalFare = rides.reduce((sum, ride) => sum + ride.fare, 0);
 
   // Transform location format
   const formattedRides = rides.map((r) => ({
@@ -1112,7 +1112,7 @@ const getDriverAnalytics = catchAsyncError(async (req, res, next) => {
     },
     distanceInKm: r.distanceInKm,
     durationInMin: r.durationInMin,
-    fare: r.fare * 0.9,
+    fare: r.fare,
     rideStatus: r.rideStatus,
     completedAt: r.timestamps.completedAt,
     cancelledAt: r.timestamps.cancelledAt,
