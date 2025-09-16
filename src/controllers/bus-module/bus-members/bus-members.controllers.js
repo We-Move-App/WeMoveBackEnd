@@ -192,7 +192,7 @@ const getAllMembersUnderBusOperator = catchAsyncError(
     const startIndex = (page - 1) * limit;
 
     const members = await BusOperatorModel.find({ parentUserId: busOperatorId })
-      .select("fullName CompanyName phoneNumber email  idNumber")
+      .select("fullName CompanyName phoneNumber email  operatorId idNumber")
       .sort({ createdAt: -1 })
       .limit(limit)
       .skip(startIndex);
@@ -239,7 +239,7 @@ const getSingleMemberUnderBusOperator = catchAsyncError(
       parentUserId: busOperatorId,
       _id: id,
     }).select(
-      "fullName email phoneNumber authorities dob idNumber verificationStatus parentUserId"
+      "fullName email phoneNumber authorities dob idNumber verificationStatus  operatorId parentUserId"
     );
 
     if (!member) {

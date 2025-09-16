@@ -48,10 +48,33 @@ const getAllRooms = catchAsyncError(async (req, res, next) => {
 
     // Sorting rooms by sortBy field and order
     allRooms.sort((a, b) => {
-        if (a[sortBy] < b[sortBy]) return -1 * sortOrder;
-        if (a[sortBy] > b[sortBy]) return 1 * sortOrder;
-        return 0;
+        const getPriority = (roomNumber) => {
+            const prefix = roomNumber.split("-")[0].toUpperCase();
+            if (prefix === "G") return 1; // Standard first
+            if (prefix === "T") return 2; // Luxury after
+            return 3; // Others last
+        };
+
+        const getNumber = (roomNumber) => {
+            const match = roomNumber.match(/\d+/);
+            return match ? parseInt(match[0], 10) : 0;
+        };
+
+        // Compare by type first
+        const priorityA = getPriority(a.roomNumber);
+        const priorityB = getPriority(b.roomNumber);
+
+        if (priorityA !== priorityB) {
+            return priorityA - priorityB;
+        }
+
+        // If same type, compare numbers
+        const numA = getNumber(a.roomNumber);
+        const numB = getNumber(b.roomNumber);
+
+        return numA - numB;
     });
+
 
     // Pagination
     const totalRooms = allRooms.length;
@@ -117,18 +140,18 @@ const updateRoom = catchAsyncError(async (req, res, next) => {
         status: "Completed"
     };
 
-   await HotelBooking.findByIdAndUpdate(room.bookingReference, {
-  $set: {
-    checkOutDate: now,
-    checkOutTime: now,
-    status: "Completed"
-  }
-}, { new: true, runValidators: true });
+    await HotelBooking.findByIdAndUpdate(room.bookingReference, {
+        $set: {
+            checkOutDate: now,
+            checkOutTime: now,
+            status: "Completed"
+        }
+    }, { new: true, runValidators: true });
 
 
     // Mark room as available
     const updatedRoom = await individualRoom.findByIdAndUpdate(
-        
+
         roomId,
         {
             status: "available",
@@ -222,8 +245,8 @@ const fetchRoomStatus = catchAsyncError(async (req, res) => {
         if (isBooked) {
             roomTypeMap[typeName].booked += 1;
             roomTypeMap[typeName].bookedRooms.push({
-                roomId: room._id.toString(),  
-                roomNumber: room.roomNumber, 
+                roomId: room._id.toString(),
+                roomNumber: room.roomNumber,
                 bookingId: bookedRoomsDetails[roomIdStr].bookingId,
                 status: bookedRoomsDetails[roomIdStr].status,
                 roomTypeId: bookedRoomsDetails[roomIdStr].roomTypeId,
