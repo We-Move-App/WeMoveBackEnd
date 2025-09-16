@@ -248,55 +248,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       throw new ApiError(statusCode.BAD_REQUEST, "Insufficient wallet balance");
     }
 
-    // Step 2: Seat availability
-    let seatAvailability = await BusSeatsLayoutModel.findOne({
-      busId,
-      journeyDate: journeyDateNormalized,
-      routeId,
-    }).session(session);
-
-    if (!seatAvailability) {
-      let busSeats = [];
-      for (let i = 0; i < findBus.noOfSeats; i++) {
-        busSeats.push({
-          seatNumber: `S${i + 1}`,
-          isAvailable: true,
-          seatType: "regular",
-          status: "available",
-        });
-      }
-      seatAvailability = await BusSeatsLayoutModel.create(
-        [
-          {
-            busId,
-            seats: busSeats,
-            noOfSeats: findBus.noOfSeats,
-            journeyDate: journeyDateNormalized,
-            bookedSeats: 0,
-            availableSeats: findBus.noOfSeats,
-            routeId,
-          },
-        ],
-        { session }
-      );
-      seatAvailability = seatAvailability[0];
-    }
-
-    const availableSeats = seatAvailability.seats.filter(
-      (seat) => seat.isAvailable
-    );
-    if (availableSeats.length < noOfPassengers) {
-      throw new ApiError(statusCode.CONFLICT, "Not enough available seats");
-    }
-
-    const assignedSeats = availableSeats
-      .slice(0, noOfPassengers)
-      .map((s) => s.seatNumber);
-
-    const assignSeatToPassenger = passengers.map((p, i) => ({
-      ...p,
-      seatNumber: assignedSeats[i],
-    }));
+   
 
     // Step 3: Create booking
 
