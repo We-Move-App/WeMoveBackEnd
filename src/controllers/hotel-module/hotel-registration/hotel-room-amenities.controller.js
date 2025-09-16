@@ -771,8 +771,6 @@ existingRoom.roomImages = roomImageDoc.images;
   );
 });
 
-
-
 const deleteRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
   const { hotelId, roomType } = req.query;
 

@@ -1104,11 +1104,11 @@ const getHotelById = catchAsyncError(async (req, res) => {
         roomTypes: roomTypesWithAvailability,
         ...(checkIn && checkOut
           ? {
-              dateFilter: {
-                checkInDate: checkIn.toISOString(),
-                checkOutDate: checkOut.toISOString(),
-              },
-            }
+            dateFilter: {
+              checkInDate: checkIn.toISOString(),
+              checkOutDate: checkOut.toISOString(),
+            },
+          }
           : {}),
       },
       "Hotel details fetched successfully."
@@ -1305,7 +1305,7 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
 
   // Process refund if booking was paid
   if (booking.paymentStatus === "PAID") {
-    const refundAmount = booking.totalAmount * 0.5;
+    const refundAmount = booking.finalAmount * 0.5;
 
     const operatorTxn = await TransactionModel.findOne({
       bookingId,

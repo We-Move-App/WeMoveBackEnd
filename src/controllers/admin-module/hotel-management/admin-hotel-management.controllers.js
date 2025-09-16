@@ -1092,8 +1092,8 @@ const getAllHotelBookings = async (req, res) => {
 
     const [bookings, total] = await Promise.all([
       HotelBookingModel.find(query)
-        .select("hotelId checkInDate checkOutDate totalAmount status user createdAt")
-        .populate("hotelId", "_id name")
+        .select("hotelId  bookingId checkInDate checkOutDate totalAmount status user createdAt")
+        .populate("hotelId", "hotelName")
         .sort(sortOption)
         .skip(skip)
         .limit(parseInt(limit))
@@ -1114,12 +1114,14 @@ const getAllHotelBookings = async (req, res) => {
           totalPages: 0,
         },
       });
-    }
+    } console.log("Bookings with populated hotel:", bookings);
+
 
     const formattedBookings = bookings.map((b) => ({
       bookingId: b._id,
+      bookId: b.bookingId,
       hotelId: b.hotelId?._id || null,
-      hotelName: b.hotelId?.name || null,
+      hotelName: b.hotelId?.hotelName || null,
       customerName: b.user?.[0]?.name || null,
       phone: b.user?.[0]?.phoneNumber || null,
       email: b.user?.[0]?.email || null,
@@ -1180,6 +1182,7 @@ const getBookingDetailsById = async (req, res) => {
     const responseData = {
       bookingDetails: {
         bookingId: booking._id,
+        bookID: booking.bookingId,
         status: booking.status,
         hotelId: booking.hotelId?._id || null,
         amount: `$${booking.totalAmount.toFixed(2)}`,

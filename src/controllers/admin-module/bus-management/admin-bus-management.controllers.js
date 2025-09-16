@@ -607,7 +607,7 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     });
   }
 
- 
+
   const totalPipeline = [...bookingsPipeline, { $count: "total" }];
   const totalResult = await BusBookingModel.aggregate(totalPipeline);
   const totalBookings = totalResult[0]?.total || 0;
@@ -641,6 +641,7 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     order,
     data: bookings.map((booking) => ({
       bookingId: booking._id,
+      bookId: booking.bookingId,
       busRegNumber: booking.bus?.busRegNumber || "N/A",
       bookedBy: booking.bookedBy
         ? {
