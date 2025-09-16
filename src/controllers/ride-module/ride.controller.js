@@ -19,6 +19,7 @@ const {
   PaymentStatusEnum,
   BookCancelledByEnum,
   VehicleTypeEnum,
+  TransactionTypeEnum,
 } = require("../../utils/constants/ENUM");
 const WalletModel = require("../../models/wallet-module/wallets.model");
 const generateCustomId = require("../../utils/customId/generateCustomId");
@@ -35,6 +36,7 @@ const DriverBasicDetails = require("../../models/new-driver-module/basic-details
 const DriverVehicleDetails = require("../../models/new-driver-module/vehicle-details/vehicle-details.model");
 const Commission = require("../../models/admin-module/commission-management/commission.model");
 const { AdminModel } = require("../../models/admin-module/admin/admin.model");
+const Transaction = require("../../models/transaction-module/transaction.model");
 
 function calculateFare(type, distanceInKm, durationInMin) {
   const config = vehicleConfig[type];
@@ -1061,28 +1063,23 @@ const getDriverAnalytics = catchAsyncError(async (req, res, next) => {
     );
   }
 
-  let matchQuery = {};
+  let matchQuery = { driverId, createdAt: { $gte: startDate, $lte: endDate } };
 
   if (entity === "completed") {
-    matchQuery = {
-      driverId,
-      rideStatus: RideBookStatusEnum.COMPLETED,
-      "timestamps.completedAt": { $gte: startDate, $lte: endDate },
-    };
+    matchQuery.type = TransactionTypeEnum.CREDIT; // driver gets credit when ride is completed
+    matchQuery.status = PaymentStatusEnum.SUCCESS;
   } else if (entity === "cancelled") {
-    matchQuery = {
-      rideStatus: RideBookStatusEnum.CANCELLED,
-      "cancelledByDrivers.driverId": driverId,
-      "timestamps.cancelledAt": { $gte: startDate, $lte: endDate },
-    };
+    matchQuery.refund = true; // or DEBIT transactions if you deduct from driver
   }
 
-  // Fetch rides
-  const rides = await RideBookingDetail.find(matchQuery).sort({
+  // Fetch transactions
+  console.log("matchQuery", matchQuery);
+
+  const transactions = await Transaction.find(matchQuery).sort({
     createdAt: -1,
   });
 
-  if (!rides.length) {
+  if (!transactions.length) {
     return res.status(statusCode.OK).json({
       success: true,
       message: `No ${entity} rides found for this ${filter} period`,
@@ -1090,10 +1087,15 @@ const getDriverAnalytics = catchAsyncError(async (req, res, next) => {
     });
   }
 
-  // Calculate totalEarnings / totalLoss (90% to driver)
-  const totalFare = rides.reduce((sum, ride) => sum + ride.fare, 0);
+  // Calculate driver earnings/loss
+  const totalAmount = transactions.reduce((sum, tx) => sum + tx.amount, 0);
 
-  // Transform location format
+  // Fetch ride details for response
+  const bookingIds = transactions.map((tx) => tx.bookingId);
+  const rides = await RideBookingDetail.find({
+    bookingId: { $in: bookingIds },
+  });
+
   const formattedRides = rides.map((r) => ({
     bookingId: r.bookingId,
     pickupLocation: {
@@ -1101,7 +1103,7 @@ const getDriverAnalytics = catchAsyncError(async (req, res, next) => {
       coordinates: [
         r.pickupLocation.location.coordinates[1],
         r.pickupLocation.location.coordinates[0],
-      ], // reverse [lng, lat] to [lat, lng]
+      ],
     },
     dropLocation: {
       address: r.dropLocation.address,
@@ -1113,6 +1115,7 @@ const getDriverAnalytics = catchAsyncError(async (req, res, next) => {
     distanceInKm: r.distanceInKm,
     durationInMin: r.durationInMin,
     fare: r.fare,
+    driverShare: transactions.find((t) => t.bookingId === r.bookingId)?.amount,
     rideStatus: r.rideStatus,
     completedAt: r.timestamps.completedAt,
     cancelledAt: r.timestamps.cancelledAt,
@@ -1120,7 +1123,7 @@ const getDriverAnalytics = catchAsyncError(async (req, res, next) => {
 
   const response = {
     driverId,
-    [entity === "completed" ? "totalEarnings" : "totalLoss"]: totalFare,
+    [entity === "completed" ? "totalEarnings" : "totalLoss"]: totalAmount,
     rides: formattedRides,
   };
 
