@@ -514,6 +514,7 @@ const searchBusOperators = async (req, res) => {
     });
   }
 };
+
 const getAllBusBookings = catchAsyncError(async (req, res, next) => {
   let {
     page = 1,
@@ -527,6 +528,7 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     to,
     createdBy,
   } = req.query;
+  console.log("req.query", req.query);
 
   page = parseInt(page);
   limit = parseInt(limit);
@@ -536,12 +538,14 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
 
   if (status) matchStage.status = status;
   if (paymentStatus) matchStage.paymentStatus = paymentStatus;
-  if (from) matchStage.from = new RegExp(from, "i");
-  if (to) matchStage.to = new RegExp(to, "i");
+  if (from && from.trim() !== "") matchStage.from = new RegExp(from, "i");
+  if (to && to.trim() !== "") matchStage.to = new RegExp(to, "i");
   if (createdBy) matchStage.bookedBy = createdBy;
 
   const bookingsPipeline = [
     { $match: matchStage },
+
+    // Lookup bus
     {
       $lookup: {
         from: "buses",
@@ -551,6 +555,8 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
       },
     },
     { $unwind: { path: "$bus", preserveNullAndEmptyArrays: true } },
+
+    // Lookup bookedBy (user)
     {
       $lookup: {
         from: "users",
@@ -560,6 +566,8 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
       },
     },
     { $unwind: { path: "$bookedBy", preserveNullAndEmptyArrays: true } },
+
+    // Lookup bookedByOperator (operator user)
     {
       $lookup: {
         from: "users",
@@ -569,37 +577,46 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
       },
     },
     { $unwind: { path: "$bookedByOperator", preserveNullAndEmptyArrays: true } },
+
+    // ✅ Unwind passengers so we can search inside
+    { $unwind: { path: "$passengers", preserveNullAndEmptyArrays: true } },
   ];
 
-  // ✅ Global search including busRegNumber
-  if (search) {
-    const regex = new RegExp(search, "i");
+  // ✅ Global search
+  if (search && search.trim() !== "") {
+    function escapeRegex(str) {
+      return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+
+    const regex = new RegExp(escapeRegex(search), "i");
     const isDate = !isNaN(Date.parse(search));
+
     bookingsPipeline.push({
       $match: {
         $or: [
-          { from: regex },
-          { to: regex },
-          { email: regex },
-          { phoneNumber: regex },
-          { status: regex },
-          { paymentStatus: regex },
-          { "bookedBy.fullName": regex },
-          { "passengers.name": regex },
-          { "passengers.email": regex },
+          { "passengers.name": regex },            // passenger name
           { "passengers.contactNumber": regex },
-          { "bus.busRegNumber": regex }, // ✅ include busRegNumber here
-          isDate ? { journeyDate: new Date(search) } : null,
+          { "passengers.email": regex },
+          { bookingId: regex },                     // booking ID
+          { paymentStatus: regex },                // payment status
+          { status: regex },                       // booking status
+          { "bus.busRegNumber": regex },           // bus registration number
+          isDate ? { journeyDate: new Date(search) } : null, // journey date
         ].filter(Boolean),
       },
     });
   }
 
+ 
+  const totalPipeline = [...bookingsPipeline, { $count: "total" }];
+  const totalResult = await BusBookingModel.aggregate(totalPipeline);
+  const totalBookings = totalResult[0]?.total || 0;
+
+
   bookingsPipeline.push({ $sort: { [sortBy]: order === "asc" ? 1 : -1 } });
   bookingsPipeline.push({ $skip: skip }, { $limit: limit });
 
   const bookings = await BusBookingModel.aggregate(bookingsPipeline);
-  const totalBookings = await BusBookingModel.countDocuments(matchStage);
 
   if (!bookings.length) {
     return res.status(404).json({
@@ -640,19 +657,21 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
       paymentStatus: booking.paymentStatus,
       status: booking.status,
       createdAt: booking.createdAt,
-      passengers: booking.passengers.map((p) => ({
-        name: p.name,
-        age: p.age,
-        gender: p.gender,
-        contactNumber: p.contactNumber,
-        seatNumber: p.seatNumber,
-        email: p.email,
-      })),
+      passengers: booking.passengers
+        ? [
+          {
+            name: booking.passengers.name,
+            age: booking.passengers.age,
+            gender: booking.passengers.gender,
+            contactNumber: booking.passengers.contactNumber,
+            seatNumber: booking.passengers.seatNumber,
+            email: booking.passengers.email,
+          },
+        ]
+        : [],
     })),
   });
 });
-
-
 
 const searchAllBusBookings = catchAsyncError(async (req, res, next) => {
   const {

@@ -28,6 +28,7 @@ const getAllUsersByAdmin = async ({ req, model }) => {
       { email: regex },
       { phoneNumber: regex },
       { fullName: regex },
+      { companyName, regex },
       { verificationStatus: regex }
     ];
   }
