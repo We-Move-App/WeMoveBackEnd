@@ -91,10 +91,12 @@ const busOperatorSchema = new mongoose.Schema(
     },
     parentUserId: {
       type: Schema.Types.ObjectId,
-      ref: "bus-operator",
+      ref: "BusOperator", // ✔ correct
       required: function () {
         return this.role === "bus-operator-member";
       },
+
+
     },
     dob: {
       type: Date,
@@ -190,6 +192,8 @@ busOperatorSchema.pre("save", function (next) {
   }
   next();
 });
+
+
 
 // Create the user model
 const BusOperatorModel = mongoose.model("BusOperator", busOperatorSchema);

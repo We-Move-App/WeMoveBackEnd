@@ -508,20 +508,53 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const skipIndex = (page - 1) * limit;
-  const { role } = req.query;
+  const { role, search } = req.query;
 
-  const query = { role: { $in: ["Admin", "SubAdmin"] } };
-  if (role) query.role = role;
+  // Build match query
+  const matchQuery = { role: { $in: ["Admin", "SubAdmin"] } };
+  if (role) matchQuery.role = role;
 
-  const allUsers = await AdminModel.find(query)
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .skip(skipIndex)
-    .populate("branch", "name location createdAt");
+  const searchQuery = search
+    ? {
+      $or: [
+        { userName: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { phoneNumber: { $regex: search, $options: "i" } },
+        { reportingManger: { $regex: search, $options: "i" } },
+        { role: { $regex: search, $options: "i" } },
+        { "branchData.name": { $regex: search, $options: "i" } }, // ✅ branch name search
+      ],
+    }
+    : {};
 
-  const totalUser = await AdminModel.countDocuments(query);
+  // Aggregation pipeline
+  const pipeline = [
+    { $match: matchQuery },
+    {
+      $lookup: {
+        from: "branches", // ✅ must match your branch collection name in MongoDB
+        localField: "branch",
+        foreignField: "_id",
+        as: "branchData",
+      },
+    },
+    { $unwind: { path: "$branchData", preserveNullAndEmptyArrays: true } },
+    { $match: searchQuery },
+    { $sort: { createdAt: -1 } },
+    {
+      $facet: {
+        data: [{ $skip: skipIndex }, { $limit: limit }],
+        totalCount: [{ $count: "count" }],
+      },
+    },
+  ];
 
-  if (!allUsers || allUsers.length === 0) {
+  const results = await AdminModel.aggregate(pipeline);
+
+  const totalUser = results[0]?.totalCount[0]?.count || 0;
+  const allUsers = results[0]?.data || [];
+
+  if (!allUsers.length) {
     throw new ApiError(statusCode.NOT_FOUND, "No users found");
   }
 
@@ -529,7 +562,6 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
     let truePermissionCount = 0;
 
     if (Array.isArray(user.permissions)) {
-      // if it's an array of booleans or objects
       truePermissionCount = user.permissions.filter(
         (perm) =>
           perm === true ||
@@ -539,10 +571,7 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
       typeof user.permissions === "object" &&
       user.permissions !== null
     ) {
-      // if it's a plain object like {create: true, edit: false}
-      truePermissionCount = Object.values(user.permissions).filter(
-        Boolean
-      ).length;
+      truePermissionCount = Object.values(user.permissions).filter(Boolean).length;
     }
 
     return {
@@ -554,36 +583,31 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
       role: user.role,
       permissionsCount: truePermissionCount,
       createdAt: user.createdAt,
-      branch: user.branch
+      branch: user.branchData
         ? {
-            branchId: user.branch?._id,
-            name: user.branch.name,
-            location: user.branch.location,
-            createdAt: user.branch.createdAt,
-          }
+          branchId: user.branchData._id,
+          name: user.branchData.name,
+          location: user.branchData.location,
+          createdAt: user.branchData.createdAt,
+        }
         : null,
     };
   });
 
-  const results = {
-    data: {
+  return res.status(statusCode.OK).json(
+    new ApiResponse(statusCode.OK, {
       success: true,
-      message: " fetched successfully",
+      message: "Fetched successfully",
       total: totalUser,
       page,
       limit,
       sortBy: "createdAt",
       order: "desc",
       data: users,
-    },
-  };
-
-  return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(statusCode.OK, results.data, "Data found successfully")
-    );
+    })
+  );
 });
+
 const getSubAdminsByBranch = catchAsyncError(async (req, res) => {
   const { role, _id } = req.user; // authenticated admin
 
@@ -636,28 +660,28 @@ const getAdminById = catchAsyncError(async (req, res, next) => {
     updatedAt: admin.updatedAt,
     branch: admin.branch
       ? {
-          branchId: admin.branch?._id,
-          name: admin.branch.name || null,
-          location: admin.branch.location || null,
-        }
+        branchId: admin.branch?._id,
+        name: admin.branch.name || null,
+        location: admin.branch.location || null,
+      }
       : {
-          branchId: null,
-          name: null,
-          location: null,
-        },
+        branchId: null,
+        name: null,
+        location: null,
+      },
     reportingManager: admin.reportingManager
       ? {
-          id: admin.reportingManager._id,
-          userName: admin.reportingManager.userName,
-          phoneNumber: admin.reportingManager.phoneNumber,
-          email: admin.reportingManager.email,
-        }
+        id: admin.reportingManager._id,
+        userName: admin.reportingManager.userName,
+        phoneNumber: admin.reportingManager.phoneNumber,
+        email: admin.reportingManager.email,
+      }
       : null,
     UserActivity: lastActivity
       ? {
-          activity: lastActivity.activity,
-          time: lastActivity.createdAt,
-        }
+        activity: lastActivity.activity,
+        time: lastActivity.createdAt,
+      }
       : null,
   };
 
@@ -1138,40 +1162,63 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     );
   }
 
-  const {
-    couponCode,
-    couponName,
-    serviceType,
+  let {
+    search,
     status,
+    serviceType,
     startDate,
     endDate,
-    page = 1,
-    limit = 10,
-    sortBy = "createdAt",
-    order = "desc",
+    page,
+    limit,
+    sortBy,
+    order,
   } = req.query;
+
+  // 🛠 Dynamic pagination with fallback
+  page = page ? Math.max(parseInt(page, 10), 1) : 1;
+  limit = limit ? Math.max(parseInt(limit, 10), 1) : 12;
+
+  const skip = (page - 1) * limit;
+
+  // 🛠 Sorting (default = createdAt desc)
+  sortBy = sortBy || "createdAt";
+  order = order === "asc" ? 1 : -1;
 
   const filter = {};
 
-  if (couponCode) filter.couponCode = new RegExp(couponCode, "i");
-  if (couponName) filter.couponName = new RegExp(couponName, "i");
-  if (serviceType) filter.serviceType = new RegExp(serviceType, "i");
-  if (status) filter.status = status;
+  // 🔍 Unified search across fields
+  if (search) {
+    filter.$or = [
+      { couponCode: { $regex: search, $options: "i" } },
+      { couponName: { $regex: search, $options: "i" } },
+      { serviceType: { $regex: search, $options: "i" } },
+      { status: { $regex: search, $options: "i" } },
+    ];
+  }
+
+  // ✅ Status filter (All = skip filter)
+  if (status && status !== "All") {
+    filter.status = status;
+  }
+
+  // ✅ ServiceType filter (All = skip filter)
+  if (serviceType && serviceType !== "All") {
+    filter.serviceType = serviceType;
+  }
+
+  // 📅 Date range filter
   if (startDate && endDate) {
     filter.startDate = { $gte: new Date(startDate) };
     filter.expiryDate = { $lte: new Date(endDate) };
   }
 
-  const pageNum = parseInt(page, 10);
-  const limitNum = parseInt(limit, 10);
-  const skip = (pageNum - 1) * limitNum;
-
+  // 📊 Count + Data
   const total = await CouponModel.countDocuments(filter);
 
   const coupons = await CouponModel.find(filter)
-    .sort({ [sortBy]: order === "desc" ? -1 : 1 })
+    .sort({ [sortBy]: order }) // recent first by default
     .skip(skip)
-    .limit(limitNum)
+    .limit(limit)
     .lean();
 
   const data = coupons.map((c) => ({
@@ -1188,15 +1235,28 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     status: c.status,
   }));
 
+  if (data.length === 0) {
+    return res.status(200).json({
+      success: true,
+      total: 0,
+      page,
+      limit,
+      totalPages: 0,
+      message: "No coupons found",
+      data: [],
+    });
+  }
   res.status(200).json({
     success: true,
     total,
-    page: pageNum,
-    limit: limitNum,
-    totalPages: Math.ceil(total / limitNum),
+    page,
+    limit,
+    totalPages: Math.ceil(total / limit),
     data,
   });
 });
+
+
 const getCouponById = catchAsyncError(async (req, res) => {
   const { _id, role } = req.user;
 
@@ -1300,11 +1360,11 @@ const getUserActivities = async (req, res) => {
       time: formatActivityTime(act.createdAt),
       performedBy: act.performedBy
         ? {
-            _id: act.performedBy._id,
-            name: act.performedBy.name,
-            email: act.performedBy.email,
-            role: act.performedBy.role,
-          }
+          _id: act.performedBy._id,
+          name: act.performedBy.name,
+          email: act.performedBy.email,
+          role: act.performedBy.role,
+        }
         : null,
     }));
 

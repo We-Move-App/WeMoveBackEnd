@@ -9,6 +9,7 @@ const EntityCodeEnum = {
   HOTEL_MANAGER: "hotel_manager",
   HOTEL_BOOKING: "hotel_booking",
   BUS_OPERATOR: "bus_operator",
+  BUS_MEMBER: "bus_member",
   BUS_BOOKING: "bus_booking",
   ADMIN: "admin",
   RIDES: "rides",
