@@ -1088,7 +1088,9 @@ const getDriverAnalytics = catchAsyncError(async (req, res, next) => {
   }
 
   // Calculate driver earnings/loss
-  const totalAmount = transactions.reduce((sum, tx) => sum + tx.amount, 0);
+  const totalAmount =
+    Math.floor(transactions.reduce((sum, tx) => sum + tx.amount, 0) * 100) /
+    100;
 
   // Fetch ride details for response
   const bookingIds = transactions.map((tx) => tx.bookingId);
