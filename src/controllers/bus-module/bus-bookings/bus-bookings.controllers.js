@@ -43,6 +43,8 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     pickup,
     drop,
   } = req.query;
+
+  console.log("Query Parameters:");
   const busOperator = req.user._id;
   // Initialize query object
   const query = {};
@@ -60,6 +62,10 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
       );
     }
     query.busId = { $in: buses.map((bus) => bus._id) };
+  }
+  // Global search by bookingId
+  if (req.query.search && req.query.search.trim() !== "") {
+    query.bookingId = { $regex: req.query.search, $options: "i" };
   }
 
   if (startDate) {
@@ -108,7 +114,7 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     .skip(skip)
     .limit(pageSize)
     .select(
-      "from to seatNumbers paymentStatus journeyDate passengers status createdAt updatedAt email phoneNumber bookedBy bookedByOperator bookingBy"
+      "from to bookingId  seatNumbers paymentStatus journeyDate passengers status createdAt updatedAt email phoneNumber bookedBy bookedByOperator bookingBy"
     )
     .populate("bookedBy", "fullName email phoneNumber")
     .populate("bookedByOperator", "fullName email phoneNumber")
@@ -310,7 +316,7 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
   const booking = await BusBookingModel.findById(bookingId)
     .populate(
       "busId",
-      "busName busRegNumber busModelNumber createdAt updatedAt email phoneNumber"
+      "busName bookingId busRegNumber busModelNumber createdAt updatedAt email phoneNumber"
     )
     .populate("bookedBy", "fullName email phoneNumber")
     .populate("routeId", "startLocation endLocation departureTime arrivalTime")

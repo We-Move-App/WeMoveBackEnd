@@ -10,10 +10,10 @@ const hotelPolicySchema = new mongoose.Schema(
     checkInTime: {
       type: String,
       required: true,
-      trim: true, 
+      trim: true,
       validate: {
         validator: function (value) {
-          return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value); 
+          return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
         },
         message: "Invalid check-in time format. Use HH:mm (24-hour format).",
       },
@@ -21,10 +21,10 @@ const hotelPolicySchema = new mongoose.Schema(
     checkOutTime: {
       type: String,
       required: true,
-      trim: true, 
+      trim: true,
       validate: {
         validator: function (value) {
-          return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value); 
+          return /^([01]\d|2[0-3]):([0-5]\d)$/.test(value);
         },
         message: "Invalid check-out time format. Use HH:mm (24-hour format).",
       },
@@ -36,31 +36,36 @@ const hotelPolicySchema = new mongoose.Schema(
       },
     ],
     uploadDocuments: [
-  {
-    name: { type: String, required: false },
-    fileUrl: { type: String, required: true },
-    public_id: { type: String },
-    fileName: { type: String },
-    fileType: { type: String }
-  }
-]
+      {
+        name: { type: String, required: false },
+        fileUrl: { type: String, required: true },
+        public_id: { type: String },
+        fileName: { type: String },
+        fileType: { type: String }
+      }
+    ]
 
   },
   { timestamps: true }
 );
 
 hotelPolicySchema.pre("validate", function (next) {
-  const checkInTime = this.checkInTime.trim(); 
-  const checkOutTime = this.checkOutTime.trim(); 
+  const checkInTime = this.checkInTime.trim();
+  const checkOutTime = this.checkOutTime.trim();
 
   const checkInParts = checkInTime.split(":").map(Number);
   const checkOutParts = checkOutTime.split(":").map(Number);
 
-  const checkInMinutes = checkInParts[0] * 60 + checkInParts[1]; 
-  const checkOutMinutes = checkOutParts[0] * 60 + checkOutParts[1];
+  let checkInMinutes = checkInParts[0] * 60 + checkInParts[1];
+  let checkOutMinutes = checkOutParts[0] * 60 + checkOutParts[1];
 
   if (checkOutMinutes <= checkInMinutes) {
-    return next(new Error("Check-out time must be later than check-in time."));
+    checkOutMinutes += 24 * 60; // add 24 hours
+  }
+
+  if (checkOutMinutes <= checkInMinutes) {
+
+    return next(new Error("Check-out time must occur after the check-in time"));
   }
 
   next();
