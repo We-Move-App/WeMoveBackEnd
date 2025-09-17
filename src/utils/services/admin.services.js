@@ -4,16 +4,13 @@ const ApiResponse = require("../response/ApiResponse");
 const busModel = require("../../models/bus-module/buses/buses.model");
 const { HostAddress } = require("mongodb");
 
-
-
-
 const getAllUsersByAdmin = async ({ req, model }) => {
   let {
     page,
     limit,
     sortBy = "createdAt",
     order = "desc",
-    search = ""
+    search = "",
   } = req.query;
 
   page = page ? Math.max(parseInt(page, 10), 1) : 1;
@@ -21,15 +18,18 @@ const getAllUsersByAdmin = async ({ req, model }) => {
 
   const skip = (page - 1) * limit;
 
-  const query = {};
+  console.log("branchId:", req.user.branch);
+
+  const query = { branch: req.user.branch };
+
   if (search && search.trim() !== "") {
     const regex = new RegExp(search, "i");
     query.$or = [
       { email: regex },
       { phoneNumber: regex },
       { fullName: regex },
-      { companyName, regex },
-      { verificationStatus: regex }
+      { companyName: regex },
+      { verificationStatus: regex },
     ];
   }
 
@@ -53,7 +53,7 @@ const getAllUsersByAdmin = async ({ req, model }) => {
     .sort({ [sortBy]: order.toLowerCase() === "asc" ? 1 : -1 })
     .skip(skip)
     .limit(limit)
-    .select("avatar email phoneNumber fullName verificationStatus");
+    .select("avatar email phoneNumber fullName verificationStatus branchId");
 
   return {
     success: true,
@@ -72,7 +72,6 @@ const getUserByIdByAdmin = async ({
   userModel,
   userDocsModel,
   userBankModel,
-
 }) => {
   const { userId } = req.params;
   console.log("userId", userId);
@@ -94,7 +93,7 @@ const getUserByIdByAdmin = async ({
     user,
     docs: userDocs,
     bank: userBank,
-    address: user.address
+    address: user.address,
   };
   return new ApiResponse(statusCode.OK, result, `Data found Successfully`);
 };
@@ -133,11 +132,8 @@ const deleteUserPermanentlyByAdmin = async ({
   userDocsModel,
   userBankModel,
 }) => {
-  const { userId } = req.params
-
-
-}
-
+  const { userId } = req.params;
+};
 
 module.exports = {
   getAllUsersByAdmin,
