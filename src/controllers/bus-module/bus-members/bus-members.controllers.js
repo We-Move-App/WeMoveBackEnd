@@ -10,6 +10,8 @@ const {
 const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
+const generateCustomId = require("../../../utils/customId/generateCustomId");
+const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
 
 // =====================|| ADD BUS MEMBER UNDER BUS OPERATOR ||===============================
 const addMemberUnderBusOperator = catchAsyncError(async (req, res, next) => {
@@ -67,8 +69,10 @@ const addMemberUnderBusOperator = catchAsyncError(async (req, res, next) => {
     ticketManagement: permissions.includes("ticketManagement"),
     walletManagement: permissions.includes("walletManagement"),
   };
+  const operatorId = await generateCustomId(EntityCodeEnum.BUS_MEMBER, "BO");
 
   const newMember = new BusOperatorModel({
+    operatorId,
     fullName,
     phoneNumber,
     email,
@@ -84,6 +88,7 @@ const addMemberUnderBusOperator = catchAsyncError(async (req, res, next) => {
     verificationStatus: "approved",
     permissions: mappedPermissions,
     branch: parentOperator.branch,
+
   });
 
   // Save the member and assign to a variable
@@ -113,7 +118,6 @@ const addMemberUnderBusOperator = catchAsyncError(async (req, res, next) => {
 });
 
 // =====================|| UPDATE BUS MEMBER UNDER BUS OPERATOR ||===============================
-
 const updateBusMemberUnderBusOperator = catchAsyncError(
   async (req, res, next) => {
     const { id } = req.params;
@@ -188,7 +192,7 @@ const getAllMembersUnderBusOperator = catchAsyncError(
     const startIndex = (page - 1) * limit;
 
     const members = await BusOperatorModel.find({ parentUserId: busOperatorId })
-      .select("fullName CompanyName phoneNumber email  idNumber")
+      .select("fullName CompanyName phoneNumber email  operatorId idNumber")
       .sort({ createdAt: -1 })
       .limit(limit)
       .skip(startIndex);
@@ -235,7 +239,7 @@ const getSingleMemberUnderBusOperator = catchAsyncError(
       parentUserId: busOperatorId,
       _id: id,
     }).select(
-      "fullName email phoneNumber authorities dob idNumber verificationStatus parentUserId"
+      "fullName email phoneNumber authorities dob idNumber verificationStatus  operatorId parentUserId"
     );
 
     if (!member) {

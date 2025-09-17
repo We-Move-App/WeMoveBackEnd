@@ -42,7 +42,7 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
     .populate("busId", "busName")
     .populate("routeId", "startLocation endLocation departureTime arrivalTime")
     .select(
-      "seatNumbers paymentStatus journeyDate createdAt updatedAt routeId busId"
+      " bookingId seatNumbers paymentStatus journeyDate createdAt updatedAt routeId busId"
     )
     .lean();
 
@@ -52,7 +52,7 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
 
   const transformedBookings = await Promise.all(
     bookings.map(async (booking) => {
-      // Create a new booking object to ensure we can modify properties
+
       const transformedBooking = { ...booking };
 
       if (transformedBooking.routeId) {
@@ -248,7 +248,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       throw new ApiError(statusCode.BAD_REQUEST, "Insufficient wallet balance");
     }
 
-   
+
 
     // Step 3: Create booking
 
@@ -657,7 +657,7 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
   const { cancelReason } = req.body;
 
   const booking = await BusBookingModel.findById(bookingId).select(
-    "paymentStatus status routeId busId journeyDate bookedBy price"
+    "paymentStatus status routeId busId journeyDate bookedBy finalAmount "
   );
 
   if (!booking) {
@@ -691,7 +691,8 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
   }
 
   if (booking.paymentStatus === "PAID") {
-    const refundAmount = booking.price * 0.5;
+    const refundAmount = booking.finalAmount * 0.5;
+
 
     const operatorTxn = await TransactionModel.findOne({
       bookingId,
@@ -804,7 +805,7 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
   const bookingResponse = {
     journeyDate: booking.journeyDate,
     paymentStatus: booking.paymentStatus,
-    price: booking.price,
+    price: booking.finalAmount,
     status: booking.status,
     cancelReason: booking.cancelReason,
     cancelledBy: booking.cancelledBy,

@@ -750,7 +750,11 @@ const getUserProfileFunc = async ({
   console.log(_id);
 
   const [user, documents, bankDetails, pinDetails] = await Promise.all([
-    reqModel.findById(_id).select("-password").lean(),
+    reqModel.findById(_id).select("-password")
+      .populate("branch", "-createdAt -updatedAt -__v")
+
+      .lean(),
+
     reqDocModel.findOne({ userId: _id }).populate("documentIds").lean(),
     bankModel.findOne({ userId: _id }).lean(),
 

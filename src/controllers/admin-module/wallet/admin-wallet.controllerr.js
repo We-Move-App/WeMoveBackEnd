@@ -24,7 +24,7 @@ const getTransactionsSuperAdmin = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Unauthorized access");
   }
 
-  const superAdminId = decoded._id; // directly from token
+  const superAdminId = decoded._id;
 
   const { page: pageQuery, limit: limitQuery, id: transactionId } = req.query;
 

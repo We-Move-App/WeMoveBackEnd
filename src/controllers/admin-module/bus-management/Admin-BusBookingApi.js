@@ -108,7 +108,7 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     .skip(skip)
     .limit(pageSize)
     .select(
-      "from to seatNumbers paymentStatus journeyDate passengers status createdAt updatedAt email phoneNumber bookedBy bookedByOperator bookingBy"
+      " bookingId from to seatNumbers paymentStatus journeyDate passengers status createdAt updatedAt email phoneNumber bookedBy bookedByOperator bookingBy"
     )
     .populate("bookedBy", "fullName email phoneNumber")
     .populate("bookedByOperator", "fullName email phoneNumber")

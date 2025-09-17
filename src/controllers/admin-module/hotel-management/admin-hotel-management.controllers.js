@@ -1048,9 +1048,11 @@ const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
 const getAllHotelBookings = async (req, res) => {
   try {
     const {
-      search,   // 🔎 single search param
+      search,
       page = 1,
       limit = 10,
+      sortBy = "createdAt",
+      sortOrder = "desc",
     } = req.query;
 
     const query = {};
@@ -1088,12 +1090,12 @@ const getAllHotelBookings = async (req, res) => {
     }
 
     const skip = (parseInt(page) - 1) * parseInt(limit);
-    const sortOption = { createdAt: -1 }; // ✅ always recent first
+    const sortOption = { [sortBy]: sortOrder === "desc" ? -1 : 1 };
 
     const [bookings, total] = await Promise.all([
       HotelBookingModel.find(query)
-        .select("hotelId checkInDate checkOutDate totalAmount status user createdAt")
-        .populate("hotelId", "_id name")
+        .select("hotelId bookingId checkInDate checkOutDate totalAmount status user createdAt")
+        .populate("hotelId", "hotelName")
         .sort(sortOption)
         .skip(skip)
         .limit(parseInt(limit))
@@ -1101,25 +1103,11 @@ const getAllHotelBookings = async (req, res) => {
       HotelBookingModel.countDocuments(query),
     ]);
 
-    if (total === 0) {
-      return res.status(404).json({
-        success: false,
-        statusCode: 404,
-        message: "No hotel bookings found",
-        data: [],
-        pagination: {
-          total: 0,
-          page: parseInt(page),
-          limit: parseInt(limit),
-          totalPages: 0,
-        },
-      });
-    }
-
     const formattedBookings = bookings.map((b) => ({
       bookingId: b._id,
+      bookId: b.bookingId,
       hotelId: b.hotelId?._id || null,
-      hotelName: b.hotelId?.name || null,
+      hotelName: b.hotelId?.hotelName || null,
       customerName: b.user?.[0]?.name || null,
       phone: b.user?.[0]?.phoneNumber || null,
       email: b.user?.[0]?.email || null,
@@ -1131,27 +1119,23 @@ const getAllHotelBookings = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      statusCode: 200,
       message: "Hotel bookings fetched successfully",
-      data: {
-        bookings: formattedBookings,
-        pagination: {
-          total,
-          page: parseInt(page),
-          limit: parseInt(limit),
-          totalPages: Math.ceil(total / parseInt(limit)),
-        },
-      },
+      total,
+      page: parseInt(page),
+      limit: parseInt(limit),
+      sortBy,
+      order: sortOrder,
+      data: formattedBookings,
     });
   } catch (error) {
     console.error("Error fetching hotel bookings:", error);
     res.status(500).json({
       success: false,
-      statusCode: 500,
       message: "Internal server error",
     });
   }
 };
+
 
 
 const getBookingDetailsById = async (req, res) => {
@@ -1180,6 +1164,7 @@ const getBookingDetailsById = async (req, res) => {
     const responseData = {
       bookingDetails: {
         bookingId: booking._id,
+        bookID: booking.bookingId,
         status: booking.status,
         hotelId: booking.hotelId?._id || null,
         amount: `$${booking.totalAmount.toFixed(2)}`,
