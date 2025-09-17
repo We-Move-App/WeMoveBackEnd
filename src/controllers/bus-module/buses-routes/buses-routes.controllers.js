@@ -12,7 +12,7 @@ const { getFinalPrice } = require("../../../utils/services/prices.services");
 
 // =============|| CREATE BUS ROUTE ||=============================
 
-const  createBusRoute = catchAsyncError(async (req, res, next) => {
+const createBusRoute = catchAsyncError(async (req, res, next) => {
   const {
     busId,
     startLocation,
@@ -393,7 +393,7 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
       { startLocation: { $regex: search, $options: "i" } },
       { endLocation: { $regex: search, $options: "i" } },
     ];
-  
+
     if (mongoose.Types.ObjectId.isValid(search)) {
       query.$or.push({ busId: new mongoose.Types.ObjectId(search) });
     }
@@ -424,7 +424,7 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
 
   const newRoutes = await Promise.all(
     routes?.map(async (route) => {
-     
+
       const pricePerSeat = await getFinalPrice(
         "bus",
         route.pricePerSeat,
@@ -435,7 +435,7 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
         pricePerSeat,
       };
     })
-  ) 
+  )
 
 
   const result = {

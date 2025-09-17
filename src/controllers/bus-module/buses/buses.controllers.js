@@ -215,28 +215,48 @@ const getAllBuses = catchAsyncError(async (req, res, next) => {
 
   const query = { ownerId: userId, status };
 
-  if (search) {
+  if (search && search.trim() !== "") {
+    function escapeRegex(str) {
+      return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+    console.log("Search Term:", search);
+    const regex = new RegExp(escapeRegex(search), "i");
+
     query.$or = [
-      { busRegNumber: { $regex: search, $options: "i" } },
-      { busName: { $regex: search, $options: "i" } },
-      { busModelNumber: { $regex: search, $options: "i" } },
+      { busRegNumber: regex },       // ✅ registration number
+      { busName: regex },            // ✅ bus name
+      { busModelNumber: regex },     // ✅ model number
+      { status: regex },             // ✅ status
     ];
   }
+
   const buses = await BusModel.find(query)
     .sort({ createdAt: -1 })
     .limit(limit)
     .skip(startIndex)
-    .populate("assignedDriver", "fullName ")
+    .populate("assignedDriver", "fullName")
     .populate("busImages", "images")
-    .select(
-      "assignedDriver busRegNumber busName busModelNumber status noOfSeats"
-    );
+    .select("assignedDriver busRegNumber busName busModelNumber status noOfSeats");
 
   if (!buses || buses.length === 0) {
     throw new ApiError(statusCode.NOT_FOUND, "No buses found");
   }
 
-  const busesWithFirstImage = buses.map((bus) => ({
+  // ✅ Post-filter driver.fullName search (because it's populated)
+  let filteredBuses = buses;
+  if (search && search.trim() !== "") {
+    const regex = new RegExp(search, "i");
+    filteredBuses = buses.filter(
+      (bus) =>
+        bus.assignedDriver?.fullName?.match(regex) ||
+        bus.busRegNumber?.match(regex) ||
+        bus.busName?.match(regex) ||
+        bus.busModelNumber?.match(regex) ||
+        bus.status?.match(regex)
+    );
+  }
+
+  const busesWithFirstImage = filteredBuses.map((bus) => ({
     ...bus.toObject(),
     busImages: bus.busImages?.images?.[0] || null,
   }));
@@ -247,12 +267,15 @@ const getAllBuses = catchAsyncError(async (req, res, next) => {
     totalPages: Math.ceil(totalBus / limit),
     currentPage: page,
     totalCount: totalBus,
+    page,
+    limit,
   };
 
   return res
     .status(statusCode.OK)
     .json(new ApiResponse(statusCode.OK, results, "Data found successfully"));
 });
+
 
 // =================|| GET BUS BY ID ||==================
 const getSingleBus = catchAsyncError(async (req, res, next) => {
@@ -415,7 +438,7 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
       const [arrHour, arrMin] = route.arrivalTime.split(":").map(Number);
       let diffInMinutes = (arrHour * 60 + arrMin) - (depHour * 60 + depMin);
       if (diffInMinutes < 0) diffInMinutes += 24 * 60;
-      
+
       const endDate = new Date(startDate);
       endDate.setMinutes(endDate.getMinutes() + diffInMinutes);
 

@@ -243,28 +243,28 @@ const assignDriverToBus = catchAsyncError(async (req, res, next) => {
 
 
   // if (findDriver.assignedBus) {
-    // await BusModel.findByIdAndUpdate(findDriver.assignedBus, {
-    //   assignedDriver: null,
-    // });
-if (!Array.isArray(findBus.assignedDriver)) {
-  findBus.assignedDriver = [];
-}
-const alreadyAssigned = findBus.assignedDriver.some(
-  (driverId) => String(driverId) === String(findDriver._id)
-);
+  // await BusModel.findByIdAndUpdate(findDriver.assignedBus, {
+  //   assignedDriver: null,
+  // });
+  if (!Array.isArray(findBus.assignedDriver)) {
+    findBus.assignedDriver = [];
+  }
+  const alreadyAssigned = findBus.assignedDriver.some(
+    (driverId) => String(driverId) === String(findDriver._id)
+  );
 
-if (alreadyAssigned) {
-  return next(new ApiError(400, "This driver is already assigned to this bus."));
-}
-    
-    findBus.assignedDriver.push(findDriver._id) 
-    await findBus.save()
+  if (alreadyAssigned) {
+    return next(new ApiError(400, "This driver is already assigned to this bus."));
+  }
+
+  findBus.assignedDriver.push(findDriver._id)
+  await findBus.save()
 
 
 
-    findDriver.assignedBus = findBus._id;
-    findDriver.status = "assigned"; 
-    await findDriver.save()
+  findDriver.assignedBus = findBus._id;
+  findDriver.status = "assigned";
+  await findDriver.save()
   // }
 
   // Step 5: Assign the driver to the new bus and update status
@@ -276,8 +276,8 @@ if (alreadyAssigned) {
   // await BusModel.findByIdAndUpdate(findBus._id, {
   //   assignedDriver: findDriver._id,
   // });
-const updatedDriver = await BusDriverModel.findById(findDriver._id);
-console.log("Status in DB after save:", updatedDriver.status); 
+  const updatedDriver = await BusDriverModel.findById(findDriver._id);
+  console.log("Status in DB after save:", updatedDriver.status);
 
   return res
     .status(statusCode.OK)
@@ -292,36 +292,50 @@ const getBusDrivers = catchAsyncError(async (req, res, next) => {
     req,
     busOperatorAuthoritiesFields.DRIVER_MANAGEMENT
   );
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 10;
+
+  const { page: queryPage, limit: queryLimit, search, status } = req.query;
+  const page = parseInt(queryPage) || 1;
+  const limit = parseInt(queryLimit) || 10;
   const startIndex = (page - 1) * limit;
 
-  const busDrivers = await BusDriverModel.find({ busOperator: userId })
+  // Base query
+  const query = { busOperator: userId, status: status || "assigned" };
+
+  // Search by driverId
+  if (search && mongoose.Types.ObjectId.isValid(search)) {
+    query._id = new mongoose.Types.ObjectId(search);
+  }
+
+  // Fetch drivers
+  const busDrivers = await BusDriverModel.find(query)
     .sort({ createdAt: -1 })
     .limit(limit)
     .skip(startIndex)
     .populate("busOperator", "fullName")
     .populate("assignedBus", "busRegNumber")
-    .select("avatar driverLicenseFront  status  isActive fullName phoneNumber");
+    .select("avatar driverLicenseFront status isActive fullName phoneNumber");
 
   if (!busDrivers || busDrivers.length === 0) {
     throw new ApiError(statusCode.NOT_FOUND, "No bus drivers found");
   }
 
-  const totalBus = await BusDriverModel.countDocuments({ busOperator: userId }).exec();
+  // Total count for pagination
+  const totalBus = await BusDriverModel.countDocuments(query).exec();
+
   const results = {
-    busDrivers: busDrivers,
+    busDrivers,
     totalPages: Math.ceil(totalBus / limit),
     currentPage: page,
     totalCount: totalBus,
+    page,
+    limit,
   };
 
   return res
     .status(statusCode.OK)
-    .json(
-      new ApiResponse(statusCode.OK, results, "Data found successfully")
-    );
+    .json(new ApiResponse(statusCode.OK, results, "Data found successfully"));
 });
+
 
 const deleteDrivers = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
@@ -386,7 +400,7 @@ const getDriverById = catchAsyncError(async (req, res, next) => {
 });
 const unassignDriver = catchAsyncError(async (req, res, next) => {
   console.log("Unassigning driver from bus...");
-  const { busId, driverId } = req.query ;
+  const { busId, driverId } = req.query;
 
   const driver = await BusDriverModel.findOne({
     _id: driverId,
@@ -397,7 +411,7 @@ const unassignDriver = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.NOT_FOUND, "Driver not found or does not belong to you");
   }
 
- s
+  s
   const bus = await BusModel.findOne({
     _id: busId,
     assignedDriver: driverId,
@@ -407,11 +421,11 @@ const unassignDriver = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.NOT_FOUND, "Bus not found or driver is not assigned to this bus");
   }
 
- 
+
   bus.assignedDriver.pull(driverId);
   await bus.save();
 
-  
+
   if (driver.assignedBus && String(driver.assignedBus) === String(busId)) {
     driver.assignedBus = null;
     driver.status = "unassigned";
@@ -451,7 +465,7 @@ const unassignDriver = catchAsyncError(async (req, res, next) => {
 //   );
 //   await bus.save();
 
- 
+
 //   if (driver.assignedBus?.toString() === bus._id.toString()) {
 //     driver.assignedBus = null;
 //     await driver.save();
