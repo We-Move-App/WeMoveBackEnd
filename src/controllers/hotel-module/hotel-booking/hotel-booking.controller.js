@@ -56,15 +56,7 @@ const createBooking = catchAsyncError(async (req, res) => {
     noOfRoom,
     user,
   } = req.body;
-
-  if (req.body.totalAmount === undefined || req.body.totalAmount === null) {
-    throw new ApiError(statusCode.BAD_REQUEST, "totalAmount is required.");
-  }
-
-  let totalAmount = Number(req.body.totalAmount);
-  if (isNaN(totalAmount) || totalAmount < 0) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Invalid totalAmount provided.");
-  }
+  // Convert numbers safely
   noOfRoom = Number(noOfRoom);
   noOfAdults = Number(noOfAdults);
   noOfKids = Number(noOfKids);
@@ -200,7 +192,8 @@ const createBooking = catchAsyncError(async (req, res) => {
   }
   const room = await Room.findById(roomTypeId);
   if (!room) throw new ApiError(statusCode.NOT_FOUND, "Invalid room type");
-  console.log(room.roomPrice);
+  // Calculate total amount
+  const totalAmount = room.roomPrice * noOfRoom * nights;
 
   console.log("totalAmount===", totalAmount);
 
@@ -254,7 +247,7 @@ const createBooking = catchAsyncError(async (req, res) => {
     const priceBreakup = {
       noOfRooms: noOfRoom,
       nights,
-      // basePricePerRoom: roomType.roomPrice,
+      basePricePerRoom: roomType.roomPrice,
       totalAmount,
       discount: appliedCoupon ? totalAmount - finalAmount : 0,
       finalAmount,
@@ -320,6 +313,19 @@ const createBooking = catchAsyncError(async (req, res) => {
     );
 
     const newBooking = booking[0];
+    // ✅ Decide couponMessage
+    if (couponCode) {
+      if (appliedCoupon) {
+        couponMessage = `Booking confirmed. Coupon ${couponCode} applied successfully.`;
+      } else {
+        couponMessage = "Booking confirmed, but the coupon was not applicable.";
+      }
+    } else {
+      couponMessage = "Booking confirmed. No coupon applied.";
+    }
+
+
+
 
     // Step 3: Deduct from user wallet
     userWallet.balance -= finalAmount;
@@ -332,7 +338,7 @@ const createBooking = catchAsyncError(async (req, res) => {
     }).session(session);
 
     let platformFee = 0;
-    let operatorShare = totalAmount;
+    let operatorShare = finalAmount;
 
     if (commission) {
       if (
@@ -340,7 +346,7 @@ const createBooking = catchAsyncError(async (req, res) => {
         commission.commissionPercentage
       ) {
         platformFee = parseFloat(
-          ((totalAmount * commission.commissionPercentage) / 100).toFixed(2)
+          ((finalAmount * commission.commissionPercentage) / 100).toFixed(2)
         );
       } else if (
         commission.commissionType === "fixed" &&
@@ -349,7 +355,7 @@ const createBooking = catchAsyncError(async (req, res) => {
         platformFee = parseFloat(commission.commissionRate.toFixed(2));
       }
 
-      operatorShare = parseFloat((totalAmount - platformFee).toFixed(2));
+      operatorShare = parseFloat((finalAmount - platformFee).toFixed(2));
     }
 
     await WalletModel.findOneAndUpdate(
@@ -424,9 +430,10 @@ const createBooking = catchAsyncError(async (req, res) => {
         {
           ...newBooking.toObject(),
           priceBreakup,
+          couponMessage,
         },
+        couponMessage
 
-        "Hotel booking created successfully"
       )
     );
   } catch (error) {
@@ -436,9 +443,193 @@ const createBooking = catchAsyncError(async (req, res) => {
   }
 });
 
+// const getTotalAmount = catchAsyncError(async (req, res) => {
+//   const bookedBy = req.user._id;
+//   console.log(bookedBy);
+//   let {
+//     hotelId,
+//     roomTypeId,
+//     checkInDate,
+//     checkOutDate,
+//     noOfRoom,
+//     noOfAdults,
+//     noOfKids,
+//     couponCode,
+//   } = req.body;
+
+//   // ✅ Convert numbers safely
+//   noOfRoom = Number(noOfRoom);
+//   noOfAdults = Number(noOfAdults);
+//   noOfKids = Number(noOfKids);
+
+//   // ✅ Required field validation
+//   if (
+//     !hotelId ||
+//     !roomTypeId ||
+//     !checkInDate ||
+//     !checkOutDate ||
+//     !noOfRoom ||
+//     !noOfAdults ||
+//     !bookedBy
+//   ) {
+//     throw new ApiError(statusCode.BAD_REQUEST, "Missing required fields.");
+//   }
+
+//   if (noOfRoom <= 0 || noOfAdults <= 0 || noOfKids < 0) {
+//     throw new ApiError(
+//       statusCode.BAD_REQUEST,
+//       "Invalid number of rooms/adults/kids."
+//     );
+//   }
+
+//   // ✅ Date parsing
+//   const now = new Date();
+//   const checkIn = new Date(checkInDate);
+//   const checkOut = new Date(checkOutDate);
+
+//   if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
+//     throw new ApiError(
+//       statusCode.BAD_REQUEST,
+//       "Invalid date format. Please use YYYY-MM-DD."
+//     );
+//   }
+
+//   // ✅ Check-in cannot be in the past
+//   if (checkIn < now.setHours(0, 0, 0, 0)) {
+//     throw new ApiError(
+//       statusCode.BAD_REQUEST,
+//       "Check-in cannot be in the past."
+//     );
+//   }
+//   // ✅ Checkout must be after check-in
+//   if (checkOut <= checkIn) {
+//     throw new ApiError(
+//       statusCode.BAD_REQUEST,
+//       "Check-out must be after check-in date."
+//     );
+//   }
+//   const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+//   if (nights <= 0) {
+//     throw new ApiError(
+//       statusCode.BAD_REQUEST,
+//       "Stay must be at least 1 night."
+//     );
+//   }
+//   if (nights > 30) {
+//     throw new ApiError(statusCode.BAD_REQUEST, "Stay cannot exceed 30 nights.");
+//   }
+
+//   // ✅ Guest validation
+//   const maxAdults = noOfRoom * 2;
+//   const maxKids = noOfRoom * 2;
+//   const maxTotal = noOfRoom * 4;
+//   const totalGuests = noOfAdults + noOfKids;
+
+//   if (noOfAdults > maxAdults) {
+//     throw new ApiError(
+//       statusCode.BAD_REQUEST,
+//       `Maximum ${maxAdults} adults allowed for ${noOfRoom} room(s).`
+//     );
+//   }
+//   if (noOfKids > maxKids) {
+//     throw new ApiError(
+//       statusCode.BAD_REQUEST,
+//       `Maximum ${maxKids} children allowed for ${noOfRoom} room(s).`
+//     );
+//   }
+//   if (totalGuests > maxTotal) {
+//     throw new ApiError(
+//       statusCode.BAD_REQUEST,
+//       `Maximum ${maxTotal} total guests allowed for ${noOfRoom} room(s).`
+//     );
+//   }
+//   const hotelExists = await Hotel.findById(hotelId);
+//   if (!hotelExists)
+//     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
+
+//   const roomType = await Room.findById(roomTypeId).select("roomPrice");
+//   if (!roomType || !roomType.roomPrice || roomType.roomPrice <= 0) {
+//     throw new ApiError(statusCode.NOT_FOUND, "Invalid room type or price.");
+//   }
+
+//   // ✅ Base total calculation
+//   const totalAmount = roomType.roomPrice * noOfRoom * nights;
+//   let finalAmount = totalAmount;
+//   let appliedCoupon = null;
+//   let couponMessage = null;
+
+//   // ✅ Optional coupon logic
+//   if (couponCode) {
+//     const currentDate = new Date();
+//     const coupon = await CouponModel.findOne({
+//       couponCode,
+//       status: "Active",
+//       serviceType: { $in: ["Hotel", "All Services"] },
+//       startDate: { $lte: currentDate },
+//       expiryDate: { $gte: currentDate },
+//       $expr: { $lt: ["$usedCount", "$maxUsage"] },
+//     });
+
+//     if (!coupon) {
+//       couponMessage = "Invalid or expired coupon.";
+//     } else {
+//       const alreadyUsed = coupon.usageHistory.some(
+//         (u) => u.userId.toString() === bookedBy.toString()
+//       );
+
+//       if (alreadyUsed) {
+//         couponMessage = "You have already used this coupon.";
+//       } else if (totalAmount < coupon.minOrderAmount) {
+//         couponMessage = `Coupon valid only on orders above ₹${coupon.minOrderAmount}.`;
+//       } else {
+//         // ✅ Apply discount
+//         if (coupon.discountType === "Percentage") {
+//           finalAmount =
+//             totalAmount - (totalAmount * coupon.discountPercentage) / 100;
+//         } else if (coupon.discountType === "Fixed Amount") {
+//           finalAmount = totalAmount - coupon.discountAmount;
+//         }
+//         if (finalAmount < 0) finalAmount = 0;
+//         appliedCoupon = coupon;
+//         couponMessage = "Coupon applied successfully.";
+//       }
+//     }
+//   }
+
+//   // ✅ Price breakup
+//   const priceBreakup = {
+//     noOfRooms: noOfRoom,
+//     nights,
+//     basePricePerRoom: roomType.roomPrice,
+//     totalAmount,
+//     discount: appliedCoupon ? totalAmount - finalAmount : 0,
+//     finalAmount,
+//   };
+
+//   // ✅ Response
+//   return res.status(statusCode.OK).json(
+//     new ApiResponse(
+//       statusCode.OK,
+//       {
+//         totalAmount,
+//         nights,
+//         noOfRooms: noOfRoom,
+//         perRoomPrice: roomType.roomPrice,
+//         adults: noOfAdults,
+//         children: noOfKids,
+//         priceBreakup,
+//         appliedCoupon: appliedCoupon ? appliedCoupon.couponCode : null,
+//         couponMessage,
+//       },
+//       "Price calculated successfully"
+//     )
+//   );
+// });
+
 const getTotalAmount = catchAsyncError(async (req, res) => {
   const bookedBy = req.user._id;
   console.log(bookedBy);
+
   let {
     hotelId,
     roomTypeId,
@@ -450,7 +641,7 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
     couponCode,
   } = req.body;
 
-  // ✅ Convert numbers safely
+  // ✅ Convert to numbers
   noOfRoom = Number(noOfRoom);
   noOfAdults = Number(noOfAdults);
   noOfKids = Number(noOfKids);
@@ -494,6 +685,7 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
       "Check-in cannot be in the past."
     );
   }
+
   // ✅ Checkout must be after check-in
   if (checkOut <= checkIn) {
     throw new ApiError(
@@ -501,6 +693,7 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
       "Check-out must be after check-in date."
     );
   }
+
   const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
   if (nights <= 0) {
     throw new ApiError(
@@ -536,6 +729,8 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
       `Maximum ${maxTotal} total guests allowed for ${noOfRoom} room(s).`
     );
   }
+
+  // ✅ Hotel & Room validation
   const hotelExists = await Hotel.findById(hotelId);
   if (!hotelExists)
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
@@ -549,7 +744,7 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
   const totalAmount = roomType.roomPrice * noOfRoom * nights;
   let finalAmount = totalAmount;
   let appliedCoupon = null;
-  let couponMessage = null;
+  let couponMessage = "Price calculated successfully."; // default
 
   // ✅ Optional coupon logic
   if (couponCode) {
@@ -564,16 +759,18 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
     });
 
     if (!coupon) {
-      couponMessage = "Invalid or expired coupon.";
+      couponMessage =
+        "Price calculated successfully, but coupon is not applicable.";
     } else {
       const alreadyUsed = coupon.usageHistory.some(
         (u) => u.userId.toString() === bookedBy.toString()
       );
 
       if (alreadyUsed) {
-        couponMessage = "You have already used this coupon.";
+        couponMessage =
+          "Price calculated successfully, but you have already used this coupon.";
       } else if (totalAmount < coupon.minOrderAmount) {
-        couponMessage = `Coupon valid only on orders above ₹${coupon.minOrderAmount}.`;
+        couponMessage = `Price calculated successfully, but coupon valid only on orders above ₹${coupon.minOrderAmount}.`;
       } else {
         // ✅ Apply discount
         if (coupon.discountType === "Percentage") {
@@ -583,10 +780,13 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
           finalAmount = totalAmount - coupon.discountAmount;
         }
         if (finalAmount < 0) finalAmount = 0;
+
         appliedCoupon = coupon;
-        couponMessage = "Coupon applied successfully.";
+        couponMessage = `Coupon ${coupon.couponCode} applied successfully.`;
       }
     }
+  } else {
+    couponMessage = "Price calculated successfully (no coupon applied).";
   }
 
   // ✅ Price breakup
@@ -614,7 +814,7 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
         appliedCoupon: appliedCoupon ? appliedCoupon.couponCode : null,
         couponMessage,
       },
-      "Price calculated successfully"
+      couponMessage // ✅ root message
     )
   );
 });
