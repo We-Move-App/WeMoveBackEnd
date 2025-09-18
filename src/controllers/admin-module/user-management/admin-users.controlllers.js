@@ -12,14 +12,14 @@ const {
   getAllUsersByAdmin,
   userVerifiedByAdmin,
 } = require("../../../utils/services/admin.services");
-const HotelBookingModel = require("../../../models/hotel-module/hotel-bookings/hotel-bookings.model")
-const BusBookingModel = require("../../../models/bus-module/bus-bookings/bus-bookings.model")
+const HotelBookingModel = require("../../../models/hotel-module/hotel-bookings/hotel-bookings.model");
+const BusBookingModel = require("../../../models/bus-module/bus-bookings/bus-bookings.model");
 const RideBookingDetail = require("../../../models/new-driver-module/booking-details/booking-details.model");
-const BusModel = require("../../../models/bus-module/buses/buses.model")
+const BusModel = require("../../../models/bus-module/buses/buses.model");
 
 const getAllUsers = catchAsyncError(async (req, res) => {
   const {
-    search,              // one global search input
+    search, // one global search input
     page,
     limit,
     sortBy = "createdAt",
@@ -39,7 +39,7 @@ const getAllUsers = catchAsyncError(async (req, res) => {
       { fullName: regex },
       { email: regex },
       { phoneNumber: regex },
-      { verificationStatus: regex }   // ✅ added status search
+      { verificationStatus: regex }, // ✅ added status search
     ];
   }
 
@@ -84,12 +84,14 @@ const getAllUsers = catchAsyncError(async (req, res) => {
   });
 });
 
-
 const getSingleUser = catchAsyncError(async (req, res) => {
   const { userId } = req.params;
   const { page = 1, limit = 10, sortBy = "date", order = "desc" } = req.query;
 
-  const user = await UserModel.findById(userId, "fullName email phoneNumber verificationStatus");
+  const user = await UserModel.findById(
+    userId,
+    "fullName email phoneNumber verificationStatus"
+  );
   if (!user) {
     return res.status(404).json({
       success: false,
@@ -105,7 +107,10 @@ const getSingleUser = catchAsyncError(async (req, res) => {
   ]);
 
   // Fetch all bookings without pagination
-  const busBookings = await BusBookingModel.find({ bookedBy: userId }, "_id busId routeId journeyDate price status")
+  const busBookings = await BusBookingModel.find(
+    { bookedBy: userId },
+    "_id busId routeId journeyDate price status"
+  )
     .populate({
       path: "busId",
       select: "busRegNumber routes",
@@ -164,18 +169,25 @@ const getSingleUser = catchAsyncError(async (req, res) => {
   }));
 
   // Merge all bookings and sort by date
-  const allBookingsSorted = [...formattedRideBookings, ...formattedBusBookings, ...formattedHotelBookings].sort(
-    (a, b) => {
-      if (!a.date) return 1;
-      if (!b.date) return -1;
-      return order === "asc" ? new Date(a.date) - new Date(b.date) : new Date(b.date) - new Date(a.date);
-    }
-  );
+  const allBookingsSorted = [
+    ...formattedRideBookings,
+    ...formattedBusBookings,
+    ...formattedHotelBookings,
+  ].sort((a, b) => {
+    if (!a.date) return 1;
+    if (!b.date) return -1;
+    return order === "asc"
+      ? new Date(a.date) - new Date(b.date)
+      : new Date(b.date) - new Date(a.date);
+  });
 
   // Apply pagination to merged list
   const totalBookings = allBookingsSorted.length;
   const totalPages = Math.ceil(totalBookings / limit);
-  const paginatedAllBookings = allBookingsSorted.slice((page - 1) * limit, page * limit);
+  const paginatedAllBookings = allBookingsSorted.slice(
+    (page - 1) * limit,
+    page * limit
+  );
 
   // Final response
   res.status(200).json({
@@ -204,7 +216,6 @@ const getSingleUser = catchAsyncError(async (req, res) => {
   });
 });
 
-
 const verifyUserProfile = catchAsyncError(async (req, res, next) => {
   const result = await userVerifiedByAdmin({ req, model: UserModel });
 
@@ -212,16 +223,14 @@ const verifyUserProfile = catchAsyncError(async (req, res, next) => {
 });
 
 const deleteUserPermanently = catchAsyncError(async (req, res, next) => {
-  const { userId } = req.params
+  const { userId } = req.params;
 
   const [user, userBank, userDocs] = await Promise.all([
     UserModel.findById(_id),
     UserBankModel.findOne({ userId: _id }),
     UserDocumentModel.findOne({ userId: _id }).populate("documentIds"),
   ]);
-
-
-})
+});
 module.exports = {
   getAllUsers,
   getSingleUser,

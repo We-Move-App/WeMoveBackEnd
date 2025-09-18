@@ -74,7 +74,13 @@ adminBusManagementRoutes
     deleteBusOperatorAccount
   );
 
-adminBusManagementRoutes.route("/AllBusBookings").get(getAllBusBookings);
+adminBusManagementRoutes
+  .route("/AllBusBookings")
+  .get(
+    isAdminAuthenticated,
+    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+    getAllBusBookings
+  );
 
 adminBusManagementRoutes
   .route("/bus-booking-details/:bookingId")

@@ -43,7 +43,9 @@ const { generateTokens } = require("../../../utils/jwtToken/generateTokens");
 const UserModel = require("../../../models/user-module/users/user.model");
 const WalletModel = require("../../../models/wallet-module/wallets.model");
 const TransactionModel = require("../../../models/transaction-module/transaction.model");
-const { BranchModel } = require("../../../models/admin-module/branch/branches.model")
+const {
+  BranchModel,
+} = require("../../../models/admin-module/branch/branches.model");
 
 const getAllDrivers = async (req, res) => {
   try {
@@ -72,17 +74,23 @@ const getAllDrivers = async (req, res) => {
     // ✅ Vehicle filter
     const vehicleMatch = { "vehicleInfo.vehicleType": vehicleType };
 
+    // ✅ Branch filter (only for Admins)
+    let branchFilter = {};
+    if (req.user.role !== "SuperAdmin") {
+      branchFilter = { branch: req.user.branch };
+    }
+
     // ✅ Search across multiple fields (case-insensitive, partial)
     let searchFilter = {};
     if (search) {
       const regex = { $regex: search, $options: "i" };
       searchFilter = {
         $or: [
-          { fullName: regex },                  // driver name
-          { email: regex },                     // driver email
-          { phoneNo: regex },                   // driver mobile
-          { status: regex },                    // driver status
-          { "vehicleInfo.registrationNo": regex } // vehicle registration
+          { fullName: regex }, // driver name
+          { email: regex }, // driver email
+          { phoneNo: regex }, // driver mobile
+          { status: regex }, // driver status
+          { "vehicleInfo.registrationNo": regex }, // vehicle registration
         ],
       };
     }
@@ -101,6 +109,7 @@ const getAllDrivers = async (req, res) => {
       {
         $match: {
           ...vehicleMatch,
+          ...branchFilter,
           ...searchFilter,
         },
       },
@@ -115,6 +124,7 @@ const getAllDrivers = async (req, res) => {
           email: 1,
           name: "$fullName",
           mobile: "$phoneNo",
+          branch: 1,
           vehicleType: "$vehicleInfo.vehicleType",
           registrationNumber: "$vehicleInfo.registrationNo",
           createdAt: 1,
@@ -136,6 +146,7 @@ const getAllDrivers = async (req, res) => {
       {
         $match: {
           ...vehicleMatch,
+          ...branchFilter,
           ...searchFilter,
         },
       },
@@ -164,8 +175,6 @@ const getAllDrivers = async (req, res) => {
     });
   }
 };
-
-
 
 const getdriverDetailsById = catchAsyncError(async (req, res) => {
   const { driverId } = req.params;
@@ -203,11 +212,11 @@ const getdriverDetailsById = catchAsyncError(async (req, res) => {
     const doc = allDocs.find((d) => d.documentType === type);
     return doc
       ? {
-        documentType: doc.documentType,
-        fileName: doc.fileName,
-        fileUrl: doc.fileUrl,
-        status: doc.status,
-      }
+          documentType: doc.documentType,
+          fileName: doc.fileName,
+          fileUrl: doc.fileUrl,
+          status: doc.status,
+        }
       : null;
   };
   //  const findDocs = (type) => {
@@ -249,18 +258,18 @@ const getdriverDetailsById = catchAsyncError(async (req, res) => {
       },
       bikeDetails: vehicleDetails
         ? {
-          seats: vehicleDetails.seats || 2, // default if not stored
-          model: vehicleDetails.model,
-          registrationNo: vehicleDetails.registrationNo,
-          vehicleType: vehicleDetails.vehicleType,
-        }
+            seats: vehicleDetails.seats || 2, // default if not stored
+            model: vehicleDetails.model,
+            registrationNo: vehicleDetails.registrationNo,
+            vehicleType: vehicleDetails.vehicleType,
+          }
         : null,
       bankDetails: bankDetails
         ? {
-          accountNumber: bankDetails.accountNumber,
-          holderName: bankDetails.holderName,
-          document: findDoc(DriverDocEnum.PASSBOOK),
-        }
+            accountNumber: bankDetails.accountNumber,
+            holderName: bankDetails.holderName,
+            document: findDoc(DriverDocEnum.PASSBOOK),
+          }
         : null,
       isOnline,
     },
@@ -268,7 +277,6 @@ const getdriverDetailsById = catchAsyncError(async (req, res) => {
 
   return res.status(statusCode.OK).json(response);
 });
-
 
 const verifyUserProfile = catchAsyncError(async (req, res) => {
   const { driverId } = req.params;
@@ -310,10 +318,10 @@ const verifyUserProfile = catchAsyncError(async (req, res) => {
     const doc = allDocs.find((d) => d.documentType === type);
     return doc
       ? {
-        fileName: doc.fileName,
-        fileUrl: doc.fileUrl,
-        status: doc.status,
-      }
+          fileName: doc.fileName,
+          fileUrl: doc.fileUrl,
+          status: doc.status,
+        }
       : null;
   };
 
@@ -337,20 +345,20 @@ const verifyUserProfile = catchAsyncError(async (req, res) => {
       },
       vehicleDetails: vehicleDetails
         ? {
-          vehicleType: vehicleDetails.vehicleType,
-          registrationNumber: vehicleDetails.registrationNo,
-          insurance: findDoc(DriverDocEnum.INSURANCE),
-          registrationCertificate: findDoc(DriverDocEnum.REGISTRATION),
-          vehiclePhotos: findDoc(DriverDocEnum.VEHICLEPHOTO),
-          avatarPhotos: findDoc(DriverDocEnum.AVATAR),
-        }
+            vehicleType: vehicleDetails.vehicleType,
+            registrationNumber: vehicleDetails.registrationNo,
+            insurance: findDoc(DriverDocEnum.INSURANCE),
+            registrationCertificate: findDoc(DriverDocEnum.REGISTRATION),
+            vehiclePhotos: findDoc(DriverDocEnum.VEHICLEPHOTO),
+            avatarPhotos: findDoc(DriverDocEnum.AVATAR),
+          }
         : null,
       bankDetails: bankDetails
         ? {
-          accountNumber: bankDetails.accountNumber,
-          holderName: bankDetails.holderName,
-          passbook: findDoc(DriverDocEnum.PASSBOOK),
-        }
+            accountNumber: bankDetails.accountNumber,
+            holderName: bankDetails.holderName,
+            passbook: findDoc(DriverDocEnum.PASSBOOK),
+          }
         : null,
       isOnline,
     },
@@ -420,7 +428,6 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
 
     const branchDoc = await BranchModel.findById(basicDriverDetails.branch);
     if (!branchDoc) {
-
       throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
     }
   }
@@ -449,8 +456,8 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
 
   const vehiclePhotoDocs = Array.isArray(vehicleDetails.vehiclePhotos)
     ? vehicleDetails.vehiclePhotos.map((photo) =>
-      normalizeDoc(photo, DriverDocEnum.VEHICLEPHOTO)
-    )
+        normalizeDoc(photo, DriverDocEnum.VEHICLEPHOTO)
+      )
     : vehicleDetails.vehiclePhotos
       ? [normalizeDoc(vehicleDetails.vehiclePhotos, DriverDocEnum.VEHICLEPHOTO)]
       : [];
@@ -487,7 +494,8 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
   const driverToken = await generateTokens({ driverId });
   const populatedDriver = await DriverBasicDetails.findOne({
     driverId,
-  }).populate("createdById", "name email role")
+  })
+    .populate("createdById", "name email role")
     .populate("branch", "name location");
   const allDocuments = {
     vehicleBikePhotos: [],
@@ -580,7 +588,6 @@ const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
   const savedDriver = await DriverBasicDetails.findOne({ driverId });
   if (!savedDriver)
     throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
-
 
   if (branch) {
     const branchDoc = await BranchModel.findById(branch);
@@ -839,7 +846,8 @@ const createTaxiDriverFromAdmin = catchAsyncError(async (req, res) => {
   // Populate createdById
   const populatedDriver = await DriverBasicDetails.findOne({
     driverId,
-  }).populate("createdById", "name email role")
+  })
+    .populate("createdById", "name email role")
     .populate("branch", "name location");
 
   // Build response documents
@@ -938,8 +946,6 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
   if (!savedDriver)
     throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
 
-
-
   if (basicDriverDetails.branch) {
     // Convert to ObjectId
     basicDriverDetails.branch = new ObjectId(basicDriverDetails.branch);
@@ -950,7 +956,6 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
       throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch ID");
     }
   }
-
 
   // 2️⃣ Update driver basic details
   await DriverBasicDetails.updateOne(
@@ -1128,11 +1133,11 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
     const doc = allDocs.find((d) => d.documentType === type);
     return doc
       ? {
-        documentType: doc.documentType,
-        fileName: doc.fileName,
-        fileUrl: doc.fileUrl,
-        status: doc.status,
-      }
+          documentType: doc.documentType,
+          fileName: doc.fileName,
+          fileUrl: doc.fileUrl,
+          status: doc.status,
+        }
       : null;
   };
 
@@ -1175,18 +1180,18 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
       },
       taxiDetails: vehicleDetails
         ? {
-          seats: vehicleDetails.seats || 4,
-          model: vehicleDetails.model,
-          registrationNo: vehicleDetails.registrationNo,
-          vehicleType: vehicleDetails.vehicleType,
-        }
+            seats: vehicleDetails.seats || 4,
+            model: vehicleDetails.model,
+            registrationNo: vehicleDetails.registrationNo,
+            vehicleType: vehicleDetails.vehicleType,
+          }
         : null,
       bankDetails: bankDetails
         ? {
-          accountNumber: bankDetails.accountNumber,
-          holderName: bankDetails.holderName,
-          document: findDoc(DriverDocEnum.PASSBOOK),
-        }
+            accountNumber: bankDetails.accountNumber,
+            holderName: bankDetails.holderName,
+            document: findDoc(DriverDocEnum.PASSBOOK),
+          }
         : null,
       isOnline,
     },
@@ -1216,15 +1221,21 @@ const getAllBikeBookings = catchAsyncError(async (req, res) => {
     const regex = { $regex: search, $options: "i" };
     searchFilter = {
       $or: [
-        { bookingId: regex },                // booking id
-        { rideStatus: regex },               // booking status
-        { fromCity: regex },                 // from city
-        { toCity: regex },                   // to city
-        { "user.fullName": regex },          // customer name
-        { "driver.fullName": regex },        // rider name
+        { bookingId: regex }, // booking id
+        { rideStatus: regex }, // booking status
+        { fromCity: regex }, // from city
+        { toCity: regex }, // to city
+        { "user.fullName": regex }, // customer name
+        { "driver.fullName": regex }, // rider name
         { "vehicle.registrationNo": regex }, // vehicle registration
       ],
     };
+  }
+
+  // ✅ Branch filter
+  let branchFilter = {};
+  if (req.user.role !== "SuperAdmin") {
+    branchFilter = { "driver.branch": req.user.branch };
   }
 
   // Common pipeline before pagination
@@ -1271,6 +1282,7 @@ const getAllBikeBookings = catchAsyncError(async (req, res) => {
       $match: {
         "vehicle.vehicleType": vehicleType,
         ...searchFilter,
+        ...branchFilter, // ✅ branch-based filtering
       },
     },
   ];
@@ -1301,6 +1313,7 @@ const getAllBikeBookings = catchAsyncError(async (req, res) => {
         bookingId: 1,
         customerName: { $ifNull: ["$user.fullName", "N/A"] },
         riderName: { $ifNull: ["$driver.fullName", "N/A"] },
+        branch: "$driver.branch", // include branch in response
         from: "$fromCity",
         to: "$toCity",
         rideDate: { $ifNull: ["$timestamps.requestedAt", "$createdAt"] },
@@ -1327,7 +1340,6 @@ const getAllBikeBookings = catchAsyncError(async (req, res) => {
     data: bookings,
   });
 });
-
 
 const getBookingDetailsById = catchAsyncError(async (req, res) => {
   const { bookingId } = req.params;
