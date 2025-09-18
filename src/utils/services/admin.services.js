@@ -20,7 +20,11 @@ const getAllUsersByAdmin = async ({ req, model }) => {
 
   console.log("branchId:", req.user.branch);
 
-  const query = { branch: req.user.branch };
+  const query = {};
+
+  if (req.user.role !== "SuperAdmin") {
+    query.branch = req.user.branch;
+  }
 
   if (search && search.trim() !== "") {
     const regex = new RegExp(search, "i");
