@@ -529,14 +529,12 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     to,
     createdBy,
   } = req.query;
-  console.log("req.query", req.query);
 
   page = parseInt(page);
   limit = parseInt(limit);
   const skip = (page - 1) * limit;
 
   const matchStage = {};
-
   if (status) matchStage.status = status;
   if (paymentStatus) matchStage.paymentStatus = paymentStatus;
   if (from && from.trim() !== "") matchStage.from = new RegExp(from, "i");
@@ -556,6 +554,22 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
       },
     },
     { $unwind: { path: "$bus", preserveNullAndEmptyArrays: true } },
+
+    // Lookup busOperator
+    {
+      $lookup: {
+        from: "busoperators",
+        localField: "bus.ownerId",
+        foreignField: "_id",
+        as: "busOperator",
+      },
+    },
+    { $unwind: { path: "$busOperator", preserveNullAndEmptyArrays: true } },
+
+    // 🔹 Branch filter via BusOperator
+    ...(req.user.role !== "SuperAdmin"
+      ? [{ $match: { "busOperator.branch": req.user.branch } }]
+      : []),
 
     // Lookup bookedBy (user)
     {
@@ -597,14 +611,14 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     bookingsPipeline.push({
       $match: {
         $or: [
-          { "passengers.name": regex }, // passenger name
+          { "passengers.name": regex },
           { "passengers.contactNumber": regex },
           { "passengers.email": regex },
-          { bookingId: regex }, // booking ID
-          { paymentStatus: regex }, // payment status
-          { status: regex }, // booking status
-          { "bus.busRegNumber": regex }, // bus registration number
-          isDate ? { journeyDate: new Date(search) } : null, // journey date
+          { bookingId: regex },
+          { paymentStatus: regex },
+          { status: regex },
+          { "bus.busRegNumber": regex },
+          isDate ? { journeyDate: new Date(search) } : null,
         ].filter(Boolean),
       },
     });
@@ -644,6 +658,7 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
       bookingId: booking._id,
       bookId: booking.bookingId,
       busRegNumber: booking.bus?.busRegNumber || "N/A",
+      branch: booking.busOperator?.branch || null, // ✅ branch comes from operator
       bookedBy: booking.bookedBy
         ? {
             fullName: booking.bookedBy.fullName,

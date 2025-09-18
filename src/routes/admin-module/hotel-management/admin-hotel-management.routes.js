@@ -6,26 +6,27 @@ const {
 const {
   uploadDocuments,
   uploadAvatar,
-   uploadHotelManagerFiles
+  uploadHotelManagerFiles,
 } = require("../../../utils/uploadFiles/multer");
 const {
   registerHotelManagerFromAdmin,
-  updateHotelManagerFromAdmin ,
+  updateHotelManagerFromAdmin,
   getHotelByManagerId,
   getAllHotelManagers,
   getSingleUser,
   verifyUserProfile,
-  getAllHotelBookings ,
+  getAllHotelBookings,
   getBookingDetailsById,
   searchHotelBookings,
-  searchHotelManagers}
- = require("../../../controllers/admin-module/hotel-management/admin-hotel-management.controllers");
+  searchHotelManagers,
+} = require("../../../controllers/admin-module/hotel-management/admin-hotel-management.controllers");
 const adminHotelManagementRoutes = express.Router();
 
 adminHotelManagementRoutes
   .route("/hotel-managers/register")
   .post(
-    isAdminAuthenticated,  uploadHotelManagerFiles,
+    isAdminAuthenticated,
+    uploadHotelManagerFiles,
     authorizeRole(["SuperAdmin", "Admin"]),
     registerHotelManagerFromAdmin
   );
@@ -53,7 +54,7 @@ adminHotelManagementRoutes
     verifyUserProfile
   );
 
-  adminHotelManagementRoutes
+adminHotelManagementRoutes
   .route("/hotel-managers/hotel/search-hotel-managers")
   .get(
     isAdminAuthenticated,
@@ -61,45 +62,42 @@ adminHotelManagementRoutes
     searchHotelManagers
   );
 
- adminHotelManagementRoutes
+adminHotelManagementRoutes
   .route("/hotel-managers/hotel/:ownerId")
   .get(
     isAdminAuthenticated,
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
-    getHotelByManagerId 
+    getHotelByManagerId
   );
-  adminHotelManagementRoutes
+adminHotelManagementRoutes
   .route("/hotel-manager/update/:managerId")
-  .put(  isAdminAuthenticated,
+  .put(
+    isAdminAuthenticated,
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
-     updateHotelManagerFromAdmin)
+    updateHotelManagerFromAdmin
+  );
 
-
-  adminHotelManagementRoutes
+adminHotelManagementRoutes
   .route("/hotel-booking-details")
   .get(
     isAdminAuthenticated,
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
     getAllHotelBookings
   );
-  adminHotelManagementRoutes
-   .route("/booking-details/:bookingId")
-    .get(
-      isAdminAuthenticated,
-      authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
-     getBookingDetailsById
-    );
-     adminHotelManagementRoutes
+adminHotelManagementRoutes
+  .route("/booking-details/:bookingId")
+  .get(
+    isAdminAuthenticated,
+    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+    getBookingDetailsById
+  );
+adminHotelManagementRoutes
   .route("/searchHotelBooking")
   .get(
     isAdminAuthenticated,
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
-   searchHotelBookings
+    searchHotelBookings
   );
-
-
-  
-
 
 module.exports = {
   adminHotelManagementRoutes,

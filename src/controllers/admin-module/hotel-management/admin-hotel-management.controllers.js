@@ -44,7 +44,9 @@ const {
 } = require("../../../utils/uploadFiles/uploadFilestoAws");
 const generateCustomId = require("../../../utils/customId/generateCustomId");
 const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
-const { BranchModel } = require("../../../models/admin-module/branch/branches.model");
+const {
+  BranchModel,
+} = require("../../../models/admin-module/branch/branches.model");
 
 const getAllHotelManagers = catchAsyncError(async (req, res, next) => {
   const results = await getAllUsersByAdmin({ req, model: HotelManagerModel });
@@ -73,7 +75,6 @@ const getHotelByManagerId = catchAsyncError(async (req, res, next) => {
   const { ownerId } = req.params;
 
   try {
-
     const manager = await HotelManagerModel.findById(ownerId)
       .populate("branch", "name location") // ✅ populate branch with name & location
       .lean();
@@ -276,7 +277,6 @@ const registerHotelManagerFromAdmin = catchAsyncError(
         throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
       }
 
-
       // Create manager with all verification fields true by default
       const managerId = await generateCustomId(
         EntityCodeEnum.HOTEL_MANAGER,
@@ -307,11 +307,11 @@ const registerHotelManagerFromAdmin = catchAsyncError(
         createdBy: adminId,
         bankDocs: bankInfo.bankDocs
           ? {
-            public_id: bankInfo.bankDocs.public_id || null,
-            url: bankInfo.bankDocs.url || bankInfo.bankDocs.fileUrl || null,
-            fileName: bankInfo.bankDocs.fileName || null,
-            fileType: bankInfo.bankDocs.fileType || null,
-          }
+              public_id: bankInfo.bankDocs.public_id || null,
+              url: bankInfo.bankDocs.url || bankInfo.bankDocs.fileUrl || null,
+              fileName: bankInfo.bankDocs.fileName || null,
+              fileType: bankInfo.bankDocs.fileType || null,
+            }
           : null,
       });
 
@@ -771,7 +771,6 @@ const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
       updateManagerData.businessLicense = profileInfo.businessLicense;
     if (branchDoc) updateManagerData.branch = branchDoc._id;
 
-
     // Verified & status
     updateManagerData.isverified = true;
     updateManagerData.emailVerified = true;
@@ -801,12 +800,15 @@ const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
     let bankAccount = null;
 
     if (bankInfo && typeof bankInfo === "object") {
-      const existingBank = await HotelManagerBankModel.findOne({ userId: manager._id });
+      const existingBank = await HotelManagerBankModel.findOne({
+        userId: manager._id,
+      });
 
       if (existingBank) {
         const updateBankData = {
           bankName: bankInfo.bankName || existingBank.bankName,
-          accountHolderName: bankInfo.accountHolderName || existingBank.accountHolderName,
+          accountHolderName:
+            bankInfo.accountHolderName || existingBank.accountHolderName,
           accountNumber: bankInfo.accountNumber || existingBank.accountNumber,
           isPrimary:
             bankInfo.isPrimary !== undefined
@@ -837,7 +839,6 @@ const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
       }
       // if no existing bank → skip silently (no error)
     }
-
 
     // 3) Update Hotel Info
     const existingHotel = await Hotel.findOne({ ownerId: manager._id });
@@ -1055,17 +1056,37 @@ const getAllHotelBookings = async (req, res) => {
       sortOrder = "desc",
     } = req.query;
 
-    const query = {};
+    let query = {};
 
+    // 🔹 Branch restriction (except SuperAdmin)
+    if (req.user.role !== "SuperAdmin") {
+      // 1. Find all hotel managers in this branch
+      const managers = await HotelManagerModel.find(
+        { branch: req.user.branch },
+        { _id: 1 }
+      ).lean();
+
+      const managerIds = managers.map((m) => m._id);
+
+      // 2. Find all hotels owned by these managers
+      const hotels = await Hotel.find(
+        { ownerId: { $in: managerIds } },
+        { _id: 1 }
+      ).lean();
+
+      const hotelIds = hotels.map((h) => h._id);
+
+      // 3. Restrict bookings to only those hotelIds
+      query.hotelId = { $in: hotelIds };
+    }
+
+    // 🔎 Search filter
     if (search) {
       const regex = new RegExp(search, "i");
-
-      // Handle ObjectId search (bookingId / hotelId)
       const isValidObjectId = mongoose.Types.ObjectId.isValid(search);
-
-      // Try parsing dates for checkIn/checkOut search
       const date = !isNaN(Date.parse(search)) ? new Date(search) : null;
       let dateRange = null;
+
       if (date) {
         const start = new Date(date);
         const end = new Date(date);
@@ -1094,7 +1115,9 @@ const getAllHotelBookings = async (req, res) => {
 
     const [bookings, total] = await Promise.all([
       HotelBookingModel.find(query)
-        .select("hotelId bookingId checkInDate checkOutDate totalAmount status user createdAt")
+        .select(
+          "hotelId bookingId checkInDate checkOutDate totalAmount status user createdAt"
+        )
         .populate("hotelId", "hotelName")
         .sort(sortOption)
         .skip(skip)
@@ -1135,8 +1158,6 @@ const getAllHotelBookings = async (req, res) => {
     });
   }
 };
-
-
 
 const getBookingDetailsById = async (req, res) => {
   try {

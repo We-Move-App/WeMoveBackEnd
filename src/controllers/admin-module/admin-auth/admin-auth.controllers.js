@@ -504,35 +504,57 @@ const removeDeviceTokens = catchAsyncError(async (req, res, next) => {
       new ApiResponse(statusCode.OK, data, "Device token removed successfully")
     );
 });
+
 const getAllAdmins = catchAsyncError(async (req, res, next) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const skipIndex = (page - 1) * limit;
   const { role, search } = req.query;
 
-  // Build match query
-  const matchQuery = { role: { $in: ["Admin", "SubAdmin"] } };
-  if (role) matchQuery.role = role;
+  // Logged in user details (from token middleware)
+  const loggedInUser = req.user; // ✅ must be set in auth middleware
+  if (!loggedInUser) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Unauthorized");
+  }
 
+  // Base filter
+  let matchQuery = {};
+
+  if (loggedInUser.role === "SuperAdmin") {
+    // SuperAdmin → show all Admin + SubAdmin
+    matchQuery.role = { $in: ["Admin", "SubAdmin"] };
+  } else if (loggedInUser.role === "Admin") {
+    // Admin → only SubAdmins under him
+    matchQuery = { role: "SubAdmin", reportingManager: loggedInUser._id };
+  } else {
+    // SubAdmin should not fetch
+    throw new ApiError(statusCode.FORBIDDEN, "Access denied");
+  }
+
+  // Apply role filter from query param (optional)
+  if (role) {
+    matchQuery.role = role;
+  }
+
+  // Search
   const searchQuery = search
     ? {
-      $or: [
-        { userName: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { phoneNumber: { $regex: search, $options: "i" } },
-        { reportingManger: { $regex: search, $options: "i" } },
-        { role: { $regex: search, $options: "i" } },
-        { "branchData.name": { $regex: search, $options: "i" } }, // ✅ branch name search
-      ],
-    }
+        $or: [
+          { userName: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { phoneNumber: { $regex: search, $options: "i" } },
+          { role: { $regex: search, $options: "i" } },
+          { "branchData.name": { $regex: search, $options: "i" } },
+        ],
+      }
     : {};
 
-  // Aggregation pipeline
+  // Aggregation
   const pipeline = [
     { $match: matchQuery },
     {
       $lookup: {
-        from: "branches", // ✅ must match your branch collection name in MongoDB
+        from: "branches",
         localField: "branch",
         foreignField: "_id",
         as: "branchData",
@@ -550,7 +572,6 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
   ];
 
   const results = await AdminModel.aggregate(pipeline);
-
   const totalUser = results[0]?.totalCount[0]?.count || 0;
   const allUsers = results[0]?.data || [];
 
@@ -571,25 +592,27 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
       typeof user.permissions === "object" &&
       user.permissions !== null
     ) {
-      truePermissionCount = Object.values(user.permissions).filter(Boolean).length;
+      truePermissionCount = Object.values(user.permissions).filter(
+        Boolean
+      ).length;
     }
 
     return {
       _id: user._id,
       name: user.userName,
       phoneNumber: user.phoneNumber,
-      reportingManger: user.reportingManger,
+      reportingManager: user.reportingManager,
       email: user.email,
       role: user.role,
       permissionsCount: truePermissionCount,
       createdAt: user.createdAt,
       branch: user.branchData
         ? {
-          branchId: user.branchData._id,
-          name: user.branchData.name,
-          location: user.branchData.location,
-          createdAt: user.branchData.createdAt,
-        }
+            branchId: user.branchData._id,
+            name: user.branchData.name,
+            location: user.branchData.location,
+            createdAt: user.branchData.createdAt,
+          }
         : null,
     };
   });
@@ -660,28 +683,28 @@ const getAdminById = catchAsyncError(async (req, res, next) => {
     updatedAt: admin.updatedAt,
     branch: admin.branch
       ? {
-        branchId: admin.branch?._id,
-        name: admin.branch.name || null,
-        location: admin.branch.location || null,
-      }
+          branchId: admin.branch?._id,
+          name: admin.branch.name || null,
+          location: admin.branch.location || null,
+        }
       : {
-        branchId: null,
-        name: null,
-        location: null,
-      },
+          branchId: null,
+          name: null,
+          location: null,
+        },
     reportingManager: admin.reportingManager
       ? {
-        id: admin.reportingManager._id,
-        userName: admin.reportingManager.userName,
-        phoneNumber: admin.reportingManager.phoneNumber,
-        email: admin.reportingManager.email,
-      }
+          id: admin.reportingManager._id,
+          userName: admin.reportingManager.userName,
+          phoneNumber: admin.reportingManager.phoneNumber,
+          email: admin.reportingManager.email,
+        }
       : null,
     UserActivity: lastActivity
       ? {
-        activity: lastActivity.activity,
-        time: lastActivity.createdAt,
-      }
+          activity: lastActivity.activity,
+          time: lastActivity.createdAt,
+        }
       : null,
   };
 
@@ -1256,7 +1279,6 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
   });
 });
 
-
 const getCouponById = catchAsyncError(async (req, res) => {
   const { _id, role } = req.user;
 
@@ -1360,11 +1382,11 @@ const getUserActivities = async (req, res) => {
       time: formatActivityTime(act.createdAt),
       performedBy: act.performedBy
         ? {
-          _id: act.performedBy._id,
-          name: act.performedBy.name,
-          email: act.performedBy.email,
-          role: act.performedBy.role,
-        }
+            _id: act.performedBy._id,
+            name: act.performedBy.name,
+            email: act.performedBy.email,
+            role: act.performedBy.role,
+          }
         : null,
     }));
 
@@ -1666,11 +1688,26 @@ const getTransactionHistory = async (req, res) => {
     // Total count for pagination
     const total = await Transaction.countDocuments();
 
+    const creditAgg = await Transaction.aggregate([
+      { $match: { type: "CREDIT", status: "SUCCESS" } }, // 👈 uppercase
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+
+    const debitAgg = await Transaction.aggregate([
+      { $match: { type: "DEBIT", status: "SUCCESS" } }, // 👈 uppercase
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+
+    const creditTotal = creditAgg.length > 0 ? creditAgg[0].total : 0;
+    const debitTotal = debitAgg.length > 0 ? debitAgg[0].total : 0;
+
     res.json({
       page,
       limit,
       totalPages: Math.ceil(total / limit),
       totalRecords: total,
+      creditTotal,
+      debitTotal,
       data: results,
     });
   } catch (error) {
