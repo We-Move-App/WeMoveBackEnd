@@ -30,7 +30,9 @@ const BusModel = require("../../../models/bus-module/buses/buses.model");
 const BusRouteModel = require("../../../models/bus-module/bus-routes/bus-routes.model");
 const multer = require("../../../utils/uploadFiles/multer");
 const moment = require("moment");
-const { BranchModel } = require("../../../models/admin-module/branch/branches.model");
+const {
+  BranchModel,
+} = require("../../../models/admin-module/branch/branches.model");
 const busModel = require("../../../models/bus-module/buses/buses.model");
 
 const { TypeOfUser } = require("../../../utils/constants/constants");
@@ -57,7 +59,6 @@ const getAllBusOperators = catchAsyncError(async (req, res, next) => {
       };
     })
   );
-
 
   results.data = dataWithBusCount;
 
@@ -576,7 +577,9 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
         as: "bookedByOperator",
       },
     },
-    { $unwind: { path: "$bookedByOperator", preserveNullAndEmptyArrays: true } },
+    {
+      $unwind: { path: "$bookedByOperator", preserveNullAndEmptyArrays: true },
+    },
 
     // ✅ Unwind passengers so we can search inside
     { $unwind: { path: "$passengers", preserveNullAndEmptyArrays: true } },
@@ -594,24 +597,22 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     bookingsPipeline.push({
       $match: {
         $or: [
-          { "passengers.name": regex },            // passenger name
+          { "passengers.name": regex }, // passenger name
           { "passengers.contactNumber": regex },
           { "passengers.email": regex },
-          { bookingId: regex },                     // booking ID
-          { paymentStatus: regex },                // payment status
-          { status: regex },                       // booking status
-          { "bus.busRegNumber": regex },           // bus registration number
+          { bookingId: regex }, // booking ID
+          { paymentStatus: regex }, // payment status
+          { status: regex }, // booking status
+          { "bus.busRegNumber": regex }, // bus registration number
           isDate ? { journeyDate: new Date(search) } : null, // journey date
         ].filter(Boolean),
       },
     });
   }
 
-
   const totalPipeline = [...bookingsPipeline, { $count: "total" }];
   const totalResult = await BusBookingModel.aggregate(totalPipeline);
   const totalBookings = totalResult[0]?.total || 0;
-
 
   bookingsPipeline.push({ $sort: { [sortBy]: order === "asc" ? 1 : -1 } });
   bookingsPipeline.push({ $skip: skip }, { $limit: limit });
@@ -645,10 +646,10 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
       busRegNumber: booking.bus?.busRegNumber || "N/A",
       bookedBy: booking.bookedBy
         ? {
-          fullName: booking.bookedBy.fullName,
-          email: booking.bookedBy.email,
-          phoneNumber: booking.bookedBy.phoneNumber,
-        }
+            fullName: booking.bookedBy.fullName,
+            email: booking.bookedBy.email,
+            phoneNumber: booking.bookedBy.phoneNumber,
+          }
         : null,
       from: booking.from,
       to: booking.to,
@@ -660,15 +661,15 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
       createdAt: booking.createdAt,
       passengers: booking.passengers
         ? [
-          {
-            name: booking.passengers.name,
-            age: booking.passengers.age,
-            gender: booking.passengers.gender,
-            contactNumber: booking.passengers.contactNumber,
-            seatNumber: booking.passengers.seatNumber,
-            email: booking.passengers.email,
-          },
-        ]
+            {
+              name: booking.passengers.name,
+              age: booking.passengers.age,
+              gender: booking.passengers.gender,
+              contactNumber: booking.passengers.contactNumber,
+              seatNumber: booking.passengers.seatNumber,
+              email: booking.passengers.email,
+            },
+          ]
         : [],
     })),
   });

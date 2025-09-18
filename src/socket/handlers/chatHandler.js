@@ -50,6 +50,12 @@ const chatHandler = (socket, io) => {
 
       // 📢 broadcast to ride room
       io.to(bookingId).emit("chat:message", chatPayload);
+
+      // 📢 also emit directly to user & driver ID rooms (for reconnected clients)
+      io.to(userId.toString()).emit("chat:message", chatPayload);
+      io.to(driverId.toString()).emit("chat:message", chatPayload);
+
+      // 🎯 target push notification to opposite party
       const targetUserId =
         sender.role === "user" ? driverId.toString() : userId.toString();
 

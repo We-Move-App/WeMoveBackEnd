@@ -418,20 +418,59 @@ const verifyPin = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.BAD_REQUEST, "Pin must be a 4-digit number");
   }
 
-  const isMatch = await bcrypt.compare(pin, driver.pin);
-  if (!isMatch) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Invalid pin");
+  // ✅ Blocking logic starts
+  if (driver.blockUntil && driver.blockUntil > new Date()) {
+    const remaining = Math.ceil((driver.blockUntil - new Date()) / 1000);
+    throw new ApiError(
+      statusCode.FORBIDDEN,
+      `Too many invalid attempts. Try again after ${remaining} seconds.`
+    );
   }
 
-  return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(
-        statusCode.OK,
-        { driverId: driver.driverId },
-        "Pin verified successfully"
-      )
-    );
+  const isMatch = await bcrypt.compare(pin, driver.pin);
+
+  if (isMatch) {
+    driver.failedAttempts = 0;
+    driver.blockUntil = null;
+    driver.blockStage = 0;
+    await driver.save();
+
+    return res
+      .status(statusCode.OK)
+      .json(
+        new ApiResponse(
+          statusCode.OK,
+          { driverId: driver.driverId },
+          "Pin verified successfully"
+        )
+      );
+  }
+
+  // If not valid -> increase failed attempts
+  driver.failedAttempts = (driver.failedAttempts || 0) + 1;
+  let blockDuration = null;
+
+  if (driver.blockStage === 0 && driver.failedAttempts >= 5) {
+    blockDuration = 60 * 1000; // 1 min
+    driver.blockStage = 1;
+    driver.failedAttempts = 0;
+  } else if (driver.blockStage === 1 && driver.failedAttempts >= 3) {
+    blockDuration = 5 * 60 * 1000; // 5 min
+    driver.blockStage = 2;
+    driver.failedAttempts = 0;
+  } else if (driver.blockStage === 2 && driver.failedAttempts >= 3) {
+    blockDuration = 24 * 60 * 60 * 1000; // 1 day
+    driver.blockStage = 3;
+    driver.failedAttempts = 0;
+  }
+
+  if (blockDuration) {
+    driver.blockUntil = new Date(Date.now() + blockDuration);
+  }
+
+  await driver.save();
+
+  throw new ApiError(statusCode.BAD_REQUEST, "Invalid pin");
 });
 
 const deleteDriverProfile = catchAsyncError(async (req, res, next) => {
