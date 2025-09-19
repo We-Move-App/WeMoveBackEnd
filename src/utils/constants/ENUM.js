@@ -108,7 +108,16 @@ const CommissionStatusEnum = {
   INACTIVE: "in_active",
 };
 
+const NotificationTypeEnum = {
+  TAXI_DRIVER_REGISTERED: "TAXI_DRIVER_REGISTERED",
+  BIKE_DRIVER_REGISTERED: "BIKE_DRIVER_REGISTERED",
+  USER_REGISTERED: "USER_REGISTERED",
+  BUS_OPERATOR_REGISTERED: "BUS_OPERATOR_REGISTERED",
+  HOTEL_MANAGER_REGISTERED: "HOTEL_MANAGER_REGISTERED",
+};
+
 module.exports = {
+  NotificationTypeEnum,
   DriverBasicStatus,
   EntityCodeEnum,
   GenderEnum,

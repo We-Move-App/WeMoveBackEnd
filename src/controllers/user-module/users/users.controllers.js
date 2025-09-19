@@ -33,6 +33,9 @@ const {
 const {
   decodeAccessToken,
 } = require("../../../utils/jwtToken/customTokenService");
+const {
+  AdminModel,
+} = require("../../../models/admin-module/admin/admin.model");
 
 const getProfile = catchAsyncError(async (req, res, next) => {
   const result = await getUserProfileFunc({
@@ -187,7 +190,55 @@ const updateAvatar = catchAsyncError(async (req, res, next) => {
     reqModel: UserModel,
   });
 
-  return res.status(statusCode.OK).json(result);
+  // 🔹 Take userId from authenticated user
+  const userId = req.user?._id;
+  if (!userId) {
+    return next(
+      new ApiError(statusCode.BAD_REQUEST, "User not found after avatar update")
+    );
+  }
+
+  const user = await UserModel.findById(userId).lean();
+  if (!user) {
+    return next(new ApiError(statusCode.NOT_FOUND, "User not found"));
+  }
+
+  // 🔹 Fetch only SuperAdmins
+  const superAdmins = await AdminModel.find({ role: "SuperAdmin" }).lean();
+
+  let recipients = superAdmins.map((sa) => ({
+    adminId: sa._id,
+    role: sa.role,
+    isRead: false,
+  }));
+
+  if (recipients.length === 0) {
+    return res
+      .status(statusCode.OK)
+      .json(
+        new ApiResponse(
+          statusCode.OK,
+          result,
+          "Avatar updated successfully (no SuperAdmin found for notification)"
+        )
+      );
+  }
+
+  await sendNotification({
+    recipients,
+    type: NotificationTypeEnum.USER_REGISTERED,
+    title: "User Registered",
+    message: `User Registered (ID: ${userId})`,
+    referenceId: userId,
+    referenceModel: "User",
+    createdBy: userId,
+  });
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(statusCode.OK, result, "Avatar updated successfully")
+    );
 });
 
 const assignBranch = catchAsyncError(async (req, res, next) => {
@@ -202,6 +253,10 @@ const assignBranch = catchAsyncError(async (req, res, next) => {
 
 const mongoose = require("mongoose");
 const InactiveUserModel = require("../../../models/user-module/users/inactive-users.model");
+const {
+  sendNotification,
+} = require("../../../socket/handlers/notificationHandler");
+const { NotificationTypeEnum } = require("../../../utils/constants/ENUM");
 
 const getBeneficiary = catchAsyncError(async (req, res, next) => {
   const { userId } = req.body;

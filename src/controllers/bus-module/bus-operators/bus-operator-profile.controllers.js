@@ -24,11 +24,18 @@ const {
   resetPasswordFunc,
   updateAvatarFunc,
   assignBranchToUserFunc,
-  resetPasswordFunc2
+  resetPasswordFunc2,
 } = require("../../../utils/services/functions.services");
 const {
   BusOperatorBankModel,
 } = require("../../../models/bus-module/bus-operator-banks/bus-operator-banks.model");
+const {
+  sendNotification,
+} = require("../../../socket/handlers/notificationHandler");
+const { NotificationTypeEnum } = require("../../../utils/constants/ENUM");
+const {
+  AdminModel,
+} = require("../../../models/admin-module/admin/admin.model");
 
 const getProfile = catchAsyncError(async (req, res, next) => {
   const result = await getUserProfileFunc({
@@ -54,12 +61,25 @@ const getAvatar = catchAsyncError(async (req, res, next) => {
 
 const updateYourProfile = catchAsyncError(async (req, res, next) => {
   const userId = req.user?._id;
-  const { companyName, fullName, dob, nationality, companyAddress,nationIdExpiry } = req.body;
+  const {
+    companyName,
+    fullName,
+    dob,
+    nationality,
+    companyAddress,
+    nationIdExpiry,
+  } = req.body;
   const docsToUpload = req.files;
 
   const keys = Object.keys(req.files);
 
-  const reqField = ["fullName","companyName", "dob", "nationality", "nationIdExpiry"];
+  const reqField = [
+    "fullName",
+    "companyName",
+    "dob",
+    "nationality",
+    "nationIdExpiry",
+  ];
   validateRequestBody(reqField, req.body);
 
   const updateData = {};
@@ -187,8 +207,69 @@ const updateAvatar = catchAsyncError(async (req, res, next) => {
     reqModel: BusOperatorModel,
   });
 
-  return res.status(statusCode.OK).json(result);
+  const operatorId = req.user?._id;
+  if (!operatorId) {
+    return next(
+      new ApiError(
+        statusCode.BAD_REQUEST,
+        "Bus Operator not found after avatar update"
+      )
+    );
+  }
+
+  const operator = await BusOperatorModel.findById(operatorId).lean();
+  if (!operator) {
+    return next(new ApiError(statusCode.NOT_FOUND, "Bus Operator not found"));
+  }
+
+  // 🔹 Fetch SuperAdmins (always included)
+  const superAdmins = await AdminModel.find({ role: "SuperAdmin" }).lean();
+
+  // 🔹 Fetch Admins/SubAdmins from same branch with busManagement permission
+  const branchAdmins = await AdminModel.find({
+    role: { $in: ["Admin", "SubAdmin"] },
+    branch: operator.branch,
+    "permissions.busManagement": true,
+  }).lean();
+
+  // 🔹 Build recipients
+  let recipients = [
+    ...superAdmins.map((sa) => ({
+      adminId: sa._id,
+      role: sa.role,
+      isRead: false,
+    })),
+    ...branchAdmins.map((adm) => ({
+      adminId: adm._id,
+      role: adm.role,
+      isRead: false,
+    })),
+  ];
+
+  if (recipients.length === 0 && superAdmins.length > 0) {
+    recipients = [
+      { adminId: superAdmins[0]._id, role: "SuperAdmin", isRead: false },
+    ];
+  }
+
+  // 🔹 Send notification
+  await sendNotification({
+    recipients,
+    type: NotificationTypeEnum.BUS_OPERATOR_REGISTERED,
+    title: "Bus Operator Registered",
+    message: `Bus Operator Registered (ID: ${operatorId})`,
+    referenceId: operatorId,
+    referenceModel: "BusOperator",
+    createdBy: operatorId,
+  });
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(statusCode.OK, result, "Avatar updated successfully")
+    );
 });
+
 const deleteAccount = catchAsyncError(async (req, res, next) => {
   const { _id } = req.user;
 
@@ -218,7 +299,7 @@ const deleteAccount = catchAsyncError(async (req, res, next) => {
       if (key?.file?.public_id) {
         await deleteImageFromAws(key.file.public_id);
       }
-      await DocumentsModel.deleteOne({_id:key._id})
+      await DocumentsModel.deleteOne({ _id: key._id });
     }
     await BusOperatorDocumentModel.deleteMany({ userId: _id });
   }
@@ -244,7 +325,6 @@ const assignBranch = catchAsyncError(async (req, res, next) => {
   return res.status(statusCode.OK).json(result);
 });
 
-
 module.exports = {
   getProfile,
   getAvatar,
@@ -255,5 +335,5 @@ module.exports = {
   updateAvatar,
   deleteAccount,
   assignBranch,
-  resetPassword2
+  resetPassword2,
 };

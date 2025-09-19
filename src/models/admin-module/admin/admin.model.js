@@ -5,7 +5,6 @@ const {
   ImageSchema,
 } = require("../../../utils/validation/forSchema");
 const { hash_rounds } = require("../../../config/config");
-const { Schema } = mongoose;
 const bcrypt = require("bcrypt");
 
 const defaultPermissions = {
