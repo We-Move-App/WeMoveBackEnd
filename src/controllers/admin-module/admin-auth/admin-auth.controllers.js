@@ -1065,19 +1065,52 @@ const createCoupon = catchAsyncError(async (req, res) => {
     expiryDate,
     status,
   } = req.body;
-  console.log(minOrderAmount);
 
   const { _id: performedBy, role } = req.user;
+
+  // Only SuperAdmin or Admin
   if (!["SuperAdmin", "Admin"].includes(role)) {
     throw new ApiError(
       statusCode.FORBIDDEN,
       "Only SuperAdmin or Admin can create coupons"
     );
   }
+
+  // Check if coupon code already exists
   const existingCoupon = await CouponModel.findOne({ couponCode });
   if (existingCoupon) {
     throw new ApiError(statusCode.BAD_REQUEST, "Coupon Code already exists");
   }
+  // Trim input strings and parse dates
+  const start = new Date(startDate?.trim());
+  const expiry = new Date(expiryDate?.trim());
+
+  // Validate parsed dates
+  if (isNaN(start.getTime()) || isNaN(expiry.getTime())) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid date format");
+  }
+
+  // Reset time to start of the day for safe comparison
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  start.setHours(0, 0, 0, 0);
+  expiry.setHours(0, 0, 0, 0);
+
+  // Check that start date is not in the past
+  if (start < today) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Start date cannot be in the past");
+  }
+
+  // Check that expiry date is after start date
+  if (expiry <= start) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Expiry date must be after start date"
+    );
+  }
+
+  // Create coupon
   const newCoupon = await CouponModel.create({
     couponName,
     couponCode,
@@ -1086,11 +1119,12 @@ const createCoupon = catchAsyncError(async (req, res) => {
     discountPercentage,
     discountAmount,
     minOrderAmount,
-    startDate,
-    expiryDate,
+    startDate: start,
+    expiryDate: expiry,
     status,
     createdBy: performedBy,
   });
+
   const activityLog = await logActivity({
     userId: performedBy,
     activity: `Created a new coupon ${couponName} (${couponCode})`,
@@ -1104,6 +1138,7 @@ const createCoupon = catchAsyncError(async (req, res) => {
     activityLog,
   });
 });
+
 const updateCoupon = catchAsyncError(async (req, res) => {
   const { couponId } = req.params;
   const updateData = req.body;
