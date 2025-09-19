@@ -249,85 +249,93 @@ const getRoomsstatus = catchAsyncError(async (req, res) => {
 const getBookingsByHotelManager = catchAsyncError(async (req, res) => {
   const hotelManagerId = req.user._id;
 
+  // ✅ Step 1: Validate manager
   const hotelManager = await HotelManagerModel.findById(hotelManagerId);
   if (!hotelManager) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel Manager not found.");
   }
 
+  // ✅ Step 2: Get all hotels owned by this manager
+  const ownedHotels = await Hotel.find({ ownerId: hotelManagerId }).select("_id");
+  if (!ownedHotels.length) {
+    return res
+      .status(statusCode.OK)
+      .json(new ApiResponse(statusCode.OK, { bookings: [] }, "No hotels found for this manager"));
+  }
+  const ownedHotelIds = ownedHotels.map(h => h._id.toString());
+
+  // ✅ Step 3: Build query
   const {
-    hotelId,
     bookingId,
     roomTypeId,
-    startDate,
-    endDate,
+    checkInDate,       // start date filter
+    checkOutDate,      // end date filter
     page = 1,
     limit = 10,
+    search        // search by bookingId
   } = req.query;
 
-  const query = {};
+  console.log("Query Params:", req.query);
 
-  if (bookingId) {
-    query._id = bookingId;
-  } else if (hotelId) {
-    query.hotelId = hotelId;
+  const query = { hotelId: { $in: ownedHotelIds } };
 
-    if (startDate || endDate) {
-      query.createdAt = {};
-      if (startDate) query.createdAt.$gte = new Date(startDate);
-      if (endDate) query.createdAt.$lte = new Date(endDate);
-    }
-
-    if (roomTypeId) {
-      query.roomTypeId = roomTypeId;
-    }
-  } else {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Please provide bookingId or hotelId in query params."
-    );
+  // 🔎 Global search by bookingId
+  if (search && search.trim() !== "") {
+    query.bookingId = { $regex: search, $options: "i" };
   }
 
-  const skip = (parseInt(page) - 1) * parseInt(limit);
+  // Direct bookingId filter (overrides search)
+  if (bookingId) {
+    query._id = bookingId;
+  }
 
-  // Step 1: Fetch bookings WITHOUT populating bookedBy
+  // ✅ Check overlapping check-in / check-out
+  // ✅ Check overlapping check-in / check-out
+  if (checkInDate || checkOutDate) {
+    const start = checkInDate ? new Date(checkInDate) : null;
+    const end = checkOutDate ? new Date(checkOutDate) : null;
+
+    // Booking overlaps the given range
+    query.$and = query.$and || [];
+
+    if (start && end) {
+      query.$and.push({ checkInDate: { $lte: end }, checkOutDate: { $gte: start } });
+    } else if (start) {
+      query.$and.push({ checkOutDate: { $gte: start } });
+    } else if (end) {
+      query.$and.push({ checkInDate: { $lte: end } });
+    }
+  }
+
+  // ✅ Step 4: Pagination
+  const pageNumber = parseInt(page) > 0 ? parseInt(page) : 1;
+  const pageSize = parseInt(limit) > 0 ? parseInt(limit) : 10;
+  const skip = (pageNumber - 1) * pageSize;
+
+  // ✅ Step 5: Fetch bookings
   let bookings = await HotelBooking.find(query)
     .sort({ createdAt: -1 })
     .skip(skip)
-    .limit(parseInt(limit))
+    .limit(pageSize)
     .populate({ path: "hotelId", model: Hotel, select: "-__v" })
     .populate({ path: "roomTypeId", model: Room, select: "-__v" })
     .populate({ path: "assignedRooms", model: individualRoom, select: "-__v" });
 
-  // Step 2: Separate manager bookings and user bookings
-  // const managerBookings = bookings.filter(
-  //   (b) => String(b.bookedBy) === String(hotelManagerId)
-  // );
-  const userBookings = bookings.filter(
-    (b) => String(b.bookedBy) !== String(hotelManagerId)
-  );
+  // ✅ Step 6: Enrich "bookedBy" field
+  const userBookings = bookings.filter(b => String(b.bookedBy) !== String(hotelManagerId));
 
-  // console.log("MANAGER bOOKINGS", managerBookings)
-  // console.log("USER bOOKINGS", userBookings)
+  const populatedManager = await HotelManagerModel.findById(hotelManagerId).select("-password -__v");
+  const managerMap = { [hotelManagerId.toString()]: populatedManager };
 
-  // Step 3: Populate manager details
-  const populatedManager = await HotelManagerModel.findById(hotelManagerId).select(
-    "-password -__v"
-  );
-  const managerMap = {
-    [hotelManagerId.toString()]: populatedManager,
-  };
-
-  // Step 4: Populate users who booked
-  const userIds = userBookings.map((b) => b.bookedBy);
+  const userIds = userBookings.map(b => b.bookedBy);
   const users = await UserModel.find({ _id: { $in: userIds } }).select("-password -__v");
 
   const userMap = {};
-  users.forEach((user) => {
+  users.forEach(user => {
     userMap[user._id.toString()] = user;
   });
 
-  // Step 5: Map final results
-  const enrichedBookings = bookings.map((b) => {
+  const enrichedBookings = bookings.map(b => {
     const isManager = String(b.bookedBy) === String(hotelManagerId);
     const populatedBookedBy = isManager
       ? managerMap[b.bookedBy.toString()]
@@ -339,23 +347,27 @@ const getBookingsByHotelManager = catchAsyncError(async (req, res) => {
     };
   });
 
+  // ✅ Step 7: Count total bookings
   const totalBookings = await HotelBooking.countDocuments(query);
-  const totalPages = Math.ceil(totalBookings / parseInt(limit));
+  const totalPages = Math.ceil(totalBookings / pageSize);
 
+  // ✅ Step 8: Response
   return res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
       {
         totalBookings,
         totalPages,
-        currentPage: parseInt(page),
-        limit: parseInt(limit),
+        currentPage: pageNumber,
+        limit: pageSize,
         bookings: enrichedBookings,
       },
-      "Booking(s) fetched successfully"
+      enrichedBookings.length ? "Booking(s) fetched successfully" : "No bookings found"
     )
   );
 });
+
+
 
 
 const allotRoomToBooking = catchAsyncError(async (req, res) => {
@@ -365,10 +377,17 @@ const allotRoomToBooking = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.BAD_REQUEST, "Booking ID and room ID are required.");
   }
 
-  const booking = await HotelBooking.findById(bookingId);
-  if (!booking) {
+  // 🔹 Step 1: Find booking by bookingId (string)
+  const bookingDoc = await HotelBooking.findOne({ bookingId });
+  if (!bookingDoc) {
     throw new ApiError(statusCode.NOT_FOUND, "Booking not found.");
   }
+
+  // 🔹 Step 2: Extract the MongoDB _id from it
+  const bookingObjectId = bookingDoc._id;
+
+  // Now you can use bookingObjectId anywhere you need ObjectId
+  const booking = await HotelBooking.findById(bookingObjectId);
 
   if (booking.status !== "Booked") {
     throw new ApiError(statusCode.BAD_REQUEST, `Booking is already ${booking.status}.`);
@@ -391,7 +410,6 @@ const allotRoomToBooking = catchAsyncError(async (req, res) => {
     );
   }
 
-
   const room = await individualRoom.findOne({ _id: roomId, hotelId, roomTypeId: booking.roomTypeId });
   if (!room) {
     throw new ApiError(
@@ -399,20 +417,17 @@ const allotRoomToBooking = catchAsyncError(async (req, res) => {
       "Room not found or does not belong to the same hotel/room type."
     );
   }
+
   if (room.status === "booked" || room.isAvailable === false) {
     throw new ApiError(statusCode.BAD_REQUEST, "Room is not available.");
   }
 
   if (assignedRooms.includes(roomId)) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `Room ${roomId} is already assigned to this booking.`
-    );
+    throw new ApiError(statusCode.BAD_REQUEST, `Room ${roomId} is already assigned to this booking.`);
   }
 
-
   const overlapping = await HotelBooking.findOne({
-    _id: { $ne: bookingId },
+    _id: { $ne: bookingObjectId }, // ✅ use ObjectId here
     assignedRooms: roomId,
     checkInDate: { $lt: new Date(checkOutDate) },
     checkOutDate: { $gt: new Date(checkInDate) },
@@ -425,7 +440,7 @@ const allotRoomToBooking = catchAsyncError(async (req, res) => {
     );
   }
 
-  // ✅ Assign the room and update room fields
+  // ✅ Assign room
   booking.assignedRooms.push(roomId);
   await booking.save();
 
@@ -433,12 +448,10 @@ const allotRoomToBooking = catchAsyncError(async (req, res) => {
   room.status = "booked";
   room.bookingReference = booking._id;
 
-  // You can also set time/date fields here if needed:
-  const now = new Date();
   room.checkInDate = booking.checkInDate;
   room.checkOutDate = booking.checkOutDate;
-  room.checkInTime = now;
-  room.checkOutTime = booking.checkOutDate; // or whatever logic you want
+  room.checkInTime = new Date();
+  room.checkOutTime = booking.checkOutDate;
   await room.save();
 
   return res.status(statusCode.OK).json(
