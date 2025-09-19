@@ -539,14 +539,14 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
   // Search
   const searchQuery = search
     ? {
-        $or: [
-          { userName: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
-          { phoneNumber: { $regex: search, $options: "i" } },
-          { role: { $regex: search, $options: "i" } },
-          { "branchData.name": { $regex: search, $options: "i" } },
-        ],
-      }
+      $or: [
+        { userName: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { phoneNumber: { $regex: search, $options: "i" } },
+        { role: { $regex: search, $options: "i" } },
+        { "branchData.name": { $regex: search, $options: "i" } },
+      ],
+    }
     : {};
 
   // Aggregation
@@ -608,11 +608,11 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
       createdAt: user.createdAt,
       branch: user.branchData
         ? {
-            branchId: user.branchData._id,
-            name: user.branchData.name,
-            location: user.branchData.location,
-            createdAt: user.branchData.createdAt,
-          }
+          branchId: user.branchData._id,
+          name: user.branchData.name,
+          location: user.branchData.location,
+          createdAt: user.branchData.createdAt,
+        }
         : null,
     };
   });
@@ -683,28 +683,28 @@ const getAdminById = catchAsyncError(async (req, res, next) => {
     updatedAt: admin.updatedAt,
     branch: admin.branch
       ? {
-          branchId: admin.branch?._id,
-          name: admin.branch.name || null,
-          location: admin.branch.location || null,
-        }
+        branchId: admin.branch?._id,
+        name: admin.branch.name || null,
+        location: admin.branch.location || null,
+      }
       : {
-          branchId: null,
-          name: null,
-          location: null,
-        },
+        branchId: null,
+        name: null,
+        location: null,
+      },
     reportingManager: admin.reportingManager
       ? {
-          id: admin.reportingManager._id,
-          userName: admin.reportingManager.userName,
-          phoneNumber: admin.reportingManager.phoneNumber,
-          email: admin.reportingManager.email,
-        }
+        id: admin.reportingManager._id,
+        userName: admin.reportingManager.userName,
+        phoneNumber: admin.reportingManager.phoneNumber,
+        email: admin.reportingManager.email,
+      }
       : null,
     UserActivity: lastActivity
       ? {
-          activity: lastActivity.activity,
-          time: lastActivity.createdAt,
-        }
+        activity: lastActivity.activity,
+        time: lastActivity.createdAt,
+      }
       : null,
   };
 
@@ -1382,11 +1382,11 @@ const getUserActivities = async (req, res) => {
       time: formatActivityTime(act.createdAt),
       performedBy: act.performedBy
         ? {
-            _id: act.performedBy._id,
-            name: act.performedBy.name,
-            email: act.performedBy.email,
-            role: act.performedBy.role,
-          }
+          _id: act.performedBy._id,
+          name: act.performedBy.name,
+          email: act.performedBy.email,
+          role: act.performedBy.role,
+        }
         : null,
     }));
 
@@ -1627,12 +1627,28 @@ const getTransactionHistory = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    // Fetch transactions (LIFO)
-    const transactions = await Transaction.find({})
-      .sort({ createdAt: -1 })
-      .skip(skip)
-      .limit(limit);
+    const { search = "", type = "ALL", status = "ALL" } = req.query;
 
+    // Build Mongo query
+    const query = {};
+
+    // Filter by type (CREDIT / DEBIT / ALL)
+    if (type && type !== "ALL") {
+      query.type = { $regex: new RegExp(`^${type}$`, "i") }; // case-insensitive
+    }
+
+    // Filter by status (SUCCESS / FAILED / ALL)
+    if (status && status !== "ALL") {
+      query.status = { $regex: new RegExp(`^${status}$`, "i") }; // case-insensitive
+    }
+
+
+
+
+
+    // Fetch transactions (LIFO)
+    const transactions = await Transaction.find(query)
+      .sort({ createdAt: -1 });
     const results = [];
 
     for (const txn of transactions) {
@@ -1684,9 +1700,26 @@ const getTransactionHistory = async (req, res) => {
         description: txn.description,
       });
     }
+    const filteredResults = results.filter(item => {
+      if (!search) return true;
+      const s = search.toLowerCase();
+
+      return (
+        (item.transactionId || "").toLowerCase().includes(s) ||
+        (item.name || "").toLowerCase().includes(s) ||
+        (item.role || "").toLowerCase().includes(s)
+      );
+    });
+
+
+    // Pagination after search
+    const paginatedResults = filteredResults.slice(skip, skip + limit);
 
     // Total count for pagination
-    const total = await Transaction.countDocuments();
+    const totalRecords = filteredResults.length;
+    const totalPages = Math.ceil(totalRecords / limit);
+    // Total count for pagination
+    const total = await Transaction.countDocuments(query);
 
     const creditAgg = await Transaction.aggregate([
       { $match: { type: "CREDIT", status: "SUCCESS" } }, // 👈 uppercase
@@ -1698,6 +1731,7 @@ const getTransactionHistory = async (req, res) => {
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]);
 
+
     const creditTotal = creditAgg.length > 0 ? creditAgg[0].total : 0;
     const debitTotal = debitAgg.length > 0 ? debitAgg[0].total : 0;
 
@@ -1705,10 +1739,10 @@ const getTransactionHistory = async (req, res) => {
       page,
       limit,
       totalPages: Math.ceil(total / limit),
-      totalRecords: total,
+      totalRecords: filteredResults.length,
       creditTotal,
       debitTotal,
-      data: results,
+      data: paginatedResults,
     });
   } catch (error) {
     console.error("Error fetching transactions:", error);

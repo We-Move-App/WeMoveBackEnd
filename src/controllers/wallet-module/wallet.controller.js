@@ -263,17 +263,30 @@ const getTransactions = catchAsyncError(async (req, res) => {
   }
 
   const jwtToken = authHeader.split(" ")[1];
+  console.log("JWT Token:", jwtToken);
+
   const decoded = decodeAccessToken(jwtToken);
+
+
+  console.log("Decoded Token null:", decoded); // Debugging line
+
 
   const {
     entity,
     page: pageQuery,
     limit: limitQuery,
-    id: transactionId,
+    transactionId,
   } = req.query;
 
   let userId = decoded?._id;
+
   let driverIdFromToken = decoded?.driverId;
+
+
+
+  console.log("User ID from Token:", userId);
+  console.log("Driver ID from Token:", driverIdFromToken);
+
 
   if (entity === "driver" && !driverIdFromToken) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid driver token");
