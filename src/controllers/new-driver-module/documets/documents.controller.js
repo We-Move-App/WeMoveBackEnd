@@ -1,5 +1,8 @@
 const statusCode = require("../../../utils/constants/statusCode");
 const {
+  AdminModel,
+} = require("../../../models/admin-module/admin/admin.model");
+const {
   decodeAccessToken,
 } = require("../../../utils/jwtToken/customTokenService");
 const ApiError = require("../../../utils/response/ApiError");
@@ -8,8 +11,14 @@ const DriverDocDetails = require("../../../models/new-driver-module/documents/dr
 const {
   DriverDocEnum,
   DriverDocStatusEnum,
+  NotificationTypeEnum,
 } = require("../../../utils/constants/ENUM");
 const ApiResponse = require("../../../utils/response/ApiResponse");
+const DriverBasicDetails = require("../../../models/new-driver-module/basic-details/basic-details.model");
+const vehicleDetailsModel = require("../../../models/new-driver-module/vehicle-details/vehicle-details.model");
+const {
+  sendNotification,
+} = require("../../../socket/handlers/notificationHandler");
 
 const uploadAvatar = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -36,7 +45,6 @@ const uploadAvatar = catchAsyncError(async (req, res) => {
   }
 
   const existingDocEntry = await DriverDocDetails.findOne({ driverId });
-
   const avatarDoc = {
     documentType: DriverDocEnum.AVATAR,
     fileUrl,
@@ -47,10 +55,7 @@ const uploadAvatar = catchAsyncError(async (req, res) => {
   };
 
   if (!existingDocEntry) {
-    await DriverDocDetails.create({
-      driverId,
-      documents: [avatarDoc],
-    });
+    await DriverDocDetails.create({ driverId, documents: [avatarDoc] });
   } else {
     const docsMap = new Map();
     existingDocEntry.documents.forEach((doc) =>
@@ -68,6 +73,65 @@ const uploadAvatar = catchAsyncError(async (req, res) => {
       }
     );
   }
+
+  // 🔹 Fetch driver and vehicle details
+  const driver = await DriverBasicDetails.findOne({ driverId }).lean();
+  if (!driver) throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+
+  const vehicle = await vehicleDetailsModel.findOne({ driverId }).lean();
+  if (!vehicle)
+    throw new ApiError(statusCode.BAD_REQUEST, "Vehicle details not found");
+
+  const notificationType =
+    vehicle.vehicleType === "taxi"
+      ? NotificationTypeEnum.TAXI_DRIVER_REGISTERED
+      : NotificationTypeEnum.BIKE_DRIVER_REGISTERED;
+
+  const superAdmins = await AdminModel.find({ role: "SuperAdmin" }).lean();
+
+  const permissionField =
+    vehicle.vehicleType === "taxi"
+      ? "permissions.taxiManagement"
+      : "permissions.bikeManagement";
+
+  const branchAdmins = await AdminModel.find({
+    role: { $in: ["Admin", "SubAdmin"] },
+    branch: driver.branch,
+    [permissionField]: true,
+  }).lean();
+
+  // 🔹 Build recipients array
+  let recipients = [
+    ...superAdmins.map((sa) => ({
+      adminId: sa._id,
+      role: sa.role,
+      isRead: false,
+    })),
+    ...branchAdmins.map((adm) => ({
+      adminId: adm._id,
+      role: adm.role,
+      isRead: false,
+    })),
+  ];
+
+  if (recipients.length === 0 && superAdmins.length > 0) {
+    recipients = [
+      { adminId: superAdmins[0]._id, role: "SuperAdmin", isRead: false },
+    ];
+  }
+
+  await sendNotification({
+    recipients,
+    type: notificationType,
+    title:
+      vehicle.vehicleType === "taxi"
+        ? "New Taxi Driver Registered"
+        : "New Bike Driver Registered",
+    message: `A new ${vehicle.vehicleType} driver (ID: ${driverId}) has registered.`,
+    referenceId: driverId,
+    referenceModel: "Driver",
+    createdBy: driverId,
+  });
 
   return res
     .status(statusCode.CREATED)
@@ -237,12 +301,18 @@ const deleteDocumentByType = catchAsyncError(async (req, res) => {
 
   const { documentType } = req.params;
   if (!documentType) {
-    throw new ApiError(statusCode.BAD_REQUEST, "documentType is required in params");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "documentType is required in params"
+    );
   }
 
   const docEntry = await DriverDocDetails.findOne({ driverId });
   if (!docEntry) {
-    throw new ApiError(statusCode.NOT_FOUND, "No documents found for this driver");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      "No documents found for this driver"
+    );
   }
 
   const originalLength = docEntry.documents.length;
@@ -263,7 +333,11 @@ const deleteDocumentByType = catchAsyncError(async (req, res) => {
   return res
     .status(statusCode.OK)
     .json(
-      new ApiResponse(statusCode.OK, { documentType }, "Document deleted successfully")
+      new ApiResponse(
+        statusCode.OK,
+        { documentType },
+        "Document deleted successfully"
+      )
     );
 });
 
