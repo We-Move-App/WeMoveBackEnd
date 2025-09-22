@@ -117,6 +117,12 @@ const registerUserWithEmailAndPhoneNumber = async ({
         getStatusMessage(existingUser.verificationStatus)
       );
     }
+    if (["blocked", "rejected"].includes(existingUser.verificationStatus)) {
+      throw new ApiError(
+        statusCode.FORBIDDEN, // 403 is better for blocked/rejected
+        getStatusMessage(existingUser.verificationStatus)
+      );
+    }
 
     const userObject = existingUser.toObject();
     delete userObject.password;
@@ -235,6 +241,12 @@ const loginUserWithEmailAndPhoneNumber = async ({
       getStatusMessage(existingUser.verificationStatus)
     );
   }
+  if (["blocked", "rejected"].includes(existingUser.verificationStatus)) {
+    throw new ApiError(
+      statusCode.FORBIDDEN, // 403 is better for blocked/rejected
+      getStatusMessage(existingUser.verificationStatus)
+    );
+  }
 
   const userObject = existingUser.toObject();
   delete userObject.password;
@@ -255,10 +267,40 @@ const loginUserWithEmailAndPhoneNumber = async ({
 
 const logoutUserFunc = async ({ req, res }) => {
   const { accessToken, refreshToken } = req.cookies || req.body;
+
   if (!accessToken || !refreshToken) {
     throw new ApiError(statusCode.UNAUTHORIZED, {}, `Unauthorized`);
   }
+
+  // 🔹 Step 1: Decode the token to get userId
+  let decoded;
+  try {
+    decoded = jwt.verify(accessToken, access_token_secret);
+  } catch (err) {
+    throw new ApiError(statusCode.UNAUTHORIZED, {}, "Invalid access token");
+  }
+
+  // 🔹 Step 2: Check user status
+  const user = await UserModel.findById(decoded?._id).select("verificationStatus");
+  if (user?.verificationStatus === "blocked") {
+    // If blocked → immediately blacklist tokens
+    await BlackListTokenModel.create({ accessToken, refreshToken });
+
+    const cookieOptions = {
+      httpOnly: true,
+      secure: node_env === "production",
+      sameSite: "strict",
+      expires: new Date(0),
+    };
+    res.cookie("accessToken", "", cookieOptions);
+    res.cookie("refreshToken", "", cookieOptions);
+
+    return new ApiResponse(statusCode.FORBIDDEN, {}, "Your account has been blocked. You have been logged out.");
+  }
+
+  // 🔹 Step 3: Normal logout flow
   await BlackListTokenModel.create({ accessToken, refreshToken });
+
   const cookieOptions = {
     httpOnly: true,
     secure: node_env === "production",
@@ -270,6 +312,7 @@ const logoutUserFunc = async ({ req, res }) => {
 
   return new ApiResponse(statusCode.OK, {}, `Logout Successfully`);
 };
+
 
 const refreshTokenFunc = async ({ req, res, reqModel, typeOfUser }) => {
   const token =
@@ -549,7 +592,12 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
   if (!user) {
     throw new ApiError(statusCode.NOT_FOUND, "User not found");
   }
-
+  if (["blocked", "rejected"].includes(user.verificationStatus)) {
+    throw new ApiError(
+      statusCode.FORBIDDEN,
+      `Your account is ${user.verificationStatus}. Please contact support.`
+    );
+  }
   // ✅ Verify OTP using reusable functions
   if (isEmail) {
     await verifyEmailOtp(identifier, otp);
@@ -633,6 +681,12 @@ const verifyOtpWithoutTokenFunc = async ({ req, reqModel, res }) => {
 
   if (!otpInDb || otpInDb.otp !== otp || otpInDb.expiresAt < Date.now()) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid or expired OTP");
+  }
+  if (["blocked", "rejected"].includes(user.verificationStatus)) {
+    throw new ApiError(
+      statusCode.FORBIDDEN,
+      `Your account is ${user.verificationStatus}. Please contact support.`
+    );
   }
 
   if (!["approved", "submitted"].includes(user?.verificationStatus)) {
@@ -1137,8 +1191,20 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
         : { phoneNumber: emailOrPhone, userId };
 
       user = new reqModel(userData);
+
+
       await user.save();
     }
+    else {
+      // 🚨 Blocked or Rejected users should NOT proceed
+      if (["blocked", "rejected"].includes(user.verificationStatus)) {
+        throw new ApiError(
+          statusCode.FORBIDDEN,
+          `Your account is ${user.verificationStatus}. Please contact support.`
+        );
+      }
+    }
+
 
     // 🔹 Send OTP using existing utils
     let otpData;
@@ -1161,7 +1227,14 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
       expiresAt: otpData.expiresAt,
     };
   } catch (error) {
+
+
     console.error("❌ Error in registerUserWithEmailOrPhoneAndOtp:", error);
+    if (error instanceof ApiError) {
+      // Already an ApiError → rethrow as-is
+      throw error;
+    }
+
     throw new ApiError(
       statusCode.INTERNAL_SERVER_ERROR,
       error.message || "Something went wrong"
