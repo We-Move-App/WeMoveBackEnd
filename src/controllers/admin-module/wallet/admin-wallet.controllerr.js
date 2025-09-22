@@ -111,16 +111,14 @@ const getTransactionsSuperAdmin = catchAsyncError(async (req, res) => {
       statusCode.OK,
       {
         transactions,
-        pagination: {
-          total: totalCount,
-          page,
-          pages: Math.ceil(totalCount / limit),
-          limit,
-        },
+        totalCount,
+        totalPages: Math.ceil(totalCount / pageLimit),
+        currentPage: pageNumber,
+        pageSize: transactions.length,
       },
       "Transactions fetched successfully"
     )
   );
-});
 
+});
 module.exports = { getTransactionsSuperAdmin };

@@ -58,6 +58,7 @@ const { formatDistanceToNowStrict } = require("date-fns");
 const Transaction = require("../../../models/transaction-module/transaction.model");
 const generateCustomId = require("../../../utils/customId/generateCustomId");
 const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
+const moment = require("moment");
 
 // Register Admin
 // const addAdmins = catchAsyncError(async (req, res, next) => {
@@ -256,24 +257,14 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
 const addSubAdmins = catchAsyncError(async (req, res, next) => {
   const { _id: performedBy, role: loggedInRole, branch: userBranch } = req.user;
 
-  // Joi schema
+  // Joi schema (reportingManager optional here, we'll enforce rules in logic)
   const schema = Joi.object({
     email: Joi.string().email().required(),
     userName: Joi.string().min(3).required(),
     phoneNumber: Joi.string().required(),
-    role: Joi.string().valid("SuperAdmin", "Admin", "SubAdmin").required(),
-    branch: Joi.when("role", {
-      is: "Admin",
-      then: Joi.required(),
-      otherwise: Joi.optional(),
-    }),
-    reportingManger: Joi.when("role", {
-      is: "SuperAdmin",
-      then: Joi.string().required().messages({
-        "any.required": "reportingManger is required when creating SuperAdmin",
-      }),
-      otherwise: Joi.optional(),
-    }),
+    role: Joi.string().valid("Admin", "SubAdmin").required(),
+    branch: Joi.string().optional(),
+    reportingManager: Joi.string().optional(),
     permissions: Joi.object().optional(),
   });
 
@@ -286,33 +277,32 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
     phoneNumber,
     role,
     branch,
-    reportingManger,
+    reportingManager,
     permissions,
   } = value;
 
-  // Admin creating a SubAdmin → reportingManger is Admin's _id
-  if (loggedInRole === "Admin") {
-    reportingManger = performedBy;
+  // 🔑 Rule 1: If Admin is creating a SubAdmin → auto-assign reportingManager from token
+  if (loggedInRole === "Admin" && role === "SubAdmin") {
+    reportingManager = performedBy;
+    branch = userBranch; // Admin can only assign within own branch
   }
 
-  // Admin can only create SubAdmin under own branch
-  if (
-    loggedInRole === "Admin" &&
-    branch &&
-    branch.toString() !== userBranch.toString()
-  ) {
-    throw new ApiError(
-      403,
-      "Admin can only create SubAdmin under their own branch"
-    );
+  // 🔑 Rule 2: If SuperAdmin is creating Admin/SubAdmin → reportingManager must be provided
+  if (loggedInRole === "SuperAdmin") {
+    if (!reportingManager) {
+      throw new ApiError(
+        400,
+        "Reporting Manager is required when SuperAdmin creates a user"
+      );
+    }
   }
 
-  // Only Admin or SuperAdmin can create SubAdmin
+  // ❌ Restrict other roles
   if (!["Admin", "SuperAdmin"].includes(loggedInRole)) {
     throw new ApiError(403, "Only Admin or SuperAdmin can create SubAdmin");
   }
 
-  // Check if user exists
+  // Check duplicates
   const existingUser = await AdminModel.findOne({
     $or: [{ email }, { phoneNumber }, { userName }],
   });
@@ -321,7 +311,7 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
   // Default password
   const defaultPassword = "subadmin@123";
 
-  // Create user
+  // Create new user
   const adminId = await generateCustomId(EntityCodeEnum.ADMIN, "A");
   const newUser = new AdminModel({
     adminId,
@@ -329,14 +319,13 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
     userName,
     phoneNumber,
     role,
-    branch: branch || userBranch,
-    reportingManger,
+    branch,
+    reportingManager,
     permissions: { ...defaultPermissions, ...permissions },
     parentUserId: performedBy,
     createdBy: performedBy,
     updatedBy: performedBy,
     password: defaultPassword,
-    reportingManager: req.body.reportingManager,
   });
 
   await newUser.save();
@@ -357,15 +346,13 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
   );
   setTokenCookies(res, accessToken, refreshToken);
 
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        { accessToken, refreshToken, user: userObject, logs },
-        `${role} created successfully`
-      )
-    );
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      { accessToken, refreshToken, user: userObject, logs },
+      `${role} created successfully`
+    )
+  );
 });
 // ======================|| LOGIN USER ||========================
 const loginAdmin = catchAsyncError(async (req, res, next) => {
@@ -638,22 +625,67 @@ const getSubAdminsByBranch = catchAsyncError(async (req, res) => {
     throw new ApiError(403, "Only Admins can access this resource");
   }
 
-  // 1️⃣ Find the logged-in admin with branch info
   const admin = await AdminModel.findById(_id);
   if (!admin) {
     throw new ApiError(404, "Admin not found");
   }
 
-  // 2️⃣ Find all subadmins under the same branch
   const subAdmins = await AdminModel.find({
-    branch: admin.branch, // same branch as admin
+    branch: admin.branch,
     role: "SubAdmin",
-  }).select("-password");
+  })
+    .populate("reportingManager", "userName email phoneNumber")
+    .populate("branch", "name location")
+    .select("-password");
+
+  if (subAdmins.length === 0) {
+    throw new ApiError(
+      404,
+      "No SubAdmins found in your branch",
+      { branch: admin.branch }
+    );
+  }
+
+  const subAdminsWithActivity = await Promise.all(
+    subAdmins.map(async (subAdmin) => {
+      const lastActivity = await UserActivityModel.findOne({ userId: subAdmin._id })
+        .sort({ createdAt: -1 })
+        .populate("performedBy", "email role")
+        .select("activity createdAt -_id")
+        .lean();
+
+
+      let logs = null;
+      if (lastActivity) {
+        logs = {
+          lastActivity: null, // keep null if needed separately
+          recentActivity: {
+            activity: lastActivity.activity,
+            time: moment(lastActivity.createdAt).calendar(), // e.g., Today, 12:07 PM
+            performedBy: lastActivity.performedBy || null,
+          },
+        };
+      }
+
+
+      return {
+        ...subAdmin.toObject(),
+        lastActivity: lastActivity || null,
+      };
+    })
+  );
 
   return res
     .status(200)
-    .json(new ApiResponse(200, subAdmins, "SubAdmins fetched successfully"));
+    .json(
+      new ApiResponse(
+        200,
+        subAdminsWithActivity,
+        "SubAdmins fetched successfully"
+      )
+    );
 });
+
 const getAdminById = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
 
