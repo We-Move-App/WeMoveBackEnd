@@ -104,6 +104,7 @@ const dashBoardRouter = require("./routes/admin-module/dashboard/dashboard.route
 const adminWalletRoute = require("./routes/admin-module/wallet/admin-wallet.routes");
 const chatRouter = require("./routes/new-driver-module/chat-details/chat-details.routes");
 const fcmRouter = require("./routes/firebase/fcm-token.routes");
+const notificationRouter = require("./routes/notification-module/notification.routes");
 
 if (node_env !== "production") {
   require("dotenv").config();
@@ -280,6 +281,9 @@ app.use("/api/v1/amenities", amenititesRoutes);
 
 // Fcm
 app.use("/api/v1/fcm", fcmRouter);
+
+//Notification
+app.use("/api/v1/notification", notificationRouter);
 
 app.use((req, res, next) => {
   console.log("Incoming:", req.method, req.url);
