@@ -48,6 +48,9 @@ const uploadBusImages = uploads.fields([
   { name: "bus_license_back", maxCount: 1 },
 ]);
 
+
+const uploadAmenityImages = uploads.array("amenityImages", 20); 
+
 const uploadDocuments = uploads.fields([
   { name: "driver_license", maxCount: 1 },
   { name: "hotel_license", maxCount: 1 },
@@ -56,7 +59,7 @@ const uploadDocuments = uploads.fields([
   { name: "vehicle_registration_certificate", maxCount: 1 },
   { name: "vehicle_insurance", maxCount: 1 },
   { name: "identity_card", maxCount: 1 },
-  
+
   {
     name: "national_identity_card_front",
     maxCount: 1,
@@ -129,6 +132,7 @@ const uploadHotelManagerFiles = uploads.fields([
 
 module.exports = {
   uploadAvatar,
+  uploadAmenityImages,
   uploadImages,
   uploadFile,
   uploadDocuments,

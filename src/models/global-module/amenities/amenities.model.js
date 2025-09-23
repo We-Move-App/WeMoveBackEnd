@@ -13,15 +13,27 @@ const amenitiesSchema = new mongoose.Schema(
       default: " ",
     },
     icon: {
-        type: String,
-        },  
+      type: String,
+      required: false,
+    },
+    status: {
+      type: String,
+      enum: ["active", "inActive"],
+      default: "active",  // default status
+    },
+
     type: {
       type: String,
       enum: ["hotel", "room", "bus"],
       required: true,
     },
   },
-  { timestamps: true }
+  { timestamps: true },
+  {
+
+    toJSON: { virtuals: true, versionKey: false },
+    toObject: { virtuals: true, versionKey: false },
+  }
 );
 
 const AmenitiesModel = mongoose.model("Amenities", amenitiesSchema);
