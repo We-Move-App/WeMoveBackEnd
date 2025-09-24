@@ -158,55 +158,69 @@ const ChangeSecurePin = catchAsyncError(async (req, res, next) => {
 });
 
 const ResetSecurePin = catchAsyncError(async (req, res, next) => {
-  const { otp, newSecurePin } = req.body;
+  const { otp, newSecurePin, confirmSecurePin } = req.body;
   const { _id } = req.user;
 
-  if (!newSecurePin || !otp) {
+  // ✅ Check required fields
+  if (!newSecurePin || !confirmSecurePin || !otp) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Please enter your otp and pin "
+      "Please enter your OTP, new PIN, and confirm PIN"
     );
   }
-  if (newSecurePin?.length !== 4) {
+
+  // ✅ Check length
+  if (newSecurePin?.length !== 4 || confirmSecurePin?.length !== 4) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Both old and new secure PINs must be exactly 4 digits long."
+      "Both new and confirm PINs must be exactly 4 digits long"
     );
   }
-  const validateOTP = securePinValidator(newSecurePin);
-  if (!validateOTP) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Enter valid OTP (only number)");
+
+  // ✅ Validate digits only
+  const validatePIN = securePinValidator(newSecurePin);
+  const validateConfirm = securePinValidator(confirmSecurePin);
+  if (!validatePIN || !validateConfirm) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Enter valid PIN (only numbers)");
   }
 
-  const otpData = await OtpModel.findOne({
-    ownerId: _id,
-    otp,
-    isUsed: false,
-  });
-
-  if (!otpData) {
-    throw new ApiError(statusCode.NOT_FOUND, "Wrong or Used OTP");
+  // ✅ Confirm match
+  if (newSecurePin !== confirmSecurePin) {
+    throw new ApiError(statusCode.BAD_REQUEST, "New PIN and confirm PIN do not match");
   }
 
+  // ✅ Find user
+  const user = await UserModel.findById(_id);
+  if (!user) {
+    throw new ApiError(statusCode.NOT_FOUND, "User not found");
+  }
+
+  // ✅ OTP query
+  let otpQuery = { otp, isUsed: false };
+  if (user.email) otpQuery.email = user.email.toLowerCase();
+  else if (user.phoneNumber) otpQuery.phoneNumber = user.phoneNumber;
+
+  const otpData = await OtpModel.findOne(otpQuery);
+
+  if (!otpData) throw new ApiError(statusCode.BAD_REQUEST, "Wrong OTP");
+  if (new Date(otpData.expiresAt) < new Date())
+    throw new ApiError(statusCode.BAD_REQUEST, "Expired OTP");
+
+  // ✅ Update secure PIN
   const securePinData = await SecurePinModel.findOne({ userId: _id });
+  if (!securePinData)
+    throw new ApiError(statusCode.NOT_FOUND, "Secure PIN not found for this user");
 
-  if (!securePinData) {
-    throw new ApiError(
-      statusCode.NOT_FOUND,
-      "Secure Pin not found for this user"
-    );
-  }
-  // Update the secure PIN in the database
-  securePinData.securePin = newSecurePin;
+  securePinData.securePin = newSecurePin; // You can hash here if needed
   otpData.isUsed = true;
+
   await securePinData.save();
   await otpData.save();
 
   return res
     .status(statusCode.OK)
-    .json(
-      new ApiResponse(statusCode.OK, {}, `Secure Pin updated Successfully`)
-    );
+    .json(new ApiResponse(statusCode.OK, {}, "Secure PIN updated successfully"));
 });
+
 
 module.exports = { CreateSecurePin, ChangeSecurePin, ResetSecurePin };

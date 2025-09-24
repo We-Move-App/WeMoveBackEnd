@@ -358,6 +358,7 @@ const refreshTokenFunc = async ({ req, res, reqModel, typeOfUser }) => {
 
 const resendOtpFunc = async ({ req, res, reqModel }) => {
   const { emailOrPhone } = req.body;
+  console.log("emailOrPhone", emailOrPhone);
 
   let isEmail = false;
   let isPhoneNumber = false;

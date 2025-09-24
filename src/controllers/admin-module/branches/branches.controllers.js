@@ -15,7 +15,9 @@ const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const { logActivity } = require("../../../utils/ActivityLog/ActivityLog");
 
 const addBranch = catchAsyncError(async (req, res, next) => {
-  const { name, location } = req.body;
+  const { name } = req.body;
+
+  let   location = name ;
 
   // ✅ Role check
   if (req.user.role !== "SuperAdmin" && req.user.role !== "Admin") {
@@ -23,8 +25,11 @@ const addBranch = catchAsyncError(async (req, res, next) => {
   }
 
   // ✅ Validate required fields
-  const reqField = ["name", "location"];
+  const reqField = ["name"];
   validateRequestBody(reqField, req.body);
+
+  name = name.trim();
+  location = location.trim();
 
   // ✅ Check if branch already exists in this location
   const existingBranch = await BranchModel.findOne({ location });

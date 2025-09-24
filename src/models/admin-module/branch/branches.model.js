@@ -4,15 +4,11 @@ const mongoose = require("mongoose");
 
 const BranchSchema = new mongoose.Schema(
   {
-    name: { type: String, required: true },
-    location: { type: String, required: false,
-       trim: true,
-      unique: true, 
-    },
-  
+    name: { type: String, required: true, unique: true, },
+   
   },
   {
-   timestamps:true
+    timestamps: true
   }
 );
 const BranchModel = mongoose.model("Branch", BranchSchema);

@@ -36,6 +36,7 @@ const {
 const {
   AdminModel,
 } = require("../../../models/admin-module/admin/admin.model");
+const { UserAddressModel } = require("../../../models/user-module/user-address/user-address.model");
 
 const getProfile = catchAsyncError(async (req, res, next) => {
   const result = await getUserProfileFunc({
@@ -46,9 +47,27 @@ const getProfile = catchAsyncError(async (req, res, next) => {
     bankModel: UserBankModel,
   });
 
-  return res.status(statusCode.OK).json(result);
-});
+  const userId = result?.data?.user?._id;
+  if (!userId) {
+    throw new ApiError(statusCode.NOT_FOUND, "User not found");
+  }
 
+  // ✅ fetch address and populate it
+  const userAddress = await UserAddressModel.findOne({ userId })
+    .populate("address")
+    .lean();
+
+  // ✅ attach address inside user
+  return res.status(statusCode.OK).json({
+    ...result,
+    data: {
+      user: {
+        ...result.data.user,
+        address: userAddress?.address || null,
+      },
+    },
+  });
+});
 const getAvatar = catchAsyncError(async (req, res, next) => {
   const result = await getAvatarFunc({
     req,
