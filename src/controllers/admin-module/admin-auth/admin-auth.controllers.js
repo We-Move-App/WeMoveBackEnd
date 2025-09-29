@@ -1085,9 +1085,10 @@ const updateSubAdmin = catchAsyncError(async (req, res, next) => {
     );
 });
 const createCoupon = catchAsyncError(async (req, res) => {
-  const {
+  let {
     couponName,
     couponCode,
+    header,
     serviceType,
     discountType,
     minOrderAmount,
@@ -1099,6 +1100,9 @@ const createCoupon = catchAsyncError(async (req, res) => {
   } = req.body;
 
   const { _id: performedBy, role } = req.user;
+  couponName = couponName?.trim().toUpperCase();
+  couponCode = couponCode?.trim().toUpperCase();
+  header = header?.trim().toUpperCase();
 
   // Only SuperAdmin or Admin
   if (!["SuperAdmin", "Admin"].includes(role)) {
@@ -1146,6 +1150,7 @@ const createCoupon = catchAsyncError(async (req, res) => {
   const newCoupon = await CouponModel.create({
     couponName,
     couponCode,
+    header,
     serviceType,
     discountType,
     discountPercentage,
@@ -1204,6 +1209,7 @@ const updateCoupon = catchAsyncError(async (req, res) => {
     activityLog,
   });
 });
+
 const updateCouponStatus = catchAsyncError(async (req, res) => {
   const { couponId } = req.params;
   const { status } = req.body;
@@ -1314,6 +1320,7 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
   const data = coupons.map((c) => ({
     couponId: c._id,
     couponName: c.couponName,
+    header: c.header,
     couponCode: c.couponCode,
     serviceType: c.serviceType,
     discount:
@@ -1369,6 +1376,7 @@ const getCouponById = catchAsyncError(async (req, res) => {
       couponName: coupon.couponName,
       couponCode: coupon.couponCode,
       serviceType: coupon.serviceType,
+      header: coupon.header,
       discount:
         coupon.discountType === "Percentage"
           ? `${coupon.discountPercentage}%`

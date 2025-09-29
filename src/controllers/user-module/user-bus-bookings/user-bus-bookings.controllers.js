@@ -180,9 +180,10 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     // 4️⃣ Calculate price
     const basePricePerSeat = route.pricePerSeat || findBus.pricePerSeat || 0;
     const basePrice = basePricePerSeat * noOfPassengers;
-    let discountApplied = 0;
-    let finalAmount = basePrice;
+
     let appliedCoupon = null;
+    let couponMessage = null;
+    let finalAmount = basePrice;
 
     if (couponCode) {
       const currentDate = new Date();
@@ -191,44 +192,37 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
         couponCode,
         status: "Active",
         serviceType: { $in: ["Bus", "All Services"] },
-        startDate: { $lte: currentDate },
-        expiryDate: { $gte: currentDate },
-        $expr: { $lt: ["$usedCount", "$maxUsage"] },
       });
 
       if (!coupon) {
-        console.log("Coupon not found or invalid, skipping coupon application");
+        couponMessage = "Coupon code is invalid.";
+      } else if (coupon.expiryDate < currentDate) {
+        couponMessage = "Coupon code has expired.";
+      } else if (
+        coupon.usageHistory.some(
+          (u) => u.userId.toString() === userId.toString()
+        )
+      ) {
+        couponMessage = "You have already used this coupon.";
+      } else if (basePrice < coupon.minOrderAmount) {
+        couponMessage = `Coupon valid only on orders above ₹${coupon.minOrderAmount}.`;
       } else {
-        // ❌ Block if order doesn't meet minimum amount
-        if (coupon.minOrderAmount && basePrice < coupon.minOrderAmount) {
-          throw new ApiError(
-            statusCode.BAD_REQUEST,
-            `Coupon valid only for minimum ₹${coupon.minOrderAmount}`
-          );
+        // ✅ Apply discount
+        if (coupon.discountType === "Percentage") {
+          finalAmount =
+            basePrice - (basePrice * coupon.discountPercentage) / 100;
+        } else if (coupon.discountType === "Fixed Amount") {
+          finalAmount = basePrice - coupon.discountAmount;
         }
 
-        // Check if user already used this coupon
-        const alreadyUsed = coupon.usageHistory.some(
-          u => u.userId.toString() === userId.toString()
-        );
+        if (finalAmount < 0) finalAmount = 0;
 
-        if (alreadyUsed) {
-          console.log("Coupon already used by user, skipping coupon application");
-        } else {
-          // ✅ Apply coupon
-          if (coupon.discountType === "Percentage") {
-            discountApplied = (basePrice * coupon.discountPercentage) / 100;
-          } else if (coupon.discountType === "Fixed Amount") {
-            discountApplied = coupon.discountAmount;
-          }
-
-          finalAmount = Math.max(0, basePrice - discountApplied);
-          appliedCoupon = coupon;
-        }
+        appliedCoupon = coupon;
+        couponMessage = `Booking confirmed. Coupon ${coupon.couponCode} applied successfully.`;
       }
+    } else {
+      couponMessage = "Booking confirmed. No coupon applied.";
     }
-
-
     // 5️⃣ Check user wallet balance
     const userWallet = await WalletModel.findOne({ userId }).session(session);
     if (!userWallet || userWallet.balance < finalAmount) {
@@ -525,56 +519,47 @@ const calculateBusBooking = catchAsyncError(async (req, res, next) => {
     }));
 
     // 5️⃣ Calculate pricing
+    // 5️⃣ Calculate pricing
     const basePricePerSeat = route.pricePerSeat || findBus.pricePerSeat || 0;
     const basePrice = basePricePerSeat * noOfPassengers;
     let discountApplied = 0;
     let finalAmount = basePrice;
     let appliedCoupon = null;
 
+    let couponMessage = "Price calculated successfully.";
+
+    // ✅ Coupon logic same as hotel
     if (couponCode) {
       const currentDate = new Date();
-
       const coupon = await CouponModel.findOne({
         couponCode,
         status: "Active",
         serviceType: { $in: ["Bus", "All Services"] },
-        startDate: { $lte: currentDate },
-        expiryDate: { $gte: currentDate },
-        $expr: { $lt: ["$usedCount", "$maxUsage"] },
       });
 
       if (!coupon) {
-        console.log("Coupon not found or invalid, skipping coupon application");
+        couponMessage = "Coupon code is invalid.";
+      } else if (coupon.expiryDate < currentDate) {
+        couponMessage = "Coupon code has expired.";
+      } else if (
+        coupon.usageHistory.some((u) => u.userId.toString() === userId.toString())
+      ) {
+        couponMessage = "You have already used this coupon.";
+      } else if (basePrice < coupon.minOrderAmount) {
+        couponMessage = `Coupon valid only on orders above ₹${coupon.minOrderAmount}.`;
       } else {
-        // ❌ Block if order doesn't meet minimum amount
-        if (coupon.minOrderAmount && basePrice < coupon.minOrderAmount) {
-          throw new ApiError(
-            statusCode.BAD_REQUEST,
-            `Coupon valid only for minimum ₹${coupon.minOrderAmount}`
-          );
+        // ✅ Apply discount
+        if (coupon.discountType === "Percentage") {
+          discountApplied = (basePrice * coupon.discountPercentage) / 100;
+        } else if (coupon.discountType === "Fixed Amount") {
+          discountApplied = coupon.discountAmount;
         }
+        finalAmount = Math.max(0, basePrice - discountApplied);
 
-        // Check if user already used this coupon
-        const alreadyUsed = coupon.usageHistory.some(
-          u => u.userId.toString() === userId.toString()
-        );
-
-        if (alreadyUsed) {
-          console.log("Coupon already used by user, skipping coupon application");
-        } else {
-          // ✅ Apply coupon
-          if (coupon.discountType === "Percentage") {
-            discountApplied = (basePrice * coupon.discountPercentage) / 100;
-          } else if (coupon.discountType === "Fixed Amount") {
-            discountApplied = coupon.discountAmount;
-          }
-
-          finalAmount = Math.max(0, basePrice - discountApplied);
-          appliedCoupon = coupon;
-        }
+        appliedCoupon = coupon;
+        couponMessage = `Coupon ${coupon.couponCode} applied successfully.`;
       }
     }
-
 
     await session.commitTransaction();
     session.endSession();
@@ -582,7 +567,7 @@ const calculateBusBooking = catchAsyncError(async (req, res, next) => {
     // 6️⃣ Return response
     return res.status(statusCode.OK).json({
       success: true,
-      message: "Price breakup calculated successfully",
+      message: couponMessage,
       data: {
         journeyDate: journeyDateNormalized,
         noOfPassengers,
@@ -603,6 +588,8 @@ const calculateBusBooking = catchAsyncError(async (req, res, next) => {
           : null,
       },
     });
+
+
   } catch (error) {
     await session.abortTransaction();
     session.endSession();

@@ -17,6 +17,7 @@ const CouponSchema = new Schema(
       unique: true,
       minlength: [3, "Coupon Code must be at least 3 characters long"],
     },
+    header: { type: String, trim: true, default: "" },
     serviceType: {
       type: String,
       enum: ["Hotel", "Bus", "Bike", "Taxi", "All Services"],
@@ -64,7 +65,7 @@ const CouponSchema = new Schema(
     expiryDate: {
       type: Date,
       required: [true, "Expiry Date and Time is required"],
-      
+
       validate: {
         validator: function (value) {
           return this.startDate ? value > this.startDate : true;
@@ -97,8 +98,8 @@ const CouponSchema = new Schema(
       min: [0, "Used count cannot be negative"],
     },
 
-     createdBy:{ type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
-        updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
     usageHistory: [
       {
         userId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },

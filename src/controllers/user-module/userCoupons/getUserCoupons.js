@@ -6,9 +6,9 @@ const { CouponModel } = require("../../../models/admin-module/Admin-coupon/admin
 
 
 const getAllCoupons = catchAsyncError(async (req, res) => {
+
   const currentDate = new Date();
   console.log("Current Date:", currentDate);
-
 
   // ✅ Fetch only valid coupons
   const coupons = await CouponModel.find({
@@ -29,6 +29,7 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
 
   // Step 1: Format coupons
   const formattedCoupons = coupons.map(coupon => {
+    let header = coupon.header || "";
     let discountText = "";
 
     if (coupon.discountType === "Percentage") {
@@ -39,6 +40,7 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
 
     return {
       couponId: coupon._id,
+      header,
       tilte: discountText,
       couponCode: coupon.couponCode,
       description: ` Use ${coupon.couponCode} on Order above ${coupon.minOrderAmount}`,

@@ -23,6 +23,12 @@ const {
   getDriverBasicWithDocs,
 } = require("../aggregations/basic-details.aggregations");
 const InactiveDriverModel = require("../../../models/new-driver-module/basic-details/inactive-drivers.model");
+const {
+  sendOtpToPhone,
+  verifyPhoneOtp,
+  sendOtpToEmail,
+  verifyEmailOtp,
+} = require("../../../utils/otpService/otpService");
 
 const addDriverBasicDetails = catchAsyncError(async (req, res) => {
   const { error, value } = addBasicDetailsValidation.validate(req.body, {
@@ -217,17 +223,17 @@ const getDriverProfileDetails = catchAsyncError(async (req, res) => {
       },
       bankDetails: bankDetails
         ? {
-            ...bankDetails,
-            passbook: findDoc("passbook"),
-          }
+          ...bankDetails,
+          passbook: findDoc("passbook"),
+        }
         : null,
       vehicleDetails: vehicleDetails
         ? {
-            ...vehicleDetails,
-            insurance: findDoc("insurance"),
-            registration: findDoc("registration"),
-            vehicle_photo: findDoc("vehicle_photo"),
-          }
+          ...vehicleDetails,
+          insurance: findDoc("insurance"),
+          registration: findDoc("registration"),
+          vehicle_photo: findDoc("vehicle_photo"),
+        }
         : null,
     },
   };
@@ -473,6 +479,93 @@ const verifyPin = catchAsyncError(async (req, res) => {
   throw new ApiError(statusCode.BAD_REQUEST, "Invalid pin");
 });
 
+const resetSecurePin = catchAsyncError(async (req, res) => {
+  // ----------------- Step 1: Token Validation -----------------
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const driverId = decoded?.driverId;
+
+  if (!driverId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  // ----------------- Step 2: Fetch Driver -----------------
+  const driver = await DriverBasicDetails.findOne({ driverId });
+  if (!driver) {
+    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+  }
+
+  // ----------------- Step 3: Extract Body -----------------
+  const { otp, newPin, confirmPin } = req.body;
+  if (!otp || !newPin || !confirmPin) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "otp, newPin and confirmPin are required"
+    );
+  }
+
+  // ----------------- Step 4: Verify OTP -----------------
+  if (driver.phoneNo) {
+    await verifyPhoneOtp(driver.phoneNo, otp);
+  } else if (driver.email) {
+    await verifyEmailOtp(driver.email, otp);
+  } else {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Driver does not have phone or email registered for OTP verification"
+    );
+  }
+
+  // ----------------- Step 5: Validate New Pin -----------------
+  if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "New pin must be a 4-digit number"
+    );
+  }
+
+  if (newPin !== confirmPin) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "New pin and confirm pin do not match"
+    );
+  }
+
+  // ----------------- Step 6: Hash and Save New Pin -----------------
+  const salt = await bcrypt.genSalt(10);
+  const hashedPin = await bcrypt.hash(newPin, salt);
+
+  driver.pin = hashedPin;
+  driver.isPinExist = true;
+  driver.failedAttempts = 0;
+  driver.blockUntil = null;
+  driver.blockStage = 0;
+
+  await driver.save();
+
+  // ----------------- Step 7: Response -----------------
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        driverId: driver.driverId,
+        isPinExist: driver.isPinExist,
+      },
+      "Pin reset successfully"
+    )
+  );
+});
+
+
+
 const deleteDriverProfile = catchAsyncError(async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
@@ -529,5 +622,6 @@ module.exports = {
   addPin,
   verifyPin,
   updatePin,
+  resetSecurePin,
   deleteDriverProfile,
 };
