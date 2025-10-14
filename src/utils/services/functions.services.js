@@ -48,7 +48,10 @@ const {
 const {
   BranchModel,
 } = require("../../models/admin-module/branch/branches.model");
+
 const generateCustomId = require("../../utils/customId/generateCustomId");
+
+
 
 // ==============================================
 const registerUserWithEmailAndPhoneNumber = async ({
@@ -200,6 +203,7 @@ const loginUserWithEmailAndPhoneNumber = async ({
   if (!emailOrPhone) {
     throw new ApiError(statusCode.BAD_REQUEST, "Please enter email or phone");
   }
+console.log("emailOrPhone", emailOrPhone);
 
   const isEmail = validateEmail(emailOrPhone);
   const isPhoneNumber = validatePhoneNumber(emailOrPhone);
@@ -218,6 +222,7 @@ const loginUserWithEmailAndPhoneNumber = async ({
       $or: [{ email: emailOrPhone }, { phoneNumber: emailOrPhone }],
     })
     .select("+password");
+  console.log("existingUser", existingUser);
   if (!existingUser) {
     throw new ApiError(statusCode.BAD_REQUEST, `User not found`);
   }
@@ -229,6 +234,7 @@ const loginUserWithEmailAndPhoneNumber = async ({
     );
   }
   const isPasswordMatch = await existingUser.comparePassword(password);
+  console.log("isPasswordMatch", isPasswordMatch);
 
   if (!isPasswordMatch) {
     throw new ApiError(statusCode.BAD_REQUEST, `Invalid Credentials`);
@@ -628,9 +634,10 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
   // ✅ Extra details
   const bankDetails = await UserBankModel.findOne({ userId: user._id });
   const pinDetails = await SecurePinModel.findOne({ userId: user._id });
-
+  const userId = await generateCustomId(EntityCodeEnum.USER, "U");
   const userData = {
     ...user.toObject(),
+    userId: user.userId || userId,
     isEmailVerified: !!user.emailVerified,
     isPhoneVerified: !!user.phoneVerified,
     bankDetails,

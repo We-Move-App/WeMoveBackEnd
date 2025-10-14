@@ -47,6 +47,8 @@ const getProfile = catchAsyncError(async (req, res, next) => {
     bankModel: UserBankModel,
   });
 
+ 
+
   const userId = result?.data?.user?._id;
   if (!userId) {
     throw new ApiError(statusCode.NOT_FOUND, "User not found");
@@ -80,7 +82,7 @@ const getAvatar = catchAsyncError(async (req, res, next) => {
 
 const updateYourProfile = catchAsyncError(async (req, res, next) => {
   const userId = req.user?._id;
-  const { fullName, dob, nationality, nationIdExpiry, termAndConditions } =
+  const { fullName, dob, nationality, nationIdExpiry, termAndConditions, gender, address } =
     req.body;
   const docsToUpload = req.files;
 
@@ -93,6 +95,8 @@ const updateYourProfile = catchAsyncError(async (req, res, next) => {
   if (fullName) updateData.fullName = fullName;
 
   if (dob) updateData.dob = dob;
+  if (address) updateData.address = address;
+  if (gender) updateData.gender = gender;
   if (nationality) updateData.nationality = nationality;
   if (nationIdExpiry) updateData.nationIdExpiry = nationIdExpiry;
   if (termAndConditions) updateData.termAndConditions = termAndConditions;

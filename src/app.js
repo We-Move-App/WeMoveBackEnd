@@ -105,6 +105,9 @@ const adminWalletRoute = require("./routes/admin-module/wallet/admin-wallet.rout
 const chatRouter = require("./routes/new-driver-module/chat-details/chat-details.routes");
 const fcmRouter = require("./routes/firebase/fcm-token.routes");
 const notificationRouter = require("./routes/notification-module/notification.routes");
+const {userCountryRoutes }= require("./routes/user-module/userCountry/userCountryroutes");
+const userMemberRoutes = require("./routes/user-module/userMemberRoutes/userMember.routes");
+
 
 if (node_env !== "production") {
   require("dotenv").config();
@@ -171,6 +174,12 @@ app.use("/test", (req, res) => {
     statusCode: 200,
   });
 });
+
+
+//List Of All countrys
+app.use("/api/v1/user/country", userCountryRoutes);
+//Member under user
+app.use("/api/v1/user-member", userMemberRoutes);
 
 // User Routes
 app.use("/api/v1/user/auth", userAuthRoutes);

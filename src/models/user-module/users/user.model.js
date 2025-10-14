@@ -44,6 +44,7 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       minlength: [6, "Password must be at least 6 characters long"],
+      select: false, // Exclude password field by default when querying
     },
     avatar: {
       type: ImageSchema,
@@ -69,10 +70,17 @@ const userSchema = new mongoose.Schema(
       ],
       default: "submitted",
     },
+    accessForView: {
+      type: Boolean,
+      default: false,
+    },
     authorities: { type: Schema.Types.Mixed, default: {} },
     parentUserId: {
       type: Schema.Types.ObjectId,
       ref: "User",
+      required: function () {
+        return this.role === "user-member"; // mandatory for user-member
+      },
     },
     dob: {
       type: Date,
@@ -96,8 +104,9 @@ const userSchema = new mongoose.Schema(
     },
     gender: {
       type: String,
-      enum: ["male", "female", "not say"],
+      enum: ["male", "female"],
     },
+    address: { type: String },
     emailVerified: { type: Boolean, default: false },
     phoneVerified: { type: Boolean, default: false },
     branch: {

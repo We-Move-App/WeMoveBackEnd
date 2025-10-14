@@ -14,20 +14,22 @@ const {
   getAvailableModules,
   deleteProfile,
 } = require("../../../controllers/user-module/users/users.controllers");
+const { addMemberUnderUser } = require("../../../controllers/user-module/userMember/userMember.Controllers");
 const { isUserAuthenticated } = require("../../../middlewares/authUser");
 const {
   uploadDocuments,
   uploadAvatar,
 } = require("../../../utils/uploadFiles/multer");
 
+
 const userRoutes = express.Router();
 
 userRoutes.route("/profile").get(isUserAuthenticated, getProfile);
 userRoutes.route("/get-avatar").get(isUserAuthenticated, getAvatar);
-
 userRoutes
   .route("/update-profile")
   .put(isUserAuthenticated, uploadDocuments, updateYourProfile);
+  
 
 userRoutes.route("/change-password").put(isUserAuthenticated, changePassword);
 

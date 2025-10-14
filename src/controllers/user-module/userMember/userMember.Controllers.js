@@ -1,0 +1,328 @@
+const mongoose = require("mongoose");
+const ApiError = require("../../../utils/response/ApiError");
+const ApiResponse = require("../../../utils/response/ApiResponse");
+const catchAsyncError = require("../../../utils/response/catchAsyncError");
+const statusCode = require("../../../utils/constants/statusCode");
+const { validateRequestBody } = require("../../../utils/reqFunctions/reqFunction");
+const UserModel = require("../../../models/user-module/users/user.model");
+const generateCustomId = require("../../../utils/customId/generateCustomId");
+const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
+const {
+    decodeAccessToken,
+} = require("../../../utils/jwtToken/customTokenService");
+const { v4: uuidv4 } = require("uuid");
+const Transaction = require("../../../models/transaction-module/transaction.model");
+const walletModel = require("../../../models/wallet-module/wallets.model");
+
+
+const addMemberUnderUser = catchAsyncError(async (req, res, next) => {
+    const { name, email, password, confirmPassword, accessForView } = req.body;
+    const { _id: parentId } = req.user;
+
+    // ✅ Validate required fields
+    const requiredFields = ["name", "email", "password", "confirmPassword"];
+    validateRequestBody(requiredFields, req.body);
+
+
+    if (password !== confirmPassword) {
+        throw new ApiError(statusCode.BAD_REQUEST, "Passwords do not match");
+    }
+    const existingUser = await UserModel.findOne({ email });
+    if (existingUser) {
+        throw new ApiError(
+            statusCode.BAD_REQUEST,
+            "User already exists with this email"
+        );
+    }
+    const parentUser = await UserModel.findById(parentId);
+    if (!parentUser) {
+        throw new ApiError(statusCode.NOT_FOUND, "Parent user not found");
+    }
+    if (parentUser.role === "user-member") {
+        throw new ApiError(
+            statusCode.FORBIDDEN,
+            "User-members are not allowed to add members"
+        );
+    } const existingMembersCount = await UserModel.countDocuments({
+        parentUserId: parentId,
+        role: "user-member",
+    });
+    if (existingMembersCount >= 5) {
+        throw new ApiError(
+            statusCode.FORBIDDEN,
+            "You can add a maximum of 5 user-members only"
+        );
+    }
+
+    // ✅ Generate custom member ID
+    const memberId = await generateCustomId(EntityCodeEnum.USER_MEMBER, "UM");
+    const newMember = new UserModel({
+        userId: memberId,
+        fullName: name,
+        email,
+        password,
+        role: "user-member",
+        parentUserId: parentId,
+        branch: parentUser.branch, // 👈 assign same branch
+        createdBy: parentId,
+        verificationStatus: "approved",  // ✅ Approved immediately
+        emailVerified: true,             // ✅ Email verified
+        phoneVerified: true,             // ✅ Phone verified
+        termAndConditions: true,
+        accessForView: accessForView ?? false,
+
+    });
+
+    const savedMember = await newMember.save();
+
+    // ✅ Populate parent info for response
+    await savedMember.populate({
+        path: "parentUserId",
+        select: "fullName email role branch",
+    });
+
+    return res
+        .status(statusCode.CREATED)
+        .json(
+            new ApiResponse(
+                statusCode.CREATED,
+                { member: savedMember },
+                "Member added successfully under same branch"
+            )
+        );
+});
+const getAllMembersUnderUser = catchAsyncError(async (req, res, next) => {
+    const { _id: parentId } = req.user;
+    const { search = "" } = req.query; // 👈 optional search text
+
+    // ✅ Check parent user existence
+    const parentUser = await UserModel.findById(parentId);
+    if (!parentUser) {
+        throw new ApiError(statusCode.NOT_FOUND, "Parent user not found");
+    }
+
+    // ✅ Restrict user-members from accessing this
+    if (parentUser.role === "user-member") {
+        throw new ApiError(
+            statusCode.FORBIDDEN,
+            "User-members are not allowed to view member list"
+        );
+    }
+
+    // ✅ Build search filter
+    const searchFilter = search
+        ? {
+            $or: [
+                { userId: { $regex: search, $options: "i" } },
+                { fullName: { $regex: search, $options: "i" } },
+            ],
+        }
+        : {};
+
+    // ✅ Final filter (must match this parent)
+    const filter = {
+        parentUserId: new mongoose.Types.ObjectId(parentId),
+        role: "user-member",
+        ...searchFilter,
+    };
+
+    // ✅ Query
+    const members = await UserModel.find(filter)
+        .select("userId fullName email role verificationStatus accessForView createdAt")
+        .sort({ createdAt: -1 });
+
+    // ✅ Handle empty results
+    if (!members || members.length === 0) {
+        throw new ApiError(statusCode.NOT_FOUND, "No user-members found for this parent user");
+    }
+
+    // ✅ Success response
+    return res.status(statusCode.OK).json(
+        new ApiResponse(
+            statusCode.OK,
+            { count: members.length, members },
+            "All user-members fetched successfully"
+        )
+    );
+});
+const deleteMemberByUserId = catchAsyncError(async (req, res, next) => {
+    const { _id: parentId } = req.user;  // Parent user ID from token
+    const { userId } = req.params;       // userId from URL
+
+    // Validate parent user
+    const parentUser = await UserModel.findById(parentId);
+    if (!parentUser) {
+        throw new ApiError(statusCode.NOT_FOUND, "Parent user not found");
+    }
+
+    // Restrict user-members from deleting
+    if (parentUser.role === "user-member") {
+        throw new ApiError(
+            statusCode.FORBIDDEN,
+            "User-members are not allowed to delete members"
+        );
+    }
+
+    // Find member under this parent
+    const member = await UserModel.findOne({
+        userId: userId,
+        parentUserId: parentId,
+        role: "user-member",
+    });
+
+    if (!member) {
+        throw new ApiError(
+            statusCode.NOT_FOUND,
+            "No user-member found with this userId under your account"
+        );
+    }
+
+    // Delete permanently
+    await UserModel.deleteOne({ _id: member._id });
+
+    return res
+        .status(statusCode.OK)
+        .json(
+            new ApiResponse(
+                statusCode.OK,
+                {},
+                `Member (${member.fullName}) deleted successfully`
+            )
+        );
+});
+const getUserProfile = catchAsyncError(async (req, res, next) => {
+    const { _id } = req.user; // Get user ID from JWT
+
+    // Fetch user from DB, exclude password
+    const user = await UserModel.findById(_id)
+        .select("-password")
+        .populate("branch", "-createdAt -updatedAt -__v")
+        .populate("parentUserId", "fullName email role branch")
+        .lean();
+
+    if (!user) {
+        throw new ApiError(statusCode.NOT_FOUND, "User not found");
+    }
+
+    return res.status(statusCode.OK).json(
+        new ApiResponse(
+            statusCode.OK,
+            { user },
+            "Profile found"
+        )
+    );
+});
+
+const getTransactions = catchAsyncError(async (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+        throw new ApiError(
+            statusCode.UNAUTHORIZED,
+            "Access token is missing or invalid"
+        );
+    }
+
+    const jwtToken = authHeader.split(" ")[1];
+    const decoded = decodeAccessToken(jwtToken);
+
+    const {
+        page: pageQuery,
+        limit: limitQuery,
+        sortBy = "date", // 'date' or 'amount'
+        order = "desc",  // 'asc' or 'desc'
+    } = req.query;
+
+    const userId = decoded?._id;
+    if (!userId) {
+        throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+    }
+
+    // Pagination setup
+    const page = Math.max(parseInt(pageQuery) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(limitQuery) || 10, 1), 100);
+
+    // Find logged-in user
+    const user = await UserModel.findById(userId).lean();
+    if (!user) throw new ApiError(statusCode.NOT_FOUND, "User not found");
+
+    // Get target user (if user-member → parent, else self)
+    const targetUserId =
+        user.role === "user-member" ? user.parentUserId : user._id;
+
+    if (!targetUserId) {
+        throw new ApiError(
+            statusCode.BAD_REQUEST,
+            "Parent user ID not found for this member"
+        );
+    }
+
+    // Find parent user
+    const parentUser = await UserModel.findById(targetUserId)
+        .select("fullName email")
+        .lean();
+
+    if (!parentUser) {
+        throw new ApiError(statusCode.NOT_FOUND, "Parent user not found");
+    }
+
+    // Transaction filter: only those with "Received from"
+    const txFilter = {
+        userId: targetUserId,
+        description: { $regex: /^Received from /i },
+    };
+
+    // Sorting logic
+    const sortField = sortBy === "amount" ? "amount" : "createdAt";
+    const sortOrder = order === "asc" ? 1 : -1;
+
+    // Fetch transactions
+    const totalCount = await Transaction.countDocuments(txFilter);
+
+    const transactions = await Transaction.find(txFilter)
+        .sort({ [sortField]: sortOrder })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean();
+
+    // Format response
+    const formattedTransactions = transactions.map((tx) => ({
+        transactionId: tx.transactionId,
+        userName: parentUser.fullName,
+        email: parentUser.email,
+        amount: tx.amount,
+        description: tx.description,
+        status: tx.status,
+        date: tx.createdAt?.toISOString().split("T")[0],
+        time: tx.createdAt?.toISOString().split("T")[1].split(".")[0],
+    }));
+
+    return res.status(statusCode.OK).json(
+        new ApiResponse(
+            statusCode.OK,
+            {
+                transactions: formattedTransactions,
+                pagination: {
+                    total: totalCount,
+                    page,
+                    pages: Math.ceil(totalCount / limit),
+                    limit,
+                },
+            },
+            "Transactions fetched successfully"
+        )
+    );
+});
+
+
+
+
+
+module.exports = {
+    addMemberUnderUser,
+    getAllMembersUnderUser,
+    deleteMemberByUserId,
+    getUserProfile,
+     getTransactions
+
+
+};

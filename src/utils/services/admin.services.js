@@ -11,14 +11,23 @@ const getAllUsersByAdmin = async ({ req, model }) => {
     sortBy = "createdAt",
     order = "desc",
     search = "",
+    verificationStatus,
   } = req.query;
+  console.log("req.user", req.query);
 
   page = page ? Math.max(parseInt(page, 10), 1) : 1;
   limit = limit ? Math.max(parseInt(limit, 10), 1) : 10;
 
   const skip = (page - 1) * limit;
 
-  console.log("branchId:", req.user.branch);
+  const allowedStatuses = ["submitted", "processing", "approved", "rejected", "blocked"];
+  if (verificationStatus && !allowedStatuses.includes(verificationStatus)) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      `Invalid verificationStatus. Allowed values are: ${allowedStatuses.join(", ")}`
+    );
+  }
+
 
   const query = {};
 
@@ -33,8 +42,19 @@ const getAllUsersByAdmin = async ({ req, model }) => {
       { phoneNumber: regex },
       { fullName: regex },
       { companyName: regex },
-      { verificationStatus: regex },
+      // { verificationStatus: regex },
     ];
+  }
+
+  if (verificationStatus && verificationStatus.trim() !== "") {
+    const statuses = verificationStatus
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter((s) => allowedStatuses.includes(s)); // ✅ only valid values
+
+    if (statuses.length > 0) {
+      query.verificationStatus = { $in: statuses };
+    }
   }
 
   const totalUser = await model.countDocuments(query);

@@ -69,7 +69,7 @@ const addMemberUnderBusOperator = catchAsyncError(async (req, res, next) => {
     ticketManagement: permissions.includes("ticketManagement"),
     walletManagement: permissions.includes("walletManagement"),
   };
-  const operatorId = await generateCustomId(EntityCodeEnum.BUS_MEMBER, "BO");
+  const operatorId = await generateCustomId(EntityCodeEnum.BUS_MEMBER, "BM");
 
   const newMember = new BusOperatorModel({
     operatorId,
