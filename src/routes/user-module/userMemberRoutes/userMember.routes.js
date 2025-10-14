@@ -13,6 +13,7 @@ const {
 } = require("../../../controllers/user-module/users/users.controllers");
 
 const { addMemberUnderUser,
+    loginUser,
     getAllMembersUnderUser,
     getUserProfile,
     deleteMemberByUserId,
@@ -30,6 +31,7 @@ const userMemberRoutes = express.Router();
 // Route to add a member under a user
 
 userMemberRoutes.route("/add-member").post(isUserAuthenticated, addMemberUnderUser);
+userMemberRoutes.route("/login-member").post(loginUser);
 userMemberRoutes.route("/get-members").get(isUserAuthenticated, getAllMembersUnderUser);
 userMemberRoutes.route("/delete-member/:userId").delete(isUserAuthenticated, deleteMemberByUserId);
 userMemberRoutes.route("/getProfile").get(isUserAuthenticated, getUserProfile)

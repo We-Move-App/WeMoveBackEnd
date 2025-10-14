@@ -8,11 +8,28 @@ const UserModel = require("../../../models/user-module/users/user.model");
 const generateCustomId = require("../../../utils/customId/generateCustomId");
 const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
 const {
+    generateTokens,
     decodeAccessToken,
-} = require("../../../utils/jwtToken/customTokenService");
+    refreshAccessToken,
+    saveRefreshToken,
+    setTokenCookies,
+} = require("../../../utils/jwtToken/generateTokens");
 const { v4: uuidv4 } = require("uuid");
 const Transaction = require("../../../models/transaction-module/transaction.model");
 const walletModel = require("../../../models/wallet-module/wallets.model");
+const {
+    sendOtpToPhone,
+    sendOtpToEmail,
+    verifyEmailOtp,
+    verifyPhoneOtp,
+} = require("../../../utils/otpService/otpService");
+const BlackListTokenModel = require("../../../models/global-module/blacklist-tokens/blacklist-token.model");
+const emailVerifyModel = require("../../../models/global-module/verifications/emailVerification.model");
+const phoneNumberVerifyModel = require("../../../models/global-module/verifications/phoneNumberVerification");
+const {
+    validateEmail,
+    validatePhoneNumber,
+} = require("../../../utils/validation/forSchema");
 
 
 const addMemberUnderUser = catchAsyncError(async (req, res, next) => {
@@ -91,6 +108,100 @@ const addMemberUnderUser = catchAsyncError(async (req, res, next) => {
             )
         );
 });
+const loginUser = catchAsyncError(async (req, res, next) => {
+
+    const { emailOrPhone, password } = req.body;
+    console.log(emailOrPhone, password);
+
+    // Step 1: Validate inputs
+    if (!emailOrPhone) {
+        throw new ApiError(statusCode.BAD_REQUEST, "Please enter email or phone");
+    }
+
+    const isEmail = validateEmail(emailOrPhone);
+    const isPhoneNumber = validatePhoneNumber(emailOrPhone);
+
+    if (!isEmail && !isPhoneNumber) {
+        throw new ApiError(
+            statusCode.BAD_REQUEST,
+            "Enter a valid email or phone number"
+        );
+    }
+
+    if (!password) {
+        throw new ApiError(statusCode.BAD_REQUEST, "Please enter password");
+    }
+
+    // Step 2: Find user
+    const existingUser = await UserModel.findOne({
+        $or: [{ email: emailOrPhone }, { phoneNumber: emailOrPhone }],
+    }).select("+password");
+
+    if (!existingUser) {
+        throw new ApiError(statusCode.NOT_FOUND, "User not found");
+    }
+
+    if (!existingUser.password) {
+        throw new ApiError(
+            statusCode.BAD_REQUEST,
+            "You registered with OTP. Please reset your password"
+        );
+    }
+
+    // Step 3: Verify password
+    const isPasswordMatch = await existingUser.comparePassword(password);
+    if (!isPasswordMatch) {
+        throw new ApiError(statusCode.UNAUTHORIZED, "Invalid credentials");
+    }
+
+    // Step 4: Verify user status
+    if (!["approved"].includes(existingUser.verificationStatus)) {
+        throw new ApiError(
+            statusCode.UNAUTHORIZED,
+            getStatusMessage(existingUser.verificationStatus)
+        );
+    }
+
+    if (["blocked", "rejected"].includes(existingUser.verificationStatus)) {
+        throw new ApiError(
+            statusCode.FORBIDDEN,
+            getStatusMessage(existingUser.verificationStatus)
+        );
+    }
+
+    // Step 5: Generate JWT tokens
+    const { accessToken, refreshToken } = await generateTokens(
+        existingUser
+
+    );
+
+    // Step 6: Set cookies for session management
+    setTokenCookies(res, accessToken, refreshToken);
+
+    // Step 7: Prepare response data
+    const responseData = {
+        token: accessToken,
+        refreshToken,
+        user: {
+            userId: existingUser.userId,
+            userName: existingUser.fullName,
+            email: existingUser.email,
+            role: existingUser.role,
+        },
+    };
+
+    // Step 8: Send response
+    return res.status(statusCode.OK).json(
+        new ApiResponse(
+            statusCode.OK,
+            responseData,
+            "Login successfully"
+        )
+    );
+});
+
+
+
 const getAllMembersUnderUser = catchAsyncError(async (req, res, next) => {
     const { _id: parentId } = req.user;
     const { search = "" } = req.query; // 👈 optional search text
@@ -319,10 +430,11 @@ const getTransactions = catchAsyncError(async (req, res) => {
 
 module.exports = {
     addMemberUnderUser,
+    loginUser,
     getAllMembersUnderUser,
     deleteMemberByUserId,
     getUserProfile,
-     getTransactions
+    getTransactions
 
 
 };
