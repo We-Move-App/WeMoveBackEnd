@@ -184,7 +184,7 @@ const loginUser = catchAsyncError(async (req, res, next) => {
         refreshToken,
         user: {
             userId: existingUser.userId,
-            userName: existingUser.fullName,
+            fullName: existingUser.fullName,
             email: existingUser.email,
             role: existingUser.role,
         },
@@ -199,9 +199,6 @@ const loginUser = catchAsyncError(async (req, res, next) => {
         )
     );
 });
-
-
-
 const getAllMembersUnderUser = catchAsyncError(async (req, res, next) => {
     const { _id: parentId } = req.user;
     const { search = "" } = req.query; // 👈 optional search text
@@ -397,7 +394,7 @@ const getTransactions = catchAsyncError(async (req, res) => {
 
     // Format response
     const formattedTransactions = transactions.map((tx) => ({
-        transactionId: tx.transactionId,
+        transactionId: tx.transactionId?.substring(0, 8) || "N/A",
         userName: parentUser.fullName,
         email: parentUser.email,
         amount: tx.amount,
