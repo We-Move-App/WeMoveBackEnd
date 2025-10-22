@@ -17,7 +17,9 @@ const { addMemberUnderUser,
     getAllMembersUnderUser,
     getUserProfile,
     deleteMemberByUserId,
-    getTransactions
+    getTransactions,
+    updateMemberUnderUser,
+
 } = require("../../../controllers/user-module/userMember/userMember.Controllers");
 
 const { isUserAuthenticated } = require("../../../middlewares/authUser");
@@ -31,6 +33,7 @@ const userMemberRoutes = express.Router();
 // Route to add a member under a user
 
 userMemberRoutes.route("/add-member").post(isUserAuthenticated, addMemberUnderUser);
+userMemberRoutes.route("/update-member/:memberId").put(isUserAuthenticated, updateMemberUnderUser);
 userMemberRoutes.route("/login-member").post(loginUser);
 userMemberRoutes.route("/get-members").get(isUserAuthenticated, getAllMembersUnderUser);
 userMemberRoutes.route("/delete-member/:userId").delete(isUserAuthenticated, deleteMemberByUserId);

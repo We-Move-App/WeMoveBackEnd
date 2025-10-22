@@ -50,8 +50,7 @@ const {
 } = require("../../models/admin-module/branch/branches.model");
 
 const generateCustomId = require("../../utils/customId/generateCustomId");
-
-
+const userHistoryModel = require("../../models/user-module/users/userHistory.model");
 
 // ==============================================
 const registerUserWithEmailAndPhoneNumber = async ({
@@ -203,7 +202,7 @@ const loginUserWithEmailAndPhoneNumber = async ({
   if (!emailOrPhone) {
     throw new ApiError(statusCode.BAD_REQUEST, "Please enter email or phone");
   }
-console.log("emailOrPhone", emailOrPhone);
+  console.log("emailOrPhone", emailOrPhone);
 
   const isEmail = validateEmail(emailOrPhone);
   const isPhoneNumber = validatePhoneNumber(emailOrPhone);
@@ -596,6 +595,20 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
   const user = await reqModel.findOne(
     isEmail ? { email: identifier } : { phoneNumber: identifier }
   );
+
+  const existingHistory = await userHistoryModel.findOne(
+    isEmail
+      ? { $or: [{ previousEmail: emailOrPhone.toLowerCase() }, { newEmail: emailOrPhone.toLowerCase() }] }
+      : { $or: [{ previousPhoneNumber: emailOrPhone }, { newPhoneNumber: emailOrPhone }] }
+  );
+
+  if (existingHistory) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      `This ${isEmail ? "email" : "phone number"} was used previously and cannot be registered again`
+    );
+  }
+
   if (!user) {
     throw new ApiError(statusCode.NOT_FOUND, "User not found");
   }
@@ -631,7 +644,7 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
   const { accessToken, refreshToken } = await generateTokens(user, typeOfUser);
   setTokenCookies(res, accessToken, refreshToken);
 
-  // ✅ Extra details
+
   const bankDetails = await UserBankModel.findOne({ userId: user._id });
   const pinDetails = await SecurePinModel.findOne({ userId: user._id });
   const userId = await generateCustomId(EntityCodeEnum.USER, "U");
@@ -754,7 +767,7 @@ const addEmailOrPhoneNumberFunc = async ({ req, res, reqModel }) => {
   }
 
   const isUserExistWithThis = await reqModel.findOne(
-    isEmail ? { email: emailOrPhone } : { phoneNumber: emailOrPhone }
+    isEmail ? { email: emailOrPhone.toLowerCase() } : { phoneNumber: emailOrPhone }
   );
 
   if (isUserExistWithThis) {
@@ -763,6 +776,18 @@ const addEmailOrPhoneNumberFunc = async ({ req, res, reqModel }) => {
       `User already exists with this ${isEmail ? "email" : "phone number"}!`
     );
   }
+
+
+  // const isDuplicateInHistory = await UserHistory.findOne(
+  //   isEmail
+  //     ? { $or: [{ previousEmail: emailOrPhone.toLowerCase() }, { newEmail: emailOrPhone.toLowerCase() }] }
+  //     : { $or: [{ previousPhoneNumber: emailOrPhone }, { newPhoneNumber: emailOrPhone }] }
+  // );
+
+  // if (isDuplicateInUser || isDuplicateInHistory) {
+  //   throw new Error("This email/phone was already used or exists");
+  // }
+
 
   const otpInDb = await OtpModel.findOne({
     ...(isEmail && { email: emailOrPhone }),
@@ -779,15 +804,28 @@ const addEmailOrPhoneNumberFunc = async ({ req, res, reqModel }) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid OTP");
   }
 
+  // ✅ Create history entry before updating user
+  if ((isEmail && user.email !== emailOrPhone) || (isPhoneNumber && user.phoneNumber !== emailOrPhone)) {
+    await userHistoryModel.create({
+      userId: user._id,
+      previousEmail: isEmail ? user.email : undefined,
+      newEmail: isEmail ? emailOrPhone.toLowerCase() : undefined,
+      previousPhoneNumber: isPhoneNumber ? user.phoneNumber : undefined,
+      newPhoneNumber: isPhoneNumber ? emailOrPhone : undefined,
+      changedBy: user._id,
+    });
+  }
+
+
   // ✅ Update user and mark as verified
   if (isEmail) {
     user.email = emailOrPhone;
-    user.emailVerified = true; // <-- Set verified
+    user.emailVerified = true;
   }
 
   if (isPhoneNumber) {
     user.phoneNumber = emailOrPhone;
-    user.phoneVerified = true; // <-- Set verified
+    user.phoneVerified = true;
   }
 
   otpInDb.isUsed = true;
@@ -1187,9 +1225,24 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
       );
     }
 
+
     // 🔹 Create or find user
     const userField = isEmail ? "email" : "phoneNumber";
     let user = await reqModel.findOne({ [userField]: emailOrPhone });
+
+    const existingHistory = await userHistoryModel.findOne(
+      isEmail
+        ? { $or: [{ previousEmail: emailOrPhone.toLowerCase() }, { newEmail: emailOrPhone.toLowerCase() }] }
+        : { $or: [{ previousPhoneNumber: emailOrPhone }, { newPhoneNumber: emailOrPhone }] }
+    );
+
+    if (existingHistory) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        `This ${isEmail ? "email" : "phone number"} was used previously and cannot be registered again`
+      );
+    }
+
 
     if (!user) {
       const userId = await generateCustomId(EntityCodeEnum.USER, "U");

@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const ApiError = require("../../../utils/response/ApiError");
+
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const statusCode = require("../../../utils/constants/statusCode");
@@ -9,11 +10,12 @@ const generateCustomId = require("../../../utils/customId/generateCustomId");
 const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
 const {
     generateTokens,
-    decodeAccessToken,
+
     refreshAccessToken,
     saveRefreshToken,
     setTokenCookies,
 } = require("../../../utils/jwtToken/generateTokens");
+const { decodeAccessToken } = require("../../../utils/jwtToken/customTokenService");
 const { v4: uuidv4 } = require("uuid");
 const Transaction = require("../../../models/transaction-module/transaction.model");
 const walletModel = require("../../../models/wallet-module/wallets.model");
@@ -201,7 +203,9 @@ const loginUser = catchAsyncError(async (req, res, next) => {
 });
 const getAllMembersUnderUser = catchAsyncError(async (req, res, next) => {
     const { _id: parentId } = req.user;
-    const { search = "" } = req.query; // 👈 optional search text
+    console.log("req.user =>", req.user);
+
+    const { search = "" } = req.query;
 
     // ✅ Check parent user existence
     const parentUser = await UserModel.findById(parentId);
@@ -239,10 +243,17 @@ const getAllMembersUnderUser = catchAsyncError(async (req, res, next) => {
         .select("userId fullName email role verificationStatus accessForView createdAt")
         .sort({ createdAt: -1 });
 
-    // ✅ Handle empty results
+    // ✅ Handle empty results gracefully
     if (!members || members.length === 0) {
-        throw new ApiError(statusCode.NOT_FOUND, "No user-members found for this parent user");
+        return res.status(statusCode.OK).json(
+            new ApiResponse(
+                statusCode.OK,
+                { count: 0, members: [] },
+                "No user-members found for this parent user"
+            )
+        );
     }
+
 
     // ✅ Success response
     return res.status(statusCode.OK).json(
@@ -320,7 +331,6 @@ const getUserProfile = catchAsyncError(async (req, res, next) => {
         )
     );
 });
-
 const getTransactions = catchAsyncError(async (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader?.startsWith("Bearer ")) {
@@ -421,12 +431,66 @@ const getTransactions = catchAsyncError(async (req, res) => {
     );
 });
 
+const updateMemberUnderUser = catchAsyncError(async (req, res, next) => {
+    const { memberId } = req.params; // ✅ pass memberId in URL
+    const { name, email, password, confirmPassword } = req.body;
+    const { _id: parentId } = req.user;
 
+    // ✅ Check member existence
+    const member = await UserModel.findOne({
+        _id: memberId,
+        parentUserId: parentId, // only allow parent to update their members
+        role: "user-member",
+    });
 
+    if (!member) {
+        throw new ApiError(statusCode.NOT_FOUND, "Member not found or not under your account");
+    }
 
+    // ✅ Validate password fields if provided
+    if ((password && !confirmPassword) || (!password && confirmPassword)) {
+        throw new ApiError(statusCode.BAD_REQUEST, "Both password and confirmPassword are required");
+    }
+
+    if (password && confirmPassword && password !== confirmPassword) {
+        throw new ApiError(statusCode.BAD_REQUEST, "Passwords do not match");
+    }
+
+    // ✅ If email is updated, check duplication
+    if (email && email !== member.email) {
+        const existingUser = await UserModel.findOne({ email });
+        if (existingUser) {
+            throw new ApiError(statusCode.BAD_REQUEST, "Email already exists");
+        }
+        member.email = email;
+    }
+
+    // ✅ Update name if provided
+    if (name) member.fullName = name;
+
+    // ✅ Update password (hashed automatically if you have pre-save hook)
+    if (password && confirmPassword) member.password = password;
+
+    await member.save();
+
+    // ✅ Populate parent info for response
+    await member.populate({
+        path: "parentUserId",
+        select: "fullName email role branch",
+    });
+
+    return res.status(statusCode.OK).json(
+        new ApiResponse(
+            statusCode.OK,
+            { member },
+            "Member details updated successfully"
+        )
+    );
+});
 
 module.exports = {
     addMemberUnderUser,
+    updateMemberUnderUser,
     loginUser,
     getAllMembersUnderUser,
     deleteMemberByUserId,
