@@ -49,9 +49,8 @@ const {
   BranchModel,
 } = require("../../models/admin-module/branch/branches.model");
 
+const { DeviceTokensModel } = require("../../models/global-module/device-tokens/device-tokens.model");
 const generateCustomId = require("../../utils/customId/generateCustomId");
-const userHistoryModel = require("../../models/user-module/users/userHistory.model");
-
 // ==============================================
 const registerUserWithEmailAndPhoneNumber = async ({
   req,
@@ -270,11 +269,60 @@ const loginUserWithEmailAndPhoneNumber = async ({
   return new ApiResponse(statusCode.OK, data, `Login Successfully`);
 };
 
+// const logoutUserFunc = async ({ req, res }) => {
+//   const { accessToken, refreshToken } = req.cookies || req.body;
+
+//   if (!accessToken || !refreshToken) {
+//     throw new ApiError(statusCode.UNAUTHORIZED, {}, `Unauthorized`);
+//   }
+
+//   // 🔹 Step 1: Decode the token to get userId
+//   let decoded;
+//   try {
+//     decoded = jwt.verify(accessToken, access_token_secret);
+//   } catch (err) {
+//     throw new ApiError(statusCode.UNAUTHORIZED, {}, "Invalid access token");
+//   }
+
+//   // 🔹 Step 2: Check user status
+//   const user = await UserModel.findById(decoded?._id).select("verificationStatus");
+//   if (user?.verificationStatus === "blocked") {
+//     // If blocked → immediately blacklist tokens
+//     await BlackListTokenModel.create({ accessToken, refreshToken });
+
+//     const cookieOptions = {
+//       httpOnly: true,
+//       secure: node_env === "production",
+//       sameSite: "strict",
+//       expires: new Date(0),
+//     };
+//     res.cookie("accessToken", "", cookieOptions);
+//     res.cookie("refreshToken", "", cookieOptions);
+
+//     return new ApiResponse(statusCode.FORBIDDEN, {}, "Your account has been blocked. You have been logged out.");
+//   }
+
+//   // 🔹 Step 3: Normal logout flow
+//   await BlackListTokenModel.create({ accessToken, refreshToken });
+
+//   const cookieOptions = {
+//     httpOnly: true,
+//     secure: node_env === "production",
+//     sameSite: "strict",
+//     expires: new Date(0),
+//   };
+//   res.cookie("accessToken", "", cookieOptions);
+//   res.cookie("refreshToken", "", cookieOptions);
+
+//   return new ApiResponse(statusCode.OK, {}, `Logout Successfully`);
+// };
+
+
 const logoutUserFunc = async ({ req, res }) => {
   const { accessToken, refreshToken } = req.cookies || req.body;
 
   if (!accessToken || !refreshToken) {
-    throw new ApiError(statusCode.UNAUTHORIZED, {}, `Unauthorized`);
+    throw new ApiError(statusCode.UNAUTHORIZED, {}, "Unauthorized");
   }
 
   // 🔹 Step 1: Decode the token to get userId
@@ -286,38 +334,42 @@ const logoutUserFunc = async ({ req, res }) => {
   }
 
   // 🔹 Step 2: Check user status
-  const user = await UserModel.findById(decoded?._id).select("verificationStatus");
+  const user = await UserModel.findById(decoded?.userId || decoded?._id)
+    .select("verificationStatus");
+
   if (user?.verificationStatus === "blocked") {
-    // If blocked → immediately blacklist tokens
     await BlackListTokenModel.create({ accessToken, refreshToken });
+    await DeviceTokensModel.deleteOne({ token: accessToken }); // ✅ also remove session
 
-    const cookieOptions = {
-      httpOnly: true,
-      secure: node_env === "production",
-      sameSite: "strict",
-      expires: new Date(0),
-    };
-    res.cookie("accessToken", "", cookieOptions);
-    res.cookie("refreshToken", "", cookieOptions);
-
-    return new ApiResponse(statusCode.FORBIDDEN, {}, "Your account has been blocked. You have been logged out.");
+    clearAuthCookies(res);
+    return new ApiResponse(
+      statusCode.FORBIDDEN,
+      {},
+      "Your account has been blocked. You have been logged out."
+    );
   }
 
   // 🔹 Step 3: Normal logout flow
   await BlackListTokenModel.create({ accessToken, refreshToken });
 
+  // ✅ Remove device session
+  await DeviceTokensModel.deleteOne({ token: accessToken });
+
+  clearAuthCookies(res);
+  return new ApiResponse(statusCode.OK, {}, "Logout Successfully");
+};
+
+// 🔹 Helper to clear cookies
+const clearAuthCookies = (res) => {
   const cookieOptions = {
     httpOnly: true,
-    secure: node_env === "production",
+    secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
     expires: new Date(0),
   };
   res.cookie("accessToken", "", cookieOptions);
   res.cookie("refreshToken", "", cookieOptions);
-
-  return new ApiResponse(statusCode.OK, {}, `Logout Successfully`);
 };
-
 
 const refreshTokenFunc = async ({ req, res, reqModel, typeOfUser }) => {
   const token =
@@ -570,8 +622,8 @@ const resendOtpWithoutTokenFunc = async ({ req, res, reqModel }) => {
 // };
 
 // version 2 of the function to verify otp without token
-const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
-  const { email, phoneNumber, emailOrPhone, otp } = req.body;
+const verifyOtpFunc = async ({ req, reqModel, res, historyModel, typeOfUser }) => {
+  const { email, phoneNumber, emailOrPhone, otp, } = req.body;
   const identifier = emailOrPhone || email || phoneNumber;
 
   if (!identifier) {
@@ -596,18 +648,18 @@ const verifyOtpFunc = async ({ req, reqModel, res, typeOfUser }) => {
     isEmail ? { email: identifier } : { phoneNumber: identifier }
   );
 
-  const existingHistory = await userHistoryModel.findOne(
-    isEmail
-      ? { $or: [{ previousEmail: emailOrPhone.toLowerCase() }, { newEmail: emailOrPhone.toLowerCase() }] }
-      : { $or: [{ previousPhoneNumber: emailOrPhone }, { newPhoneNumber: emailOrPhone }] }
-  );
+  // const existingHistory = await historyModel.findOne(
+  //   isEmail
+  //     ? { $or: [{ previousEmail: emailOrPhone.toLowerCase() }, { newEmail: emailOrPhone.toLowerCase() }] }
+  //     : { $or: [{ previousPhoneNumber: emailOrPhone }, { newPhoneNumber: emailOrPhone }] }
+  // );
 
-  if (existingHistory) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `This ${isEmail ? "email" : "phone number"} was used previously and cannot be registered again`
-    );
-  }
+  // if (existingHistory) {
+  //   throw new ApiError(
+  //     statusCode.BAD_REQUEST,
+  //     `This ${isEmail ? "email" : "phone number"} was used previously and cannot be registered again`
+  //   );
+  // }
 
   if (!user) {
     throw new ApiError(statusCode.NOT_FOUND, "User not found");
@@ -743,7 +795,7 @@ const checkUserVerificationStatus = async ({ req, res, reqModel }) => {
   return new ApiResponse(statusCode.OK, data, "User verification status");
 };
 
-const addEmailOrPhoneNumberFunc = async ({ req, res, reqModel }) => {
+const addEmailOrPhoneNumberFunc = async ({ req, res, reqModel, historyModel }) => {
   const { _id } = req.user;
   const { emailOrPhone, otp } = req.body;
 
@@ -776,19 +828,6 @@ const addEmailOrPhoneNumberFunc = async ({ req, res, reqModel }) => {
       `User already exists with this ${isEmail ? "email" : "phone number"}!`
     );
   }
-
-
-  // const isDuplicateInHistory = await UserHistory.findOne(
-  //   isEmail
-  //     ? { $or: [{ previousEmail: emailOrPhone.toLowerCase() }, { newEmail: emailOrPhone.toLowerCase() }] }
-  //     : { $or: [{ previousPhoneNumber: emailOrPhone }, { newPhoneNumber: emailOrPhone }] }
-  // );
-
-  // if (isDuplicateInUser || isDuplicateInHistory) {
-  //   throw new Error("This email/phone was already used or exists");
-  // }
-
-
   const otpInDb = await OtpModel.findOne({
     ...(isEmail && { email: emailOrPhone }),
     ...(isPhoneNumber && { phoneNumber: emailOrPhone }),
@@ -804,9 +843,8 @@ const addEmailOrPhoneNumberFunc = async ({ req, res, reqModel }) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid OTP");
   }
 
-  // ✅ Create history entry before updating user
   if ((isEmail && user.email !== emailOrPhone) || (isPhoneNumber && user.phoneNumber !== emailOrPhone)) {
-    await userHistoryModel.create({
+    await historyModel.create({
       userId: user._id,
       previousEmail: isEmail ? user.email : undefined,
       newEmail: isEmail ? emailOrPhone.toLowerCase() : undefined,
@@ -1206,6 +1244,7 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
   req,
   res,
   reqModel,
+  historyModel,
   typeOfUser,
 }) => {
   try {
@@ -1230,18 +1269,18 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
     const userField = isEmail ? "email" : "phoneNumber";
     let user = await reqModel.findOne({ [userField]: emailOrPhone });
 
-    const existingHistory = await userHistoryModel.findOne(
-      isEmail
-        ? { $or: [{ previousEmail: emailOrPhone.toLowerCase() }, { newEmail: emailOrPhone.toLowerCase() }] }
-        : { $or: [{ previousPhoneNumber: emailOrPhone }, { newPhoneNumber: emailOrPhone }] }
-    );
+    // const existingHistory = await historyModel.findOne(
+    //   isEmail
+    //     ? { $or: [{ previousEmail: emailOrPhone.toLowerCase() }, { newEmail: emailOrPhone.toLowerCase() }] }
+    //     : { $or: [{ previousPhoneNumber: emailOrPhone }, { newPhoneNumber: emailOrPhone }] }
+    // );
 
-    if (existingHistory) {
-      throw new ApiError(
-        statusCode.BAD_REQUEST,
-        `This ${isEmail ? "email" : "phone number"} was used previously and cannot be registered again`
-      );
-    }
+    // if (existingHistory) {
+    //   throw new ApiError(
+    //     statusCode.BAD_REQUEST,
+    //     `This ${isEmail ? "email" : "phone number"} was used previously and cannot be registered again`
+    //   );
+    // }
 
 
     if (!user) {

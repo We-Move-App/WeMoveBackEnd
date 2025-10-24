@@ -46,6 +46,7 @@ const {
 const ejs = require("ejs");
 const path = require("path");
 const generateUniqueCardNumber = require("../../../utils/customId/generateUniqueCardNumber");
+const busOperatorHistoryModel = require("../../../models/bus-module/bus-operator/bus-operatorHistory.model");
 
 // =====================|| REGISTER DRIVER ||==========================
 const registerBusOperator = catchAsyncError(async (req, res, next) => {
@@ -354,6 +355,8 @@ const addEmailOrPhone = catchAsyncError(async (req, res, next) => {
     req,
     res,
     reqModel: BusOperatorModel,
+    historyModel: busOperatorHistoryModel,
+    req
   });
   return res.status(statusCode.OK).json(result);
 });

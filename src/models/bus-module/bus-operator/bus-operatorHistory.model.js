@@ -29,7 +29,7 @@ const busOperatorHistorySchema = new Schema(
         },
         changedBy: {
             type: Schema.Types.ObjectId,
-            ref: "BusOperator", // who made the change (admin or parent)
+            ref: "BusOperator", 
         },
         changedAt: {
             type: Date,

@@ -28,6 +28,7 @@ const {
   verifyEmailExistFunc,
   verifyOtpFunc,
 } = require("../../../utils/services/functions.services");
+const userHistoryModel = require("../../../models/user-module/users/userHistory.model");
 
 //=====================|| REGISTER USER ||============================
 // const registerUserWithOtp = catchAsyncError(async (req, res, next) => {
@@ -65,6 +66,7 @@ const registerUserWithOtp = catchAsyncError(async (req, res, next) => {
     req,
     res,
     reqModel: UserModel,
+    historyModel: userHistoryModel,
     typeOfUser: TypeOfUser.USER,
   });
 
@@ -179,6 +181,7 @@ const addEmailOrPhone = catchAsyncError(async (req, res, next) => {
     req,
     res,
     reqModel: UserModel,
+    historyModel: userHistoryModel,
   });
   return res.status(statusCode.OK).json(result);
 });
@@ -230,6 +233,7 @@ const verifyOTP = catchAsyncError(async (req, res, next) => {
     req,
     res,
     reqModel: UserModel,
+    historyModel: userHistoryModel,
     typeOfUser: TypeOfUser.USER,
   });
   const { accessToken, refreshToken, reqData } = result;
