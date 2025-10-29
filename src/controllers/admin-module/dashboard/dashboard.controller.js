@@ -11,6 +11,7 @@ const BusOperatorModel = require("../../../models/bus-module/bus-operator/bus-op
 const HotelManagerModel = require("../../../models/hotel-module/hotel-manager/hotel-manager.model");
 const RideBookingModel = require("../../../models/new-driver-module/booking-details/booking-details.model");
 const DriverBasicDetailsModel = require("../../../models/new-driver-module/basic-details/basic-details.model");
+const UserModel = require("../../../models/user-module/users/user.model");
 
 // More than 100 needed then
 // function calcTrend(current, previous) {
@@ -526,4 +527,33 @@ const getTopAnalytics = catchAsyncError(async (req, res) => {
     .json(new ApiResponse(statusCode.OK, result, "Data fetched successfully"));
 });
 
-module.exports = { getTopAnalytics };
+const getTotalCounts = catchAsyncError(async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+
+  const userCount = await UserModel.countDocuments();
+  const busOperatorsCount = await BusOperatorModel.countDocuments();
+  const hotelManagerCount = await HotelManagerModel.countDocuments();
+  const driversCount = await DriverBasicDetailsModel.countDocuments();
+
+  const result = {
+    users: userCount,
+    busOperators: busOperatorsCount,
+    hotelManagers: hotelManagerCount,
+    drivers: driversCount,
+  };
+
+  return res
+    .status(statusCode.OK)
+    .json(new ApiResponse(statusCode.OK, result, "Count fetched"));
+});
+
+module.exports = { getTopAnalytics, getTotalCounts };
