@@ -70,6 +70,12 @@ const userSchema = new mongoose.Schema(
       ],
       default: "submitted",
     },
+    remarks: {
+      type: String,
+      default: "", // optional by default
+      trim: true,
+    },
+
     accessForView: {
       type: Boolean,
       default: false,
@@ -106,7 +112,7 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["male", "female"],
     },
-    address: { type: String },
+
     emailVerified: { type: Boolean, default: false },
     phoneVerified: { type: Boolean, default: false },
     branch: {

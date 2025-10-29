@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 const addressSchema = new mongoose.Schema(
   {
     address: { type: String, trim: true },
+    zoneCode: { type: String, trim: true },
+    area: { type: String, trim: true },
     townCity: { type: String, trim: true },
     landmark: { type: String, trim: true },
     locality: { type: String, trim: true },

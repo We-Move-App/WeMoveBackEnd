@@ -77,6 +77,13 @@ const busOperatorSchema = new mongoose.Schema(
       enum: ["submitted", "processing", "approved", "rejected", "blocked"],
       default: "submitted",
     },
+
+    remarks: {
+      type: String,
+      default: "", // optional by default
+      trim: true,
+    },
+
     authorities: { type: Schema.Types.Mixed, default: {} },
     permissions: {
       type: defaultPermissions,

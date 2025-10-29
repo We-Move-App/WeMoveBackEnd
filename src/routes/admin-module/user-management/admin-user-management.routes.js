@@ -7,6 +7,8 @@ const {
   getAllUsers,
   getSingleUser,
   verifyUserProfile,
+  getAllUsersBookings,
+
 } = require("../../../controllers/admin-module/user-management/admin-users.controlllers");
 const adminUserManagementRoutes = express.Router();
 
@@ -15,7 +17,7 @@ adminUserManagementRoutes
   .get(isAdminAuthenticated, authorizeRole(["SuperAdmin", "Admin"]), getAllUsers);
 
 adminUserManagementRoutes
-  .route("/users/:userId")
+  .route("/users/:_id")
   .get(
     isAdminAuthenticated,
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
@@ -28,6 +30,15 @@ adminUserManagementRoutes
     isAdminAuthenticated,
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
     verifyUserProfile
+  );
+
+
+adminUserManagementRoutes
+  .route("/bookings")
+  .get(
+    isAdminAuthenticated,
+    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+    getAllUsersBookings
   );
 
 module.exports = {

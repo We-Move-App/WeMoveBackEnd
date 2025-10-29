@@ -112,8 +112,8 @@ const getTransactionsSuperAdmin = catchAsyncError(async (req, res) => {
       {
         transactions,
         totalCount,
-        totalPages: Math.ceil(totalCount / pageLimit),
-        currentPage: pageNumber,
+        totalPages: Math.ceil(totalCount / limit),
+        currentPage: page,
         pageSize: transactions.length,
       },
       "Transactions fetched successfully"

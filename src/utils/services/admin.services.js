@@ -122,7 +122,7 @@ const getUserByIdByAdmin = async ({
   return new ApiResponse(statusCode.OK, result, `Data found Successfully`);
 };
 const userVerifiedByAdmin = async ({ req, model }) => {
-  const { status } = req.body;
+  const { status , remarks } = req.body;
   const { userId } = req.params;
   if (!userId || !status) {
     throw new ApiError(
@@ -130,16 +130,35 @@ const userVerifiedByAdmin = async ({ req, model }) => {
       "Please enter Id in params and status in body"
     );
   }
+  // 2️⃣ If status is 'blocked', remarks becomes required
+  if (status.toLowerCase() === "blocked" && (!remarks || remarks.trim() === "")) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Remarks are required when blocking a user"
+    );
+  }
+
+
+
   const isUser = await model.findOne({ _id: userId });
   if (!isUser) {
     throw new ApiError(statusCode.NOT_FOUND, "User not found");
   }
   isUser.verificationStatus = status;
 
+  
+
   isUser.verifiedBy = {
     createdAt: new Date().toISOString(),
     admin: req.user._id,
   };
+
+  if (remarks) {
+    isUser.remarks = remarks.trim();
+  } else {
+    // Optional: clear previous remarks if status is not blocked
+    isUser.remarks = "";
+  }
 
   await isUser.save();
 

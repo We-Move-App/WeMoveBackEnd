@@ -49,6 +49,7 @@ const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
   const { phoneNo, otp } = req.body;
 
   if (!phoneNo || !otp) {
+    
     throw new ApiError(
       statusCode.BAD_REQUEST,
       "Phone number and OTP are required"

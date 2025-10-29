@@ -12,16 +12,16 @@ const catchAsyncError = require("../../../utils/response/catchAsyncError");
 
 const createAddress = catchAsyncError(async (req, res, next) => {
   const { _id } = req.user;
-  const { address, townCity, landmark, pincode, coordinates, state, country } =
+  const { zoneCode, area, townCity, landmark } =
     req.body;
 
-  if (!address || !townCity || !pincode || !landmark) {
+  if (!zoneCode || !townCity || !area) {
     logger.warn(
       "Validation failed. Missing required fields in the request body."
     );
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Address, townCity, landmark, pincode are required."
+      "zoneCode, area, and townCity are required fields."
     );
   }
 
@@ -36,13 +36,10 @@ const createAddress = catchAsyncError(async (req, res, next) => {
   // Create new address document
   const newAddress = new AddressModel({
     // userId: _id,
-    address,
+    zoneCode,
+    area,
     townCity,
     landmark,
-    pincode,
-    coordinates,
-    state,
-    country,
   });
 
   const userAddress = new UserAddressModel({
@@ -85,13 +82,14 @@ const getAddress = catchAsyncError(async (req, res, next) => {
 
 const updateAddress = catchAsyncError(async (req, res, next) => {
   const userId = req.user?._id;
-  const { address, townCity, landmark, pincode, coordinates, state, country } =
+  const { zoneCode, area, townCity } =
     req.body;
+  console.log(zoneCode, area, townCity);
 
-  if (!address || !townCity || !landmark || !pincode) {
+  if (!zoneCode || !townCity || !area) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Address, townCity, landmark, and pincode are required."
+      "zoneCode, area, and townCity are required fields."
     );
   }
   const userAddress = await UserAddressModel.findOne({ userId });
@@ -106,14 +104,9 @@ const updateAddress = catchAsyncError(async (req, res, next) => {
       "Address not found for the provided user."
     );
   }
-
-  addressToUpdate.address = address;
+  addressToUpdate.zoneCode = zoneCode;
+  addressToUpdate.area = area;
   addressToUpdate.townCity = townCity;
-  addressToUpdate.landmark = landmark;
-  addressToUpdate.pincode = pincode;
-  addressToUpdate.coordinates = coordinates;
-  addressToUpdate.state = state;
-  addressToUpdate.country = country;
 
   await addressToUpdate.save();
 

@@ -563,9 +563,6 @@ const resetSecurePin = catchAsyncError(async (req, res) => {
     )
   );
 });
-
-
-
 const deleteDriverProfile = catchAsyncError(async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
@@ -615,6 +612,113 @@ const deleteDriverProfile = catchAsyncError(async (req, res, next) => {
     );
 });
 
+
+const updateDriverEmailOrPhoneFunc = async (req, res) => {
+
+  console.log("Request Body: Amit", req.body); // Debugging line 
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const driverId = decoded?.driverId;
+
+  const { emailOrPhone, otp } = req.body;
+
+  if (!emailOrPhone) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Please enter email or phone");
+  }
+
+  const driver = await DriverBasicDetails.findOne({ driverId });
+  if (!driver) {
+    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+  }
+
+  const isEmail = validateEmail(emailOrPhone);
+  const isPhoneNumber = validatePhoneNumber(emailOrPhone);
+
+  if (!isEmail && !isPhoneNumber) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Enter a valid email or phone number"
+    );
+  }
+
+  // Check if email/phone already exists in DriverBasicDetails
+  const isDriverExistWithThis = await DriverBasicDetails.findOne(
+    isEmail ? { email: emailOrPhone.toLowerCase() } : { phoneNo: emailOrPhone }
+  );
+
+  if (isDriverExistWithThis) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      `Driver already exists with this ${isEmail ? "email" : "phone number"}!`
+    );
+  }
+
+  // OTP verification
+  const otpInDb = await OtpModel.findOne({
+    ...(isEmail && { email: emailOrPhone }),
+    ...(isPhoneNumber && { phoneNumber: emailOrPhone }),
+    ownerId: driver._id,
+    isUsed: false,
+  });
+
+  if (!otpInDb) {
+    throw new ApiError(statusCode.NOT_FOUND, "Expired or used OTP");
+  }
+
+  if (otpInDb.otp !== otp) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid OTP");
+  }
+
+  // Save driver history if value changed
+  if ((isEmail && driver.email !== emailOrPhone) || (isPhoneNumber && driver.phoneNo !== emailOrPhone)) {
+    await DriverHistory.create({
+      driverId: driver._id,
+      previousEmail: isEmail ? driver.email : undefined,
+      newEmail: isEmail ? emailOrPhone.toLowerCase() : undefined,
+      previousPhoneNumber: isPhoneNumber ? driver.phoneNo : undefined,
+      newPhoneNumber: isPhoneNumber ? emailOrPhone : undefined,
+      changedBy: driver._id,
+    });
+  }
+
+  // Update driver and mark as verified
+  if (isEmail) {
+    driver.email = emailOrPhone.toLowerCase();
+    driver.emailVerified = true;
+  }
+
+  if (isPhoneNumber) {
+    driver.phoneNo = emailOrPhone;
+    driver.phoneVerified = true;
+  }
+
+  otpInDb.isUsed = true;
+
+  await Promise.all([otpInDb.save(), driver.save()]);
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        driverId: driver.driverId,
+        phoneNo: driver.phoneNo,
+        email: driver.email,
+      },
+      `Driver ${isEmail ? "email" : "phone number"} updated and verified successfully`
+    )
+  );
+};
+
+
 module.exports = {
   addDriverBasicDetails,
   getDriverBasicDetails,
@@ -624,4 +728,5 @@ module.exports = {
   updatePin,
   resetSecurePin,
   deleteDriverProfile,
+  updateDriverEmailOrPhoneFunc,
 };

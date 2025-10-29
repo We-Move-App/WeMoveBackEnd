@@ -30,6 +30,8 @@ const {
 } = require("../../../utils/services/functions.services");
 const userHistoryModel = require("../../../models/user-module/users/userHistory.model");
 
+
+
 //=====================|| REGISTER USER ||============================
 // const registerUserWithOtp = catchAsyncError(async (req, res, next) => {
 //   logger.info("Driver is registering with OTP");
@@ -107,11 +109,18 @@ const loginUser = catchAsyncError(async (req, res, next) => {
 });
 
 // =====================|| LOGOUT USER ||====================================
+// =====================|| LOGOUT USER ||====================================
 const logoutUser = catchAsyncError(async (req, res, next) => {
-  const result = await logoutUserFunc({ req, res });
+  const result = await logoutUserFunc({
+    req,
+    res,
+    reqModel: UserModel,
 
-  return res.status(statusCode.OK).json(result);
+  });
+
+  return res.status(result.statusCode || 200).json(result);
 });
+
 
 // =====================|| REFRESH TOKEN ||==================================
 const refreshToken = catchAsyncError(async (req, res, next) => {
@@ -234,6 +243,7 @@ const verifyOTP = catchAsyncError(async (req, res, next) => {
     res,
     reqModel: UserModel,
     historyModel: userHistoryModel,
+    deviceTokenModel: UserDeviceTokenModel,
     typeOfUser: TypeOfUser.USER,
   });
   const { accessToken, refreshToken, reqData } = result;

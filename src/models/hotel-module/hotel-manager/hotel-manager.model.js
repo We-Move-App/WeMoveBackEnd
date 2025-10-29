@@ -80,6 +80,13 @@ const hotelManagerSchema = new mongoose.Schema(
       ],
       default: "submitted",
     },
+    remarks: {
+      type: String,
+      default: "", // optional by default
+      trim: true,
+    },
+
+
     authorities: { type: Schema.Types.Mixed, default: {} },
     parentUserId: {
       type: Schema.Types.ObjectId,

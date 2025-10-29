@@ -37,6 +37,7 @@ const {
   AdminModel,
 } = require("../../../models/admin-module/admin/admin.model");
 const { UserAddressModel } = require("../../../models/user-module/user-address/user-address.model");
+const { AddressModel } = require("../../../models/global-module/address/address.model");
 
 const getProfile = catchAsyncError(async (req, res, next) => {
   const result = await getUserProfileFunc({
@@ -47,7 +48,7 @@ const getProfile = catchAsyncError(async (req, res, next) => {
     bankModel: UserBankModel,
   });
 
- 
+
 
   const userId = result?.data?.user?._id;
   if (!userId) {
@@ -82,25 +83,35 @@ const getAvatar = catchAsyncError(async (req, res, next) => {
 
 const updateYourProfile = catchAsyncError(async (req, res, next) => {
   const userId = req.user?._id;
-  const { fullName, dob, nationality, nationIdExpiry, termAndConditions, gender, address } =
-    req.body;
+  const {
+    fullName,
+    dob,
+    nationality,
+    nationIdExpiry,
+    termAndConditions,
+    gender,
+
+    zoneCode,
+    area,
+    townCity,
+  } = req.body;
   const docsToUpload = req.files;
 
-  const keys = Object.keys(req.files);
+  const keys = Object.keys(docsToUpload || {});
 
   const reqField = ["fullName", "dob", "nationality", "nationIdExpiry"];
   validateRequestBody(reqField, req.body);
 
+  // Prepare update data
   const updateData = {};
   if (fullName) updateData.fullName = fullName;
-
   if (dob) updateData.dob = dob;
-  if (address) updateData.address = address;
   if (gender) updateData.gender = gender;
   if (nationality) updateData.nationality = nationality;
   if (nationIdExpiry) updateData.nationIdExpiry = nationIdExpiry;
   if (termAndConditions) updateData.termAndConditions = termAndConditions;
 
+  // Valid document types
   const validDocumentTypes = [
     "national_identity_card_front",
     "national_identity_card_back",
@@ -113,11 +124,14 @@ const updateYourProfile = catchAsyncError(async (req, res, next) => {
       `Invalid document types: ${invalidKeys.join(", ")}`
     );
   }
-  // Check for existing documents with the same keys
+
+  // Fetch existing document record
   const userDocument = await UserDocumentModel.findOne({ userId });
 
   let docsIds = [];
-  if (Object.keys(docsToUpload).length > 0) {
+
+  // Upload and create new docs if present
+  if (keys.length > 0) {
     for (const key of keys) {
       const imgFile = docsToUpload[key][0];
       const cloudImage = await uploadImageOnAws(imgFile.path);
@@ -135,6 +149,8 @@ const updateYourProfile = catchAsyncError(async (req, res, next) => {
       docsIds.push(uploadedDoc._id);
     }
   }
+
+  // Update user profile
   const updatedUser = await UserModel.findByIdAndUpdate(userId, updateData, {
     new: true,
     runValidators: true,
@@ -144,28 +160,87 @@ const updateYourProfile = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.NOT_FOUND, "User not found.");
   }
 
-  if (Object.keys(docsToUpload).length > 0) {
+  // Document update logic
+  if (keys.length > 0) {
     if (!userDocument) {
+      // If no record exists, create a new one
       await UserDocumentModel.create({
         userId,
         documentIds: docsIds,
       });
     } else {
+      // Remove old docs with same type before adding new ones
+      const existingDocs = await DocumentsModel.find({
+        _id: { $in: userDocument.documentIds },
+      });
+
+      const filteredDocs = existingDocs.filter(
+        (doc) => !keys.includes(doc.documentType)
+      );
+
+      // Keep only filtered (non-replaced) doc IDs
+      userDocument.documentIds = filteredDocs.map((doc) => doc._id);
+
+      // Add new uploaded docs
       userDocument.documentIds.push(...docsIds);
       await userDocument.save();
     }
   }
+  let updatedAddress = null;
+  if (zoneCode && area && townCity) {
+    let userAddress = await UserAddressModel.findOne({ userId });
 
-  return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(
-        statusCode.OK,
-        updatedUser,
-        "Profile updated successfully."
-      )
-    );
+    if (!userAddress) {
+      // 🆕 Create new address and link
+      const newAddress = await AddressModel.create({
+        zoneCode,
+        area,
+        townCity,
+      });
+
+      userAddress = await UserAddressModel.create({
+        userId,
+        address: newAddress._id,
+      });
+
+      updatedAddress = newAddress;
+    } else {
+      // 📝 Update existing address
+      const addressId = userAddress.address?._id;
+      let addressToUpdate = await AddressModel.findById(addressId);
+
+      if (!addressToUpdate) {
+        throw new ApiError(
+          statusCode.NOT_FOUND,
+          "Address not found for the provided user."
+        );
+      }
+
+      addressToUpdate.zoneCode = zoneCode;
+      addressToUpdate.area = area;
+      addressToUpdate.townCity = townCity;
+
+      await addressToUpdate.save();
+      updatedAddress = addressToUpdate;
+    }
+  }
+
+  // ✅ Send final response
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        user: updatedUser,
+        address: updatedAddress,
+
+      },
+      "Profile updated successfully."
+    )
+  );
 });
+
+
+
 
 const changePassword = catchAsyncError(async (req, res, next) => {
   const result = await changePasswordFunc({

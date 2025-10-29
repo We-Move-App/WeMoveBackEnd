@@ -49,7 +49,6 @@ const {
   BranchModel,
 } = require("../../models/admin-module/branch/branches.model");
 
-const { DeviceTokensModel } = require("../../models/global-module/device-tokens/device-tokens.model");
 const generateCustomId = require("../../utils/customId/generateCustomId");
 // ==============================================
 const registerUserWithEmailAndPhoneNumber = async ({
@@ -269,79 +268,50 @@ const loginUserWithEmailAndPhoneNumber = async ({
   return new ApiResponse(statusCode.OK, data, `Login Successfully`);
 };
 
-// const logoutUserFunc = async ({ req, res }) => {
-//   const { accessToken, refreshToken } = req.cookies || req.body;
+const logoutUserFunc = async ({ req, res, reqModel }) => {
+  // 🔹 Step 1: Extract tokens from multiple sources
+  let accessToken =
+    req.cookies?.accessToken ||
+    req.headers.authorization?.split(" ")[1] ||
+    req.body?.accessToken;
 
-//   if (!accessToken || !refreshToken) {
-//     throw new ApiError(statusCode.UNAUTHORIZED, {}, `Unauthorized`);
-//   }
+  // let refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
-//   // 🔹 Step 1: Decode the token to get userId
-//   let decoded;
-//   try {
-//     decoded = jwt.verify(accessToken, access_token_secret);
-//   } catch (err) {
-//     throw new ApiError(statusCode.UNAUTHORIZED, {}, "Invalid access token");
-//   }
-
-//   // 🔹 Step 2: Check user status
-//   const user = await UserModel.findById(decoded?._id).select("verificationStatus");
-//   if (user?.verificationStatus === "blocked") {
-//     // If blocked → immediately blacklist tokens
-//     await BlackListTokenModel.create({ accessToken, refreshToken });
-
-//     const cookieOptions = {
-//       httpOnly: true,
-//       secure: node_env === "production",
-//       sameSite: "strict",
-//       expires: new Date(0),
-//     };
-//     res.cookie("accessToken", "", cookieOptions);
-//     res.cookie("refreshToken", "", cookieOptions);
-
-//     return new ApiResponse(statusCode.FORBIDDEN, {}, "Your account has been blocked. You have been logged out.");
-//   }
-
-//   // 🔹 Step 3: Normal logout flow
-//   await BlackListTokenModel.create({ accessToken, refreshToken });
-
-//   const cookieOptions = {
-//     httpOnly: true,
-//     secure: node_env === "production",
-//     sameSite: "strict",
-//     expires: new Date(0),
-//   };
-//   res.cookie("accessToken", "", cookieOptions);
-//   res.cookie("refreshToken", "", cookieOptions);
-
-//   return new ApiResponse(statusCode.OK, {}, `Logout Successfully`);
-// };
-
-
-const logoutUserFunc = async ({ req, res }) => {
-  const { accessToken, refreshToken } = req.cookies || req.body;
-
-  if (!accessToken || !refreshToken) {
-    throw new ApiError(statusCode.UNAUTHORIZED, {}, "Unauthorized");
+  if (!accessToken) {
+    throw new ApiError(statusCode.UNAUTHORIZED, {}, "Unauthorized: Missing tokens");
   }
 
-  // 🔹 Step 1: Decode the token to get userId
+  // 🔹 Step 2: Verify access token
   let decoded;
   try {
-    decoded = jwt.verify(accessToken, access_token_secret);
+    decoded = jwt.verify(accessToken, process.env.ACCESS_TOKEN_SECRET);
   } catch (err) {
-    throw new ApiError(statusCode.UNAUTHORIZED, {}, "Invalid access token");
+    throw new ApiError(statusCode.UNAUTHORIZED, {}, "Invalid or expired access token");
   }
 
-  // 🔹 Step 2: Check user status
-  const user = await UserModel.findById(decoded?.userId || decoded?._id)
-    .select("verificationStatus");
+  // 🔹 Step 3: Check if user is blocked
+  const user = await reqModel.findById(decoded?._id).select("verificationStatus");
 
+  // Common function for clearing cookies
+  const clearCookies = () => {
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      expires: new Date(0),
+    };
+    res.cookie("accessToken", "", cookieOptions);
+    res.cookie("refreshToken", "", cookieOptions);
+  };
+
+  // 🔹 Step 4: Blacklist tokens in all cases
+  await BlackListTokenModel.create({ accessToken });
+
+  // 🔹 Step 5: Clear cookies
+  clearCookies();
+
+  // 🔹 Step 6: Return appropriate response
   if (user?.verificationStatus === "blocked") {
-    await BlackListTokenModel.create({ accessToken, refreshToken });
-    await DeviceTokensModel.deleteOne({ token: accessToken }); // ✅ also remove session
-
-    clearAuthCookies(res);
     return new ApiResponse(
       statusCode.FORBIDDEN,
       {},
@@ -349,27 +319,64 @@ const logoutUserFunc = async ({ req, res }) => {
     );
   }
 
-  // 🔹 Step 3: Normal logout flow
-  await BlackListTokenModel.create({ accessToken, refreshToken });
-
-  // ✅ Remove device session
-  await DeviceTokensModel.deleteOne({ token: accessToken });
-
-  clearAuthCookies(res);
-  return new ApiResponse(statusCode.OK, {}, "Logout Successfully");
+  return new ApiResponse(statusCode.OK, {}, "Logout successful");
 };
 
-// 🔹 Helper to clear cookies
-const clearAuthCookies = (res) => {
+
+// const logoutUserFunc = async ({ req, res }) => {
+//   const { accessToken, refreshToken } = req.cookies || req.body;
+
+//   if (!accessToken || !refreshToken) {
+//     throw new ApiError(statusCode.UNAUTHORIZED, {}, "Unauthorized");
+//   }
+
+//   // 🔹 Decode the token
+//   let decoded;
+//   try {
+//     decoded = jwt.verify(accessToken, access_token_secret);
+//   } catch (err) {
+//     // Even if invalid, still blacklist and clear cookies
+//     await BlackListTokenModel.create({ accessToken, refreshToken }).catch(() => { });
+//     clearAuthCookies(res);
+//     throw new ApiError(statusCode.UNAUTHORIZED, {}, "Invalid access token");
+//   }
+
+//   const userId = decoded?._id;
+//   if (!userId) {
+//     throw new ApiError(statusCode.UNAUTHORIZED, {}, "Invalid token payload");
+//   }
+
+//   // 🔹 Check user status
+//   const user = await UserModel.findById(userId).select("verificationStatus");
+//   if (user?.verificationStatus === "blocked") {
+//     await BlackListTokenModel.create({ accessToken, refreshToken }).catch(() => { });
+//     await DeviceTokensModel.deleteMany({ user: userId }); // remove all sessions
+//     clearAuthCookies(res);
+//     return new ApiResponse(statusCode.FORBIDDEN, {}, "Your account has been blocked. You have been logged out.");
+//   }
+
+//   // 🔹 Remove current device session
+//   const hashedAccess = hashToken(accessToken);
+//   await DeviceTokensModel.deleteOne({ user: userId, token: hashedAccess }).catch(() => { });
+
+//   // 🔹 Blacklist tokens
+//   await BlackListTokenModel.create({ accessToken, refreshToken }).catch(() => { });
+
+//   // 🔹 Clear cookies
+//   clearAuthCookies(res);
+
+//   return new ApiResponse(statusCode.OK, {}, "Logout Successfully");
+// };
+function clearAuthCookies(res) {
   const cookieOptions = {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: node_env === "production",
     sameSite: "strict",
     expires: new Date(0),
   };
   res.cookie("accessToken", "", cookieOptions);
   res.cookie("refreshToken", "", cookieOptions);
-};
+}
 
 const refreshTokenFunc = async ({ req, res, reqModel, typeOfUser }) => {
   const token =
@@ -382,7 +389,7 @@ const refreshTokenFunc = async ({ req, res, reqModel, typeOfUser }) => {
     refreshToken: token,
   });
   if (blackListedToken) {
-    logger.info("Blacklisted token found, returning unauthorized");
+
     throw new ApiError(statusCode.UNAUTHORIZED, "Please login to continue");
   }
   let decodedToken;
@@ -622,7 +629,7 @@ const resendOtpWithoutTokenFunc = async ({ req, res, reqModel }) => {
 // };
 
 // version 2 of the function to verify otp without token
-const verifyOtpFunc = async ({ req, reqModel, res, historyModel, typeOfUser }) => {
+const verifyOtpFunc = async ({ req, reqModel, res, historyModel, deviceTokenModel, typeOfUser }) => {
   const { email, phoneNumber, emailOrPhone, otp, } = req.body;
   const identifier = emailOrPhone || email || phoneNumber;
 
@@ -691,10 +698,40 @@ const verifyOtpFunc = async ({ req, reqModel, res, historyModel, typeOfUser }) =
       cardNumber: await generateUniqueCardNumber(),
     });
   }
-
+  const hashToken = require("../../utils/hashToken/hashToken");
   // ✅ Tokens
   const { accessToken, refreshToken } = await generateTokens(user, typeOfUser);
+
+  res.clearCookie("accessToken");
+  res.clearCookie("refreshToken");
+
+
+
   setTokenCookies(res, accessToken, refreshToken);
+
+
+
+  const hashedAccessToken = hashToken(accessToken);
+  // ✅ Save device session
+
+  // Remove previous device sessions for this user (enforce single session)
+  try {
+    await deviceTokenModel.deleteMany({ userId: user._id });
+  } catch (err) {
+
+    console.error("Error deleting previous device sessions:", err);
+  }
+
+  // Create new device session entry
+  // const deviceType = req.body.deviceType || "web";
+  const ip = req.ip || req.headers["x-forwarded-for"] || null;
+  const userAgent = req.headers["user-agent"] || null;
+
+  await deviceTokenModel.create({
+    userId: user._id || user.id,
+    token: hashedAccessToken,
+    userAgent,
+  });
 
 
   const bankDetails = await UserBankModel.findOne({ userId: user._id });
