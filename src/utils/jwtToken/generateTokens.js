@@ -22,6 +22,7 @@ const REFRESH_TOKEN_EXPIRATION = refresh_token_expiration_time;
 const generateTokens = async (user, userType) => {
   const payload = {
     _id: user?._id,
+    userId: user.userId,
     email: user?.email,
     role: user?.role,
     authorities: user?.authorities,
@@ -30,9 +31,8 @@ const generateTokens = async (user, userType) => {
     userType: userType,
     phoneNumber: user?.phoneNumber,
     verificationStatus: user?.verificationStatus,
-    permissions: user.permissions || {}, 
-  branch: user?.branch?._id || user?.branch || null, 
-
+    permissions: user.permissions || {},
+    branch: user?.branch?._id || user?.branch || null,
   };
 
   const refreshTokenPayload = {

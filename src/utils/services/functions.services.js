@@ -278,7 +278,11 @@ const logoutUserFunc = async ({ req, res, reqModel }) => {
   // let refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
   if (!accessToken) {
-    throw new ApiError(statusCode.UNAUTHORIZED, {}, "Unauthorized: Missing tokens");
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      {},
+      "Unauthorized: Missing tokens"
+    );
   }
 
   // 🔹 Step 2: Verify access token
@@ -286,11 +290,17 @@ const logoutUserFunc = async ({ req, res, reqModel }) => {
   try {
     decoded = jwt.verify(accessToken, process.env.ACCESS_TOKEN_SECRET);
   } catch (err) {
-    throw new ApiError(statusCode.UNAUTHORIZED, {}, "Invalid or expired access token");
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      {},
+      "Invalid or expired access token"
+    );
   }
 
   // 🔹 Step 3: Check if user is blocked
-  const user = await reqModel.findById(decoded?._id).select("verificationStatus");
+  const user = await reqModel
+    .findById(decoded?._id)
+    .select("verificationStatus");
 
   // Common function for clearing cookies
   const clearCookies = () => {
@@ -321,7 +331,6 @@ const logoutUserFunc = async ({ req, res, reqModel }) => {
 
   return new ApiResponse(statusCode.OK, {}, "Logout successful");
 };
-
 
 // const logoutUserFunc = async ({ req, res }) => {
 //   const { accessToken, refreshToken } = req.cookies || req.body;
@@ -389,7 +398,6 @@ const refreshTokenFunc = async ({ req, res, reqModel, typeOfUser }) => {
     refreshToken: token,
   });
   if (blackListedToken) {
-
     throw new ApiError(statusCode.UNAUTHORIZED, "Please login to continue");
   }
   let decodedToken;
@@ -629,8 +637,15 @@ const resendOtpWithoutTokenFunc = async ({ req, res, reqModel }) => {
 // };
 
 // version 2 of the function to verify otp without token
-const verifyOtpFunc = async ({ req, reqModel, res, historyModel, deviceTokenModel, typeOfUser }) => {
-  const { email, phoneNumber, emailOrPhone, otp, } = req.body;
+const verifyOtpFunc = async ({
+  req,
+  reqModel,
+  res,
+  historyModel,
+  deviceTokenModel,
+  typeOfUser,
+}) => {
+  const { email, phoneNumber, emailOrPhone, otp } = req.body;
   const identifier = emailOrPhone || email || phoneNumber;
 
   if (!identifier) {
@@ -705,11 +720,7 @@ const verifyOtpFunc = async ({ req, reqModel, res, historyModel, deviceTokenMode
   res.clearCookie("accessToken");
   res.clearCookie("refreshToken");
 
-
-
   setTokenCookies(res, accessToken, refreshToken);
-
-
 
   const hashedAccessToken = hashToken(accessToken);
   // ✅ Save device session
@@ -718,7 +729,6 @@ const verifyOtpFunc = async ({ req, reqModel, res, historyModel, deviceTokenMode
   try {
     await deviceTokenModel.deleteMany({ userId: user._id });
   } catch (err) {
-
     console.error("Error deleting previous device sessions:", err);
   }
 
@@ -732,7 +742,6 @@ const verifyOtpFunc = async ({ req, reqModel, res, historyModel, deviceTokenMode
     token: hashedAccessToken,
     userAgent,
   });
-
 
   const bankDetails = await UserBankModel.findOne({ userId: user._id });
   const pinDetails = await SecurePinModel.findOne({ userId: user._id });
@@ -832,7 +841,12 @@ const checkUserVerificationStatus = async ({ req, res, reqModel }) => {
   return new ApiResponse(statusCode.OK, data, "User verification status");
 };
 
-const addEmailOrPhoneNumberFunc = async ({ req, res, reqModel, historyModel }) => {
+const addEmailOrPhoneNumberFunc = async ({
+  req,
+  res,
+  reqModel,
+  historyModel,
+}) => {
   const { _id } = req.user;
   const { emailOrPhone, otp } = req.body;
 
@@ -856,7 +870,9 @@ const addEmailOrPhoneNumberFunc = async ({ req, res, reqModel, historyModel }) =
   }
 
   const isUserExistWithThis = await reqModel.findOne(
-    isEmail ? { email: emailOrPhone.toLowerCase() } : { phoneNumber: emailOrPhone }
+    isEmail
+      ? { email: emailOrPhone.toLowerCase() }
+      : { phoneNumber: emailOrPhone }
   );
 
   if (isUserExistWithThis) {
@@ -880,7 +896,10 @@ const addEmailOrPhoneNumberFunc = async ({ req, res, reqModel, historyModel }) =
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid OTP");
   }
 
-  if ((isEmail && user.email !== emailOrPhone) || (isPhoneNumber && user.phoneNumber !== emailOrPhone)) {
+  if (
+    (isEmail && user.email !== emailOrPhone) ||
+    (isPhoneNumber && user.phoneNumber !== emailOrPhone)
+  ) {
     await historyModel.create({
       userId: user._id,
       previousEmail: isEmail ? user.email : undefined,
@@ -890,7 +909,6 @@ const addEmailOrPhoneNumberFunc = async ({ req, res, reqModel, historyModel }) =
       changedBy: user._id,
     });
   }
-
 
   // ✅ Update user and mark as verified
   if (isEmail) {
@@ -1301,7 +1319,6 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
       );
     }
 
-
     // 🔹 Create or find user
     const userField = isEmail ? "email" : "phoneNumber";
     let user = await reqModel.findOne({ [userField]: emailOrPhone });
@@ -1319,7 +1336,6 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
     //   );
     // }
 
-
     if (!user) {
       const userId = await generateCustomId(EntityCodeEnum.USER, "U");
 
@@ -1329,10 +1345,8 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
 
       user = new reqModel(userData);
 
-
       await user.save();
-    }
-    else {
+    } else {
       // 🚨 Blocked or Rejected users should NOT proceed
       if (["blocked", "rejected"].includes(user.verificationStatus)) {
         throw new ApiError(
@@ -1341,7 +1355,6 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
         );
       }
     }
-
 
     // 🔹 Send OTP using existing utils
     let otpData;
@@ -1364,8 +1377,6 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
       expiresAt: otpData.expiresAt,
     };
   } catch (error) {
-
-
     console.error("❌ Error in registerUserWithEmailOrPhoneAndOtp:", error);
     if (error instanceof ApiError) {
       // Already an ApiError → rethrow as-is

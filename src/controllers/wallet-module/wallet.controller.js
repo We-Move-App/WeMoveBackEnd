@@ -157,13 +157,13 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
 
   const jwtToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(jwtToken);
-  const senderId = decoded?._id;
+  const senderId = decoded?.userId;
 
   if (!senderId) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
 
-  const sender = await UserModel.findById(senderId);
+  const sender = await UserModel.findOne({ userId: senderId });
   if (!sender) {
     throw new ApiError(statusCode.NOT_FOUND, "Sender not found");
   }
@@ -177,7 +177,7 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.BAD_REQUEST, "Cannot send to yourself");
   }
 
-  const receiver = await UserModel.findById(receiverId);
+  const receiver = await UserModel.findOne({ userId: receiverId });
   if (!receiver) {
     throw new ApiError(statusCode.NOT_FOUND, "Receiver not found");
   }
@@ -186,7 +186,7 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
   session.startTransaction();
 
   try {
-    const senderWallet = await Wallet.findOne({ userId: senderId }).session(
+    const senderWallet = await Wallet.findOne({ userId: decoded._id }).session(
       session
     );
     if (!senderWallet) {
@@ -197,9 +197,9 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
       throw new ApiError(statusCode.BAD_REQUEST, "Insufficient balance");
     }
 
-    const receiverWallet = await Wallet.findOne({ userId: receiverId }).session(
-      session
-    );
+    const receiverWallet = await Wallet.findOne({
+      userId: receiver._id,
+    }).session(session);
     if (!receiverWallet) {
       throw new ApiError(statusCode.NOT_FOUND, "Receiver wallet not found");
     }
@@ -213,7 +213,7 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
     await Transaction.create(
       [
         {
-          userId: senderId,
+          userId: decoded._id,
           transactionId: uuidv4(),
           type: TransactionTypeEnum.DEBIT,
           amount,
@@ -228,7 +228,7 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
     await Transaction.create(
       [
         {
-          userId: receiverId,
+          userId: receiver._id,
           transactionId: uuidv4(),
           type: TransactionTypeEnum.CREDIT,
           amount,
@@ -267,9 +267,7 @@ const getTransactions = catchAsyncError(async (req, res) => {
 
   const decoded = decodeAccessToken(jwtToken);
 
-
   console.log("Decoded Token null:", decoded); // Debugging line
-
 
   const {
     entity,
@@ -282,11 +280,8 @@ const getTransactions = catchAsyncError(async (req, res) => {
 
   let driverIdFromToken = decoded?.driverId;
 
-
-
   console.log("User ID from Token:", userId);
   console.log("Driver ID from Token:", driverIdFromToken);
-
 
   if (entity === "driver" && !driverIdFromToken) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid driver token");

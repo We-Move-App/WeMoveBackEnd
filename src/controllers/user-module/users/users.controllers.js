@@ -36,8 +36,12 @@ const {
 const {
   AdminModel,
 } = require("../../../models/admin-module/admin/admin.model");
-const { UserAddressModel } = require("../../../models/user-module/user-address/user-address.model");
-const { AddressModel } = require("../../../models/global-module/address/address.model");
+const {
+  UserAddressModel,
+} = require("../../../models/user-module/user-address/user-address.model");
+const {
+  AddressModel,
+} = require("../../../models/global-module/address/address.model");
 
 const getProfile = catchAsyncError(async (req, res, next) => {
   const result = await getUserProfileFunc({
@@ -47,8 +51,6 @@ const getProfile = catchAsyncError(async (req, res, next) => {
     reqDocModel: UserDocumentModel,
     bankModel: UserBankModel,
   });
-
-
 
   const userId = result?.data?.user?._id;
   if (!userId) {
@@ -232,15 +234,11 @@ const updateYourProfile = catchAsyncError(async (req, res, next) => {
       {
         user: updatedUser,
         address: updatedAddress,
-
       },
       "Profile updated successfully."
     )
   );
 });
-
-
-
 
 const changePassword = catchAsyncError(async (req, res, next) => {
   const result = await changePasswordFunc({
@@ -359,11 +357,7 @@ const { NotificationTypeEnum } = require("../../../utils/constants/ENUM");
 const getBeneficiary = catchAsyncError(async (req, res, next) => {
   const { userId } = req.body;
 
-  if (!mongoose.Types.ObjectId.isValid(userId)) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Invalid QR");
-  }
-
-  const user = await UserModel.findById(userId);
+  const user = await UserModel.findOne({ userId: userId });
 
   if (!user) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid QR");
