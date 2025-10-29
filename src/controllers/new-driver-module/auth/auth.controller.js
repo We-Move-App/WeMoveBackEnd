@@ -45,11 +45,62 @@ const sendOtpToPhoneHandler = catchAsyncError(async (req, res) => {
     .json(new ApiResponse(statusCode.CREATED, null, "Otp Sent successfully"));
 });
 
+const sendotpToUpdatephone = catchAsyncError(async (req, res) => {
+  const { phoneNo } = req.body;
+
+  if (!phoneNo) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Phone number is required");
+  }
+
+  // ✅ Step 1: Validate token header
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  // ✅ Step 2: Decode token to get driverId
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const driverId = decoded.driverId;
+
+  if (!driverId) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Valid token is required"
+    );
+  }
+
+  // ✅ Step 3: Fetch driver by driverId
+  const driver = await DriverBasicDetails.findOne({ driverId });
+  if (!driver) {
+    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+  }
+
+  // ✅ Step 4: Prevent sending OTP if phone is already registered with another driver
+  const existingDriver = await DriverBasicDetails.findOne({ phoneNo });
+  if (existingDriver && existingDriver.driverId !== driverId) {
+    throw new ApiError(
+      statusCode.CONFLICT,
+      "This phone number is already registered with another driver"
+    );
+  }
+
+  // ✅ Step 5: Send OTP
+  await sendOtpToPhone(phoneNo);
+
+  return res
+    .status(statusCode.CREATED)
+    .json(new ApiResponse(statusCode.CREATED, null, "OTP sent successfully"));
+});
+
+
 const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
   const { phoneNo, otp } = req.body;
 
   if (!phoneNo || !otp) {
-    
     throw new ApiError(
       statusCode.BAD_REQUEST,
       "Phone number and OTP are required"
@@ -220,6 +271,7 @@ const refreshAccessTokenHandler = catchAsyncError(async (req, res) => {
 });
 
 module.exports = {
+  sendotpToUpdatephone,
   sendOtpToPhoneHandler,
   verifyPhoneOtpHandler,
   sendOtpToEmailHandler,

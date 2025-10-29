@@ -8,7 +8,8 @@ const {
   updatePin,
   resetSecurePin,
   deleteDriverProfile,
-
+  updateDriverPhoneNumber,
+  updateDriverEmail,
 
 
 } = require("../../../controllers/new-driver-module/basic-details/basic-details.controller");
@@ -22,6 +23,7 @@ driverBasicDetailsRouter.get("/basic-details", getDriverBasicDetails);
 driverBasicDetailsRouter.get("/profile", getDriverProfileDetails);
 driverBasicDetailsRouter.put("/update-pin", updatePin);
 driverBasicDetailsRouter.delete("/delete-profile", deleteDriverProfile);
-
+driverBasicDetailsRouter.put("/update-phone", updateDriverPhoneNumber);
+driverBasicDetailsRouter.put("/update-email", updateDriverEmail);
 
 module.exports = driverBasicDetailsRouter;

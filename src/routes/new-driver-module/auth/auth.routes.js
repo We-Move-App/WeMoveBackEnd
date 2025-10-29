@@ -1,5 +1,6 @@
 const express = require("express");
 const {
+  sendotpToUpdatephone,
   sendOtpToPhoneHandler,
   verifyPhoneOtpHandler,
   sendOtpToEmailHandler,
@@ -9,6 +10,7 @@ const {
 const newDriverauthRoute = express.Router();
 
 newDriverauthRoute.post("/send-otp-phone", sendOtpToPhoneHandler);
+newDriverauthRoute.post("/send-otp-update-phone", sendotpToUpdatephone);
 newDriverauthRoute.post("/verify-phone-otp", verifyPhoneOtpHandler);
 newDriverauthRoute.post("/send-otp-email", sendOtpToEmailHandler);
 newDriverauthRoute.post("/verify-email-otp", verifyEmailOtpHandler);

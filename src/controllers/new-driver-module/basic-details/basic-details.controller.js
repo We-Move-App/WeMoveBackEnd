@@ -29,6 +29,7 @@ const {
   sendOtpToEmail,
   verifyEmailOtp,
 } = require("../../../utils/otpService/otpService");
+const DriverHistory = require("../../../models/new-driver-module/basic-details/driverHistory.model");
 
 const addDriverBasicDetails = catchAsyncError(async (req, res) => {
   const { error, value } = addBasicDetailsValidation.validate(req.body, {
@@ -612,13 +613,93 @@ const deleteDriverProfile = catchAsyncError(async (req, res, next) => {
     );
 });
 
-
-const updateDriverEmailOrPhoneFunc = async (req, res) => {
-
-  console.log("Request Body: Amit", req.body); // Debugging line 
+const updateDriverPhoneNumber = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
 
-  if (!authHeader?.startsWith("Bearer ")) {
+  // ✅ Step 1: Validate token header
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  // ✅ Step 2: Decode token to extract driverId
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  console.log("Decoded Token:", decoded);
+
+  const driverId = decoded.driverId;
+  console.log("Driver ID from Token:", driverId);
+  const { newPhoneNumber, otp } = req.body;
+
+  if (!newPhoneNumber || !otp) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Driver ID, new phone number, and OTP are required"
+    );
+  }
+
+  // ✅ Step 3: Verify OTP for new phone number
+  await verifyPhoneOtp(newPhoneNumber, otp);
+
+  // ✅ Step 4: Fetch driver details
+  const driver = await DriverBasicDetails.findOne({ driverId });
+  if (!driver) {
+    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+  }
+
+  // ✅ Step 5: Prevent duplicate phone numbers
+  const existingDriver = await DriverBasicDetails.findOne({
+    phoneNo: newPhoneNumber,
+  });
+
+  // Prevent updating to the same phone number
+  if (driver.phoneNo === newPhoneNumber) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "New phone number is the same as your current phone number"
+    );
+  }
+
+  if (existingDriver && String(existingDriver.driverId) !== String(driverId)) {
+   
+    throw new ApiError(
+      statusCode.CONFLICT,
+      "This phone number is already registered with another driver"
+    );
+  }
+
+  // ✅ Step 6: Log the change in history
+  await DriverHistory.create({
+    driverId: driver.driverId,
+    previousPhoneNumber: driver.phoneNo,
+    newPhoneNumber,
+    changedBy: "driver",
+  });
+
+  // ✅ Step 7: Update driver phone number
+  driver.phoneNo = newPhoneNumber;
+  await driver.save();
+
+  // ✅ Step 8: Respond success
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        driverId: driver.driverId,
+        phoneNo: driver.phoneNo,
+      },
+      "Phone number updated successfully"
+    )
+  );
+});
+
+const updateDriverEmail = catchAsyncError(async (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  // Step 1: Validate token
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
     throw new ApiError(
       statusCode.UNAUTHORIZED,
       "Access token is missing or invalid"
@@ -627,96 +708,75 @@ const updateDriverEmailOrPhoneFunc = async (req, res) => {
 
   const accessToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(accessToken);
-  const driverId = decoded?.driverId;
+  const driverId = decoded.driverId;
 
-  const { emailOrPhone, otp } = req.body;
-
-  if (!emailOrPhone) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Please enter email or phone");
+  if (!driverId) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Valid token is required"
+    );
   }
 
+  const { newEmail, otp } = req.body;
+
+  if (!newEmail || !otp) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "New email and OTP are required"
+    );
+  }
+
+  // Step 2: Fetch driver
   const driver = await DriverBasicDetails.findOne({ driverId });
   if (!driver) {
     throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
   }
 
-  const isEmail = validateEmail(emailOrPhone);
-  const isPhoneNumber = validatePhoneNumber(emailOrPhone);
-
-  if (!isEmail && !isPhoneNumber) {
+  // Step 3: Prevent updating to the same email
+  if (driver.email === newEmail.toLowerCase()) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Enter a valid email or phone number"
+      "New email is the same as your current email"
     );
   }
 
-  // Check if email/phone already exists in DriverBasicDetails
-  const isDriverExistWithThis = await DriverBasicDetails.findOne(
-    isEmail ? { email: emailOrPhone.toLowerCase() } : { phoneNo: emailOrPhone }
-  );
-
-  if (isDriverExistWithThis) {
+  // Step 4: Prevent using another driver's email
+  const existingDriver = await DriverBasicDetails.findOne({ email: newEmail.toLowerCase() });
+  if (existingDriver && String(existingDriver.driverId) !== String(driverId)) {
     throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `Driver already exists with this ${isEmail ? "email" : "phone number"}!`
+      statusCode.CONFLICT,
+      "This email is already registered with another driver"
     );
   }
 
-  // OTP verification
-  const otpInDb = await OtpModel.findOne({
-    ...(isEmail && { email: emailOrPhone }),
-    ...(isPhoneNumber && { phoneNumber: emailOrPhone }),
-    ownerId: driver._id,
-    isUsed: false,
+  // Step 5: Verify OTP for the new email
+  await verifyEmailOtp(newEmail, otp); // Implement similar to verifyPhoneOtp
+
+  // Step 6: Log change in history
+  await DriverHistory.create({
+    driverId: driver.driverId,
+    previousEmail: driver.email,
+    newEmail: newEmail.toLowerCase(),
+    changedBy: "driver",
   });
 
-  if (!otpInDb) {
-    throw new ApiError(statusCode.NOT_FOUND, "Expired or used OTP");
-  }
+  // Step 7: Update driver's email
+  driver.email = newEmail.toLowerCase();
+  await driver.save();
 
-  if (otpInDb.otp !== otp) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid OTP");
-  }
-
-  // Save driver history if value changed
-  if ((isEmail && driver.email !== emailOrPhone) || (isPhoneNumber && driver.phoneNo !== emailOrPhone)) {
-    await DriverHistory.create({
-      driverId: driver._id,
-      previousEmail: isEmail ? driver.email : undefined,
-      newEmail: isEmail ? emailOrPhone.toLowerCase() : undefined,
-      previousPhoneNumber: isPhoneNumber ? driver.phoneNo : undefined,
-      newPhoneNumber: isPhoneNumber ? emailOrPhone : undefined,
-      changedBy: driver._id,
-    });
-  }
-
-  // Update driver and mark as verified
-  if (isEmail) {
-    driver.email = emailOrPhone.toLowerCase();
-    driver.emailVerified = true;
-  }
-
-  if (isPhoneNumber) {
-    driver.phoneNo = emailOrPhone;
-    driver.phoneVerified = true;
-  }
-
-  otpInDb.isUsed = true;
-
-  await Promise.all([otpInDb.save(), driver.save()]);
-
+  // Step 8: Respond success
   return res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
       {
         driverId: driver.driverId,
-        phoneNo: driver.phoneNo,
         email: driver.email,
       },
-      `Driver ${isEmail ? "email" : "phone number"} updated and verified successfully`
+      "Email updated successfully"
     )
   );
-};
+});
+
 
 
 module.exports = {
@@ -728,5 +788,6 @@ module.exports = {
   updatePin,
   resetSecurePin,
   deleteDriverProfile,
-  updateDriverEmailOrPhoneFunc,
+  updateDriverPhoneNumber,
+  updateDriverEmail,
 };
