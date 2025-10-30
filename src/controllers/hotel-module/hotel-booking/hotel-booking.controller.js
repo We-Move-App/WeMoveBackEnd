@@ -39,6 +39,7 @@ const {
   AdminModel,
 } = require("../../../models/admin-module/admin/admin.model");
 const generateCustomId = require("../../../utils/customId/generateCustomId");
+const HotelManagerModel = require("../../../models/hotel-module/hotel-manager/hotel-manager.model");
 
 //-------------------- create booking --------------------
 const createBooking = catchAsyncError(async (req, res) => {
@@ -881,6 +882,7 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
   const kidsCount = parseInt(noOfKids);
   const pageNum = parseInt(page);
   const limitNum = parseInt(limit);
+
   if (isNaN(requiredRoomCount) || requiredRoomCount <= 0) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -890,8 +892,6 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
   if (isNaN(adultsCount) || adultsCount <= 0) {
     throw new ApiError(statusCode.BAD_REQUEST, "At least 1 adult is required.");
   }
-
-  // 3. Children must be >= 0
   if (isNaN(kidsCount) || kidsCount < 0) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -905,14 +905,12 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       "Total guests exceed maximum allowed occupancy (2 per room)."
     );
   }
-
   if (!requiredRoomCount) {
     throw new ApiError(statusCode.BAD_REQUEST, "requiredRooms is required.");
   }
   if (!townCity || typeof townCity !== "string") {
     throw new ApiError(statusCode.BAD_REQUEST, "townCity is required.");
   }
-
   if (!checkInDate || !checkOutDate) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -924,15 +922,12 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
   const checkOut = new Date(checkOutDate);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
-  // Prevent searching in the past
   if (checkIn < today) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
       "Check-in date cannot be in the past."
     );
   }
-
   if (checkOut <= checkIn) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -958,16 +953,14 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       );
   }
 
-  const addressIds = matchingAddresses.map((addr) => addr._id);
-
+  const addressIds = matchingAddresses.map((a) => a._id);
   const hotelAddressLinks = await HotelAddressModel.find({
     address: { $in: addressIds },
   })
     .select("hotelId")
     .lean();
 
-  const hotelIds = hotelAddressLinks.map((link) => link.hotelId);
-
+  const hotelIds = hotelAddressLinks.map((l) => l.hotelId);
   if (hotelIds.length === 0) {
     return res
       .status(statusCode.OK)
@@ -980,11 +973,21 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       );
   }
 
+  // ⬅️ Include ownerId so we can compute badge
   const hotels = await Hotel.find({ _id: { $in: hotelIds } })
-    .select("hotelName rating  totalRoom")
+    .select("ownerId hotelName rating totalRoom")
     .skip((pageNum - 1) * limitNum)
     .limit(limitNum)
     .lean();
+
+  // 🔎 Bulk fetch managers’ verificationStatus once
+  const ownerIds = [...new Set(hotels.map((h) => String(h.ownerId)))];
+  const managers = await HotelManagerModel.find({ _id: { $in: ownerIds } })
+    .select("_id verificationStatus")
+    .lean();
+  const managerMap = new Map(
+    managers.map((m) => [String(m._id), m.verificationStatus])
+  );
 
   const hotelRoomTypeLayout = await Promise.all(
     hotels.map(async (hotel) => {
@@ -1013,18 +1016,15 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       ]);
 
       const selectedImage = hotelImages?.images?.[0] || null;
+
       const filteredRoomTypes = await Promise.all(
         roomTypes.map(async (roomType) => {
           const rooms = await individualRoomModule
-            .find({
-              hotelId: hotel._id,
-              roomTypeId: roomType._id,
-            })
+            .find({ hotelId: hotel._id, roomTypeId: roomType._id })
             .select("_id")
             .lean();
 
           const roomIds = rooms.map((r) => r._id);
-
           const conflictingBookings = await HotelBooking.find({
             roomId: { $in: roomIds },
             checkInDate: { $lt: checkOut },
@@ -1034,10 +1034,10 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
             .lean();
 
           const bookedRoomIds = new Set(
-            conflictingBookings.map((b) => b.roomId.toString())
+            conflictingBookings.map((b) => String(b.roomId))
           );
           const availableRooms = roomIds.filter(
-            (id) => !bookedRoomIds.has(id.toString())
+            (id) => !bookedRoomIds.has(String(id))
           ).length;
 
           if (availableRooms >= requiredRoomCount) {
@@ -1048,21 +1048,24 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
               roomPrice: roomType.roomPrice,
               availableRooms,
             };
-          } else {
-            return null;
           }
+          return null;
         })
       );
 
       const availableRoomTypes = filteredRoomTypes.filter(Boolean);
 
       if (availableRoomTypes.length > 0) {
+        // 🏷️ Compute badge from owner’s verificationStatus
+        const isApproved = managerMap.get(String(hotel.ownerId)) === "approved";
+
         return {
           hotel: {
             hotelId: hotel._id,
             hotelName: hotel.hotelName,
             rating: hotel.rating,
             totalRoom: hotel.totalRoom,
+            badge: isApproved, // ✅ added here
           },
           hotelImage: selectedImage,
           hotelAddress,
@@ -1071,26 +1074,23 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
           roomTypes: availableRoomTypes,
         };
       }
-
       return null;
     })
   );
 
   const filteredHotels = hotelRoomTypeLayout.filter(Boolean);
-
   const responseMessage =
     filteredHotels.length === 0
       ? "No room found"
       : "Hotels retrieved successfully.";
 
+  // (Your recent search saving logic stays unchanged) ...
   if (filteredHotels.length > 0) {
     const firstHotelName = filteredHotels[0]?.hotel?.hotelName || null;
-
-    // Check if a recent search for this user and townCity already exists
     const existingSearch = await UserRecentSearchModel.findOne({
       user: req.user._id,
       category: "hotel",
-      "searchDetails.hotel.location.address": townCity, // match city
+      "searchDetails.hotel.location.address": townCity,
     });
 
     if (!existingSearch) {
@@ -1100,10 +1100,7 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
           category: "hotel",
           searchDetails: {
             hotel: {
-              location: {
-                hotelName: firstHotelName,
-                address: townCity,
-              },
+              location: { hotelName: firstHotelName, address: townCity },
               checkInDate: new Date(checkInDate),
               checkOutDate: new Date(checkOutDate),
               requiredRooms: parseInt(requiredRooms),
@@ -1111,13 +1108,9 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
           },
           searchTime: new Date(),
         });
-
-        console.log("Recent hotel search saved successfully");
       } catch (err) {
         console.error("Error saving recent search:", err);
       }
-    } else {
-      console.log("Search for this location already exists. Skipping save.");
     }
   }
 
