@@ -50,6 +50,12 @@ const {
 } = require("../../models/admin-module/branch/branches.model");
 
 const generateCustomId = require("../../utils/customId/generateCustomId");
+const {
+  AddressModel,
+} = require("../../models/global-module/address/address.model");
+const {
+  UserAddressModel,
+} = require("../../models/user-module/user-address/user-address.model");
 // ==============================================
 const registerUserWithEmailAndPhoneNumber = async ({
   req,
@@ -745,6 +751,13 @@ const verifyOtpFunc = async ({
 
   const bankDetails = await UserBankModel.findOne({ userId: user._id });
   const pinDetails = await SecurePinModel.findOne({ userId: user._id });
+  const addressId = await UserAddressModel.findOne({ userId: user._id });
+
+  let userAddress = null;
+  if (addressId?._id) {
+    userAddress = await AddressModel.findById(addressId._id);
+  }
+
   const userId = await generateCustomId(EntityCodeEnum.USER, "U");
   const userData = {
     ...user.toObject(),
@@ -754,6 +767,11 @@ const verifyOtpFunc = async ({
     bankDetails,
     isBankdetails: !!bankDetails,
     isPinExist: !!pinDetails,
+    address: {
+      zoneCode: userAddress?.zoneCode || null,
+      area: userAddress?.area || null,
+      townCity: userAddress?.townCity || null,
+    },
   };
 
   return new ApiResponse(
