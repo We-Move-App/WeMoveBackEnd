@@ -42,12 +42,16 @@ const {
 const generateUniqueCardNumber = require("../../../utils/customId/generateUniqueCardNumber");
 const generateCustomId = require("../../../utils/customId/generateCustomId");
 const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
+const walletsModel = require("../../../models/wallet-module/wallets.model");
 
 const getAllBusOperators = catchAsyncError(async (req, res, next) => {
   let results = await getAllUsersByAdmin({ req, model: BusOperatorModel });
   const dataWithBusCount = await Promise.all(
     results.data.map(async (operator) => {
-      const busCount = await busModel.countDocuments({ ownerId: operator._id });
+      const [busCount, wallet] = await Promise.all([
+        busModel.countDocuments({ ownerId: operator._id }),
+        walletsModel.findOne({ userId: operator._id }).lean(),
+      ]);
       return {
         _id: operator._id,
         fullName: operator.fullName,
@@ -56,6 +60,8 @@ const getAllBusOperators = catchAsyncError(async (req, res, next) => {
         verificationStatus: operator.verificationStatus,
         avatar: operator.avatar,
         busCount,
+        cardNumber: wallet ? wallet.cardNumber : null,
+        balance: wallet ? wallet.balance : 0,
       };
     })
   );

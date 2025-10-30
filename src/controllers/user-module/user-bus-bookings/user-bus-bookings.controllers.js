@@ -52,7 +52,6 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
 
   const transformedBookings = await Promise.all(
     bookings.map(async (booking) => {
-
       const transformedBooking = { ...booking };
 
       if (transformedBooking.routeId) {
@@ -109,7 +108,15 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
 
   // 1️⃣ Validate request
   validateRequestBody(
-    ["from", "to", "busId", "routeId", "passengers", "noOfPassengers", "journeyDate",],
+    [
+      "from",
+      "to",
+      "busId",
+      "routeId",
+      "passengers",
+      "noOfPassengers",
+      "journeyDate",
+    ],
     req.body
   );
 
@@ -152,26 +159,32 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       }));
 
       seatAvailability = await BusSeatsLayoutModel.create(
-        [{
-          busId,
-          seats: busSeats,
-          noOfSeats: findBus.noOfSeats,
-          bookedSeats: 0,
-          availableSeats: findBus.noOfSeats,
-          journeyDate: journeyDateNormalized,
-          routeId,
-        }],
+        [
+          {
+            busId,
+            seats: busSeats,
+            noOfSeats: findBus.noOfSeats,
+            bookedSeats: 0,
+            availableSeats: findBus.noOfSeats,
+            journeyDate: journeyDateNormalized,
+            routeId,
+          },
+        ],
         { session }
       );
       seatAvailability = seatAvailability[0];
     }
 
-    const availableSeats = seatAvailability.seats.filter(seat => seat.isAvailable);
+    const availableSeats = seatAvailability.seats.filter(
+      (seat) => seat.isAvailable
+    );
     if (availableSeats.length < noOfPassengers) {
       throw new ApiError(statusCode.CONFLICT, "Not enough available seats");
     }
 
-    const assignedSeats = availableSeats.slice(0, noOfPassengers).map(s => s.seatNumber);
+    const assignedSeats = availableSeats
+      .slice(0, noOfPassengers)
+      .map((s) => s.seatNumber);
     const assignSeatToPassenger = passengers.map((p, i) => ({
       ...p,
       seatNumber: assignedSeats[i],
@@ -223,62 +236,67 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     } else {
       couponMessage = "Booking confirmed. No coupon applied.";
     }
-    // 5️⃣ Check user wallet balance
+    //Check user wallet balance
     const userWallet = await WalletModel.findOne({ userId }).session(session);
     if (!userWallet || userWallet.balance < finalAmount) {
       await TransactionModel.create(
-        [{
-          transactionId: uuidv4(),
-          userId,
-          bookingId: null,
-          type: "DEBIT",
-          status: PaymentStatusEnum.FAILED,
-          amount: finalAmount,
-          currency: process.env.MOMO_CURRENCY,
-          description: "Bus booking failed - insufficient balance",
-        }],
+        [
+          {
+            transactionId: uuidv4(),
+            userId,
+            bookingId: null,
+            type: "DEBIT",
+            status: PaymentStatusEnum.FAILED,
+            amount: finalAmount,
+            currency: process.env.MOMO_CURRENCY,
+            description: "Bus booking failed - insufficient balance",
+          },
+        ],
         { session }
       );
       throw new ApiError(statusCode.BAD_REQUEST, "Insufficient wallet balance");
     }
-
-
 
     // Step 3: Create booking
 
     const bookingId = await generateCustomId(EntityCodeEnum.BUS_BOOKING, "BB");
 
     const [newBooking] = await BusBookingModel.create(
-      [{
-        busId,
-        bookingId,
-        bookedBy: userId,
-        routeId,
-        passengers: assignSeatToPassenger,
-        noOfPassengers,
-        finalAmount,
-        price: basePrice,
-        journeyDate: journeyDateNormalized,
-        termAndConditions,
-        paymentStatus: "PAID",
-        from,
-        to,
-        seatNumbers: assignedSeats,
-        coupon: appliedCoupon ? {
-          couponId: appliedCoupon._id,
-          couponCode: appliedCoupon.couponCode,
-          discountType: appliedCoupon.discountType,
-          discountValue: appliedCoupon.discountType === "Percentage"
-            ? appliedCoupon.discountPercentage
-            : appliedCoupon.discountAmount,
-          discountApplied,
-        } : null,
-      }],
+      [
+        {
+          busId,
+          bookingId,
+          bookedBy: userId,
+          routeId,
+          passengers: assignSeatToPassenger,
+          noOfPassengers,
+          finalAmount,
+          price: basePrice,
+          journeyDate: journeyDateNormalized,
+          termAndConditions,
+          paymentStatus: "PAID",
+          from,
+          to,
+          seatNumbers: assignedSeats,
+          coupon: appliedCoupon
+            ? {
+                couponId: appliedCoupon._id,
+                couponCode: appliedCoupon.couponCode,
+                discountType: appliedCoupon.discountType,
+                discountValue:
+                  appliedCoupon.discountType === "Percentage"
+                    ? appliedCoupon.discountPercentage
+                    : appliedCoupon.discountAmount,
+                discountApplied,
+              }
+            : null,
+        },
+      ],
       { session }
     );
 
     // 7️⃣ Update seats
-    seatAvailability.seats = seatAvailability.seats.map(seat => {
+    seatAvailability.seats = seatAvailability.seats.map((seat) => {
       if (assignedSeats.includes(seat.seatNumber)) {
         seat.status = "booked";
         seat.bookingReference = newBooking._id;
@@ -303,8 +321,13 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       if (commission.commissionType === "fixed" && commission.commissionRate) {
         platformFee = commission.commissionRate;
         operatorShare = finalAmount - platformFee;
-      } else if (commission.commissionType === "percentage" && commission.commissionPercentage) {
-        platformFee = parseFloat(((finalAmount * commission.commissionPercentage) / 100).toFixed(2));
+      } else if (
+        commission.commissionType === "percentage" &&
+        commission.commissionPercentage
+      ) {
+        platformFee = parseFloat(
+          ((finalAmount * commission.commissionPercentage) / 100).toFixed(2)
+        );
         operatorShare = finalAmount - platformFee;
       }
     }
@@ -385,13 +408,28 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
 
     // 12️⃣ Populate response
     const bookingWithBusDetails = await BusBookingModel.findById(newBooking._id)
-      .populate({ path: "busId", select: "busName busRegNumber busModelNumber" })
-      .populate({ path: "routeId", select: "routeName startLocation endLocation departureTime arrivalTime estimatedTime totalDistance" })
-      .populate({ path: "bookedBy", model: "User", select: "fullName email phoneNumber" })
+      .populate({
+        path: "busId",
+        select: "busName busRegNumber busModelNumber",
+      })
+      .populate({
+        path: "routeId",
+        select:
+          "routeName startLocation endLocation departureTime arrivalTime estimatedTime totalDistance",
+      })
+      .populate({
+        path: "bookedBy",
+        model: "User",
+        select: "fullName email phoneNumber",
+      })
       .lean();
 
-    const busImages = await BusImagesModel.findOne({ busId: bookingWithBusDetails.busId._id }, { images: 1, _id: 0 }).lean();
-    bookingWithBusDetails.busId.busImages = busImages?.images?.map(img => img.url) || [];
+    const busImages = await BusImagesModel.findOne(
+      { busId: bookingWithBusDetails.busId._id },
+      { images: 1, _id: 0 }
+    ).lean();
+    bookingWithBusDetails.busId.busImages =
+      busImages?.images?.map((img) => img.url) || [];
     bookingWithBusDetails.passengers = assignSeatToPassenger;
 
     if (bookingWithBusDetails.journeyDate) {
@@ -400,20 +438,23 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       delete bookingWithBusDetails.journeyDate;
     }
     if (bookingWithBusDetails.routeId) {
-      bookingWithBusDetails.routeId.from = bookingWithBusDetails.routeId.startLocation;
-      bookingWithBusDetails.routeId.to = bookingWithBusDetails.routeId.endLocation;
+      bookingWithBusDetails.routeId.from =
+        bookingWithBusDetails.routeId.startLocation;
+      bookingWithBusDetails.routeId.to =
+        bookingWithBusDetails.routeId.endLocation;
       delete bookingWithBusDetails.routeId.startLocation;
       delete bookingWithBusDetails.routeId.endLocation;
     }
 
-    return res.status(statusCode.CREATED).json(
-      new ApiResponse(
-        statusCode.CREATED,
-        bookingWithBusDetails,
-        "Bus booked successfully"
-      )
-    );
-
+    return res
+      .status(statusCode.CREATED)
+      .json(
+        new ApiResponse(
+          statusCode.CREATED,
+          bookingWithBusDetails,
+          "Bus booked successfully"
+        )
+      );
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
@@ -542,7 +583,9 @@ const calculateBusBooking = catchAsyncError(async (req, res, next) => {
       } else if (coupon.expiryDate < currentDate) {
         couponMessage = "Coupon code has expired.";
       } else if (
-        coupon.usageHistory.some((u) => u.userId.toString() === userId.toString())
+        coupon.usageHistory.some(
+          (u) => u.userId.toString() === userId.toString()
+        )
       ) {
         couponMessage = "You have already used this coupon.";
       } else if (basePrice < coupon.minOrderAmount) {
@@ -578,25 +621,22 @@ const calculateBusBooking = catchAsyncError(async (req, res, next) => {
         finalAmount,
         coupon: appliedCoupon
           ? {
-            couponCode: appliedCoupon.couponCode,
-            discountType: appliedCoupon.discountType,
-            discountValue:
-              appliedCoupon.discountType === "Percentage"
-                ? appliedCoupon.discountPercentage
-                : appliedCoupon.discountAmount,
-          }
+              couponCode: appliedCoupon.couponCode,
+              discountType: appliedCoupon.discountType,
+              discountValue:
+                appliedCoupon.discountType === "Percentage"
+                  ? appliedCoupon.discountPercentage
+                  : appliedCoupon.discountAmount,
+            }
           : null,
       },
     });
-
-
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
     throw error;
   }
 });
-
 
 const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
@@ -679,7 +719,6 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
 
   if (booking.paymentStatus === "PAID") {
     const refundAmount = booking.finalAmount * 0.5;
-
 
     const operatorTxn = await TransactionModel.findOne({
       bookingId,

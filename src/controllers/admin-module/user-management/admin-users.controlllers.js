@@ -16,11 +16,15 @@ const HotelBookingModel = require("../../../models/hotel-module/hotel-bookings/h
 const BusBookingModel = require("../../../models/bus-module/bus-bookings/bus-bookings.model");
 const RideBookingDetail = require("../../../models/new-driver-module/booking-details/booking-details.model");
 const BusModel = require("../../../models/bus-module/buses/buses.model");
-const { UserAddressModel } = require("../../../models/user-module/user-address/user-address.model");
+const {
+  UserAddressModel,
+} = require("../../../models/user-module/user-address/user-address.model");
 const SecurePinModel = require("../../../models/global-module/secure-pins/secure-pins.model");
 const mongoose = require("mongoose");
 const ApiError = require("../../../utils/response/ApiError");
-
+const ApiResponse = require("../../../utils/response/ApiResponse");
+const transactionModel = require("../../../models/transaction-module/transaction.model");
+const walletsModel = require("../../../models/wallet-module/wallets.model");
 
 const getAllUsers = catchAsyncError(async (req, res) => {
   const {
@@ -45,9 +49,8 @@ const getAllUsers = catchAsyncError(async (req, res) => {
       { fullName: regex },
       { email: regex },
       { phoneNumber: regex },
-      { userId: regex }
+      { userId: regex },
     ];
-
   }
   if (verificationStatus) {
     filter.verificationStatus = new RegExp(verificationStatus, "i");
@@ -101,9 +104,11 @@ const getSingleUser = catchAsyncError(async (req, res, next) => {
   // ✅ 1. Validate _id param
 
   if (!_id || typeof _id !== "string" || _id.trim() === "") {
-    throw new ApiError(statusCode.BAD_REQUEST, "User _id is required and must be a valid string");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "User _id is required and must be a valid string"
+    );
   }
-
 
   // ✅ 2. Find the user using custom userId (not _id)
   const user = await UserModel.findById(_id)
@@ -114,7 +119,10 @@ const getSingleUser = catchAsyncError(async (req, res, next) => {
     .lean();
 
   if (!user) {
-    throw new ApiError(statusCode.NOT_FOUND, "No user found with the given User ID");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      "No user found with the given User ID"
+    );
   }
 
   // ✅ 3. Use user._id (Mongo ObjectId) for relations
@@ -122,10 +130,14 @@ const getSingleUser = catchAsyncError(async (req, res, next) => {
 
   // ✅ 4. Fetch related models using Mongo _id
   const [documents, bankDetails, pinDetails, userAddress] = await Promise.all([
-    UserDocumentModel.findOne({ userId: userObjectId }).populate("documentIds").lean(),
+    UserDocumentModel.findOne({ userId: userObjectId })
+      .populate("documentIds")
+      .lean(),
     UserBankModel.findOne({ userId: userObjectId }).lean(),
     SecurePinModel.findOne({ userId: userObjectId }).select("_id").lean(),
-    UserAddressModel.findOne({ userId: userObjectId }).populate("address").lean(),
+    UserAddressModel.findOne({ userId: userObjectId })
+      .populate("address")
+      .lean(),
   ]);
 
   // ✅ 5. Combine and format data
@@ -300,11 +312,197 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
   });
 });
 
+const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
+  const { userId } = req.params;
+  const { filter, search } = req.query;
 
+  const page = Math.max(parseInt(req.query.page || "1", 10), 1);
+  const perPage = Math.min(
+    Math.max(parseInt(req.query.limit || "20", 10), 1),
+    100
+  );
+  const skip = (page - 1) * perPage;
+
+  if (!filter || !userId) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "filter and userId are required"
+    );
+  }
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid userId");
+  }
+
+  const user = await UserModel.findById(userId).lean();
+  if (!user) {
+    throw new ApiError(statusCode.NOT_FOUND, "User not found");
+  }
+
+  // build a case-insensitive prefix regex if search present
+  const buildSearchQuery = (base = {}) => {
+    if (search && search.trim() !== "") {
+      base.bookingId = { $regex: `^${search}`, $options: "i" };
+    }
+    return base;
+  };
+
+  const paginate = async (Model, query, message) => {
+    const [items, total] = await Promise.all([
+      Model.find(query)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(perPage)
+        .lean(),
+      Model.countDocuments(query),
+    ]);
+    const totalPages = Math.max(Math.ceil(total / perPage), 1);
+
+    return res.status(statusCode.OK).json(
+      new ApiResponse(
+        statusCode.OK,
+        {
+          pagination: { page, limit: perPage, total, totalPages },
+          count: items.length,
+          bookings: items,
+        },
+        message
+      )
+    );
+  };
+
+  switch (filter) {
+    case "bus":
+      return paginate(
+        BusBookingModel,
+        buildSearchQuery({ bookedBy: userId }),
+        "Bus bookings fetched successfully"
+      );
+
+    case "hotel":
+      return paginate(
+        HotelBookingModel,
+        buildSearchQuery({ bookedBy: userId }),
+        "Hotel bookings fetched successfully"
+      );
+
+    case "ride":
+      return paginate(
+        RideBookingDetail,
+        buildSearchQuery({ userId }),
+        "Ride bookings fetched successfully"
+      );
+
+    case "transactions":
+      return paginate(
+        transactionModel,
+        buildSearchQuery({ userId }),
+        "Transactions fetched successfully"
+      );
+
+    case "all": {
+      // each collection uses same search prefix logic
+      const busQuery = buildSearchQuery({ bookedBy: userId });
+      const hotelQuery = buildSearchQuery({ bookedBy: userId });
+      const rideQuery = buildSearchQuery({ userId });
+
+      const [busTotal, hotelTotal, rideTotal] = await Promise.all([
+        BusBookingModel.countDocuments(busQuery),
+        HotelBookingModel.countDocuments(hotelQuery),
+        RideBookingDetail.countDocuments(rideQuery),
+      ]);
+
+      const total = busTotal + hotelTotal + rideTotal;
+      const totalPages = Math.max(Math.ceil(total / perPage), 1);
+
+      if (total === 0) {
+        return res.status(statusCode.OK).json(
+          new ApiResponse(
+            statusCode.OK,
+            {
+              pagination: { page, limit: perPage, total: 0, totalPages: 1 },
+              count: 0,
+              countsByType: { bus: 0, hotel: 0, ride: 0 },
+              bookings: [],
+            },
+            "No bookings found"
+          )
+        );
+      }
+
+      const [busItems, hotelItems, rideItems] = await Promise.all([
+        BusBookingModel.find(busQuery).sort({ createdAt: -1 }).lean(),
+        HotelBookingModel.find(hotelQuery).sort({ createdAt: -1 }).lean(),
+        RideBookingDetail.find(rideQuery).sort({ createdAt: -1 }).lean(),
+      ]);
+
+      const merged = [
+        ...busItems.map((d) => ({ ...d, source: "bus" })),
+        ...hotelItems.map((d) => ({ ...d, source: "hotel" })),
+        ...rideItems.map((d) => ({ ...d, source: "ride" })),
+      ].sort((a, b) => {
+        const ac = new Date(a.createdAt || 0).getTime();
+        const bc = new Date(b.createdAt || 0).getTime();
+        if (bc !== ac) return bc - ac;
+        return String(b._id).localeCompare(String(a._id));
+      });
+
+      const pageSlice = merged.slice(skip, skip + perPage);
+
+      return res.status(statusCode.OK).json(
+        new ApiResponse(
+          statusCode.OK,
+          {
+            pagination: { page, limit: perPage, total, totalPages },
+            count: pageSlice.length,
+            countsByType: { bus: busTotal, hotel: hotelTotal, ride: rideTotal },
+            bookings: pageSlice,
+          },
+          "All bookings (bus, hotel, ride) fetched successfully"
+        )
+      );
+    }
+
+    default:
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "Unknown filter. Use one of: bus, hotel, ride, transactions, all"
+      );
+  }
+});
+
+const getWalletBalance = catchAsyncError(async (req, res) => {
+  const { userId } = req.params;
+  if (!userId) {
+    throw new ApiError(statusCode.BAD_REQUEST, "userId is required");
+  }
+
+  const user = await UserModel.findById(userId);
+  if (!user) {
+    throw new ApiError(statusCode.NOT_FOUND, "User not found");
+  }
+
+  const wallet = await walletsModel.findOne({ userId: userId });
+  if (!wallet) {
+    throw new ApiError(statusCode.NOT_FOUND, "Wallet not found");
+  }
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      {
+        cardNumber: wallet?.cardNumber || null,
+        balance: wallet?.balance || 0,
+      },
+      "Wallet balance found successfully"
+    )
+  );
+});
 
 module.exports = {
   getAllUsers,
   getSingleUser,
   verifyUserProfile,
   getAllUsersBookings,
+  getAllBookingsByUserId,
+  getWalletBalance,
 };

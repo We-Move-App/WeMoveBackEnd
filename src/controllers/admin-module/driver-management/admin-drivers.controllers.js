@@ -95,8 +95,9 @@ const getAllDrivers = async (req, res) => {
       };
     }
 
-    // ✅ Fetch drivers with pagination
+    // ✅ Fetch drivers with pagination (+ wallets)
     const drivers = await DriverBasicDetails.aggregate([
+      // join vehicle details
       {
         $lookup: {
           from: "vehicledetails",
@@ -106,16 +107,24 @@ const getAllDrivers = async (req, res) => {
         },
       },
       { $unwind: { path: "$vehicleInfo", preserveNullAndEmptyArrays: true } },
+
+      // 🔗 join wallets (assuming wallets.userId === driverId)
       {
-        $match: {
-          ...vehicleMatch,
-          ...branchFilter,
-          ...searchFilter,
+        $lookup: {
+          from: "wallets", // <-- ensure this matches your actual collection name
+          localField: "driverId", // <-- switch to the correct local field if needed (see note below)
+          foreignField: "userId",
+          as: "wallet",
         },
       },
+      { $unwind: { path: "$wallet", preserveNullAndEmptyArrays: true } },
+
+      { $match: { ...vehicleMatch, ...branchFilter, ...searchFilter } },
       { $sort: { createdAt: -1 } },
       { $skip: skip },
       { $limit: limit },
+
+      // final shape
       {
         $project: {
           _id: 0,
@@ -128,11 +137,15 @@ const getAllDrivers = async (req, res) => {
           vehicleType: "$vehicleInfo.vehicleType",
           registrationNumber: "$vehicleInfo.registrationNo",
           createdAt: 1,
+
+          // 🆕 wallet fields
+          cardNumber: "$wallet.cardNumber",
+          balance: { $ifNull: ["$wallet.balance", 0] },
         },
       },
     ]);
 
-    // ✅ Count total results
+    // ✅ Count total results (no need to join wallets for counting)
     const totalCount = await DriverBasicDetails.aggregate([
       {
         $lookup: {
@@ -143,13 +156,7 @@ const getAllDrivers = async (req, res) => {
         },
       },
       { $unwind: { path: "$vehicleInfo", preserveNullAndEmptyArrays: true } },
-      {
-        $match: {
-          ...vehicleMatch,
-          ...branchFilter,
-          ...searchFilter,
-        },
-      },
+      { $match: { ...vehicleMatch, ...branchFilter, ...searchFilter } },
       { $group: { _id: "$driverId" } },
       { $count: "total" },
     ]);

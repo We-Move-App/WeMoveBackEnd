@@ -47,10 +47,33 @@ const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
 const {
   BranchModel,
 } = require("../../../models/admin-module/branch/branches.model");
+const walletsModel = require("../../../models/wallet-module/wallets.model");
 
 const getAllHotelManagers = catchAsyncError(async (req, res, next) => {
   const results = await getAllUsersByAdmin({ req, model: HotelManagerModel });
 
+  const ids = results.data.map((u) => u._id);
+  if (ids.length === 0) {
+    return res.status(statusCode.OK).json(results);
+  }
+
+  const wallets = await walletsModel
+    .find({ userId: { $in: ids } })
+    .select("userId cardNumber balance")
+    .lean();
+
+  const walletByUserId = new Map(wallets.map((w) => [String(w.userId), w]));
+
+  const enriched = results.data.map((u) => {
+    const w = walletByUserId.get(String(u._id));
+    return {
+      ...(u.toObject?.() ?? u),
+      cardNumber: w ? w.cardNumber : null,
+      balance: w ? w.balance : 0,
+    };
+  });
+
+  results.data = enriched;
   return res.status(statusCode.OK).json(results);
 });
 
