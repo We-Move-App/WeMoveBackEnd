@@ -110,15 +110,15 @@ const getTransactionsSuperAdmin = catchAsyncError(async (req, res) => {
     new ApiResponse(
       statusCode.OK,
       {
-        transactions,
         totalCount,
         totalPages: Math.ceil(totalCount / limit),
         currentPage: page,
         pageSize: transactions.length,
+        transactions,
       },
       "Transactions fetched successfully"
     )
   );
-
 });
+
 module.exports = { getTransactionsSuperAdmin };
