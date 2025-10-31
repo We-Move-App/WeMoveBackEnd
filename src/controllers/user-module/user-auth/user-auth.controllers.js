@@ -29,6 +29,7 @@ const {
   verifyOtpFunc,
 } = require("../../../utils/services/functions.services");
 const userHistoryModel = require("../../../models/user-module/users/userHistory.model");
+const { AccessTokenModel } = require("../../../models/token/token.model");
 
 //=====================|| REGISTER USER ||============================
 // const registerUserWithOtp = catchAsyncError(async (req, res, next) => {
@@ -240,7 +241,7 @@ const verifyOTP = catchAsyncError(async (req, res, next) => {
     res,
     reqModel: UserModel,
     historyModel: userHistoryModel,
-    deviceTokenModel: UserDeviceTokenModel,
+    deviceTokenModel: AccessTokenModel,
     typeOfUser: TypeOfUser.USER,
   });
   const { accessToken, refreshToken, reqData } = result;

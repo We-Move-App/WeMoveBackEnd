@@ -157,6 +157,8 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
 
   const jwtToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(jwtToken);
+  console.log(decoded);
+
   const senderId = decoded?.userId;
 
   if (!senderId) {

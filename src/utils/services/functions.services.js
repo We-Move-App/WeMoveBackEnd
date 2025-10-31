@@ -727,27 +727,18 @@ const verifyOtpFunc = async ({
   res.clearCookie("refreshToken");
 
   setTokenCookies(res, accessToken, refreshToken);
-
-  const hashedAccessToken = hashToken(accessToken);
   // ✅ Save device session
-
-  // Remove previous device sessions for this user (enforce single session)
-  try {
-    await deviceTokenModel.deleteMany({ userId: user._id });
-  } catch (err) {
-    console.error("Error deleting previous device sessions:", err);
-  }
 
   // Create new device session entry
   // const deviceType = req.body.deviceType || "web";
   const ip = req.ip || req.headers["x-forwarded-for"] || null;
   const userAgent = req.headers["user-agent"] || null;
 
-  await deviceTokenModel.create({
-    userId: user._id || user.id,
-    token: hashedAccessToken,
-    userAgent,
-  });
+  await deviceTokenModel.findOneAndUpdate(
+    { user: user._id },
+    { token: accessToken },
+    { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
+  );
 
   const bankDetails = await UserBankModel.findOne({ userId: user._id });
   const pinDetails = await SecurePinModel.findOne({ userId: user._id });

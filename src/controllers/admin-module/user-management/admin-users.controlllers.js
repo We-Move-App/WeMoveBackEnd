@@ -33,10 +33,10 @@ const getAllUsers = catchAsyncError(async (req, res) => {
     page,
     limit,
     sortBy = "createdAt",
-    order = "desc",
+    order = "desc", // default descending
   } = req.query;
 
-  // 🔹 Dynamic page & limit (default if UI doesn’t send)
+  // 🔹 Pagination defaults
   const pageNum = page ? Math.max(parseInt(page, 10), 1) : 1;
   const limitNum = limit ? Math.max(parseInt(limit, 10), 1) : 20;
   const skip = (pageNum - 1) * limitNum;
@@ -56,10 +56,8 @@ const getAllUsers = catchAsyncError(async (req, res) => {
     filter.verificationStatus = new RegExp(verificationStatus, "i");
   }
 
-  // 🔹 Get total count for pagination
-
+  // 🔹 Count total users
   const total = await UserModel.countDocuments(filter);
-
   if (total === 0) {
     return res.status(404).json({
       success: false,
@@ -73,28 +71,27 @@ const getAllUsers = catchAsyncError(async (req, res) => {
     });
   }
 
-  // 🔹 Sorting
-  const sortOrder = order.toLowerCase() === "desc" ? -1 : 1;
-  const sort = {};
-  sort[sortBy] = sortOrder;
+  // 🔹 LIFO sorting (always latest first)
+  const sort = { createdAt: -1 };
 
-  // 🔹 Fetch with pagination + sorting
+  // 🔹 Fetch users
   const data = await UserModel.find(
     filter,
     "fullName phoneNumber email verificationStatus createdAt userId user_id"
   )
     .skip(skip)
     .limit(limitNum)
-    .sort(sort);
+    .sort(sort)
+    .lean();
 
   res.status(200).json({
     success: true,
-    message: "Users fetched successfully",
-    totaluser: total,
+    message: "Users fetched successfully (LIFO order)",
+    totalUsers: total,
     page: pageNum,
     limit: limitNum,
-    sortBy,
-    order,
+    sortBy: "createdAt",
+    order: "desc",
     data,
   });
 });

@@ -359,7 +359,7 @@ const getBeneficiary = catchAsyncError(async (req, res, next) => {
 
   const user = await UserModel.findOne({ userId: userId });
 
-  if (!user) {
+  if (!user || user.verificationStatus === "blocked") {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid QR");
   }
 
