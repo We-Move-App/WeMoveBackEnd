@@ -189,102 +189,162 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
   const skip = (pageNum - 1) * limitNum;
   const sortOrder = order.toLowerCase() === "asc" ? 1 : -1;
 
-  // ✅ Build filter only if search or paymentStatus is provided
+  // Base filter applied to each collection (no populated-path filters)
   const buildFilter = (extra = {}) => {
     const filter = { ...extra };
-    if (paymentStatus && paymentStatus.trim() !== "")
+    if (paymentStatus && paymentStatus.trim() !== "") {
       filter.paymentStatus = new RegExp(`^${paymentStatus.trim()}$`, "i");
-
+    }
     if (search && search.trim() !== "") {
       const regex = new RegExp(search.trim(), "i");
       filter.$or = [
         { bookingId: regex },
-        { email: regex },
-        { phoneNumber: regex },
-        { "bookedBy.email": regex },
-        { "bookedBy.fullName": regex },
-        { "bookedBy.userId": regex },
-        { "userId.email": regex },
-        { "userId.fullName": regex },
-        { "userId.userId": regex },
+        { email: regex }, // in case models store it at root (hotel/bus)
+        { phoneNumber: regex }, // same
+        { userId: regex }, // ride.userId (string) or any model exposing userId at root
       ];
     }
-
     return filter;
   };
 
-  // ✅ Fetch all bookings in parallel (bus, hotel, ride)
+  // 1) Fetch raw bookings (no populate)
   const [busBookings, hotelBookings, rideBookings] = await Promise.all([
     BusBookingModel.find(
       buildFilter(),
       "bookingId bookedBy journeyDate price paymentStatus createdAt"
-    )
-      .populate("bookedBy", "userId fullName email phoneNumber")
-      .lean(),
+    ).lean(),
 
     HotelBookingModel.find(
       buildFilter(),
       "bookingId bookedBy checkInDate totalAmount paymentStatus createdAt"
-    )
-      .populate("bookedBy", "userId fullName email phoneNumber")
-      .lean(),
+    ).lean(),
 
     RideBookingDetail.find(
       buildFilter(),
       "bookingId userId timestamps.completedAt fare paymentStatus createdAt"
-    )
-      .populate("userId", "userId fullName email phoneNumber")
-      .lean(),
+    ).lean(),
   ]);
 
-  // ✅ Format data consistently
-  const formattedBusBookings = busBookings.map((b) => ({
-    bookingId: b.bookingId || null,
-    userId: b.bookedBy?.userId || null,
-    fullName: b.bookedBy?.fullName || null,
-    email: b.bookedBy?.email || null,
-    phone: b.bookedBy?.phoneNumber || null,
-    serviceType: "bus",
-    bookingDate: b.journeyDate || null,
-    amount: b.price || 0,
-    paymentStatus: b.paymentStatus || "PENDING",
-    createdAt: b.createdAt,
-  }));
+  // 2) Build user lookup maps for each type (manual joins)
 
-  const formattedHotelBookings = hotelBookings.map((h) => ({
-    bookingId: h.bookingId || null,
-    userId: h.bookedBy?.userId || null,
-    fullName: h.bookedBy?.fullName || null,
-    email: h.bookedBy?.email || null,
-    phone: h.bookedBy?.phoneNumber || null,
-    serviceType: "hotel",
-    bookingDate: h.checkInDate || null,
-    amount: h.totalAmount || 0,
-    paymentStatus: h.paymentStatus || "PENDING",
-    createdAt: h.createdAt,
-  }));
+  // Bus/Hotel: bookedBy is an ObjectId -> map by _id
+  const busHotelUserIds = [
+    ...new Set(
+      [
+        ...busBookings.map((b) => b.bookedBy).filter(Boolean),
+        ...hotelBookings.map((h) => h.bookedBy).filter(Boolean),
+      ].map((id) => String(id))
+    ),
+  ];
+  const busHotelObjectIds = busHotelUserIds
+    .filter((id) => mongoose.isValidObjectId(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
 
-  const formattedRideBookings = rideBookings.map((r) => ({
-    bookingId: r.bookingId || null,
-    userId: r.userId?.userId || null,
-    fullName: r.userId?.fullName || null,
-    email: r.userId?.email || null,
-    phone: r.userId?.phoneNumber || null,
-    serviceType: "ride",
-    bookingDate: r.timestamps?.completedAt || null,
-    amount: r.fare || 0,
-    paymentStatus: r.paymentStatus || "PENDING",
-    createdAt: r.createdAt,
-  }));
+  const busHotelUsers = busHotelObjectIds.length
+    ? await UserModel.find({ _id: { $in: busHotelObjectIds } })
+        .select("_id userId fullName email phoneNumber")
+        .lean()
+    : [];
+  const userByObjectId = new Map(busHotelUsers.map((u) => [String(u._id), u]));
 
-  // ✅ Merge all bookings
+  // Ride: userId is a STRING (could be app userId OR _id string)
+  const rawRideIds = rideBookings
+    .map((r) => (typeof r.userId === "string" ? r.userId.trim() : r.userId))
+    .filter(Boolean);
+  const uniqueRideIds = [...new Set(rawRideIds)];
+
+  const rideObjectIdStrings = uniqueRideIds.filter((id) =>
+    mongoose.isValidObjectId(id)
+  );
+  const rideAppUserIds = uniqueRideIds.filter(
+    (id) => !mongoose.isValidObjectId(id)
+  );
+
+  const rideObjectIds = rideObjectIdStrings.map(
+    (id) => new mongoose.Types.ObjectId(id)
+  );
+
+  const [usersByRideObjectId, usersByRideAppUserId] = await Promise.all([
+    rideObjectIds.length
+      ? UserModel.find({ _id: { $in: rideObjectIds } })
+          .select("_id userId fullName email phoneNumber")
+          .lean()
+      : Promise.resolve([]),
+    rideAppUserIds.length
+      ? UserModel.find({ userId: { $in: rideAppUserIds } })
+          .select("_id userId fullName email phoneNumber")
+          .lean()
+      : Promise.resolve([]),
+  ]);
+
+  const rideMapByObjectId = new Map(
+    usersByRideObjectId.map((u) => [String(u._id), u])
+  );
+  const rideMapByUserId = new Map(
+    usersByRideAppUserId.map((u) => [u.userId, u])
+  );
+
+  // 3) Format outputs (no bookedBy.* access)
+
+  const formattedBusBookings = busBookings.map((b) => {
+    const u = b.bookedBy ? userByObjectId.get(String(b.bookedBy)) : null;
+    return {
+      _id: u?._id || null, // user ObjectId
+      bookingId: b.bookingId || null,
+      userId: u?.userId || null, // user's userId
+      fullName: u?.fullName || null,
+      email: u?.email || null,
+      phone: u?.phoneNumber || null,
+      serviceType: "bus",
+      bookingDate: b.journeyDate || null,
+      amount: b.price ?? 0,
+      paymentStatus: b.paymentStatus || "PENDING",
+      createdAt: b.createdAt,
+    };
+  });
+
+  const formattedHotelBookings = hotelBookings.map((h) => {
+    const u = h.bookedBy ? userByObjectId.get(String(h.bookedBy)) : null;
+    return {
+      _id: u?._id || null, // user ObjectId
+      bookingId: h.bookingId || null,
+      userId: u?.userId || null, // user's userId
+      fullName: u?.fullName || null,
+      email: u?.email || null,
+      phone: u?.phoneNumber || null,
+      serviceType: "hotel",
+      bookingDate: h.checkInDate || null,
+      amount: h.totalAmount ?? 0,
+      paymentStatus: h.paymentStatus || "PENDING",
+      createdAt: h.createdAt,
+    };
+  });
+
+  const formattedRideBookings = rideBookings.map((r) => {
+    const key = typeof r.userId === "string" ? r.userId.trim() : r.userId;
+    const u = rideMapByUserId.get(key) || rideMapByObjectId.get(key);
+    return {
+      _id: u?._id || null, // user ObjectId
+      bookingId: r.bookingId || null,
+      userId: u?.userId || key || null, // prefer user's userId; else raw key
+      fullName: u?.fullName || null,
+      email: u?.email || null,
+      phone: u?.phoneNumber || null,
+      serviceType: "ride",
+      bookingDate: r.timestamps?.completedAt || null,
+      amount: r.fare ?? 0,
+      paymentStatus: r.paymentStatus || "PENDING",
+      createdAt: r.createdAt,
+    };
+  });
+
+  // 4) Merge → sort → paginate
   const allBookings = [
     ...formattedBusBookings,
     ...formattedHotelBookings,
     ...formattedRideBookings,
   ];
 
-  // ✅ Sort
   const sortedBookings = allBookings.sort((a, b) => {
     const aVal = a[sortBy] || 0;
     const bVal = b[sortBy] || 0;
@@ -293,11 +353,9 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
     return 0;
   });
 
-  // ✅ Total + Pagination
   const total = sortedBookings.length;
   const paginatedBookings = sortedBookings.slice(skip, skip + limitNum);
 
-  // ✅ Response
   return res.status(200).json({
     success: true,
     message: "All bookings retrieved successfully",
