@@ -50,6 +50,29 @@ const {
 const walletsModel = require("../../../models/wallet-module/wallets.model");
 
 const getAllHotelManagers = catchAsyncError(async (req, res, next) => {
+  const { filter } = req.query;
+
+  const allowedStatuses = [
+    "approved",
+    "processing",
+    "pending",
+    "submitted",
+    "rejected",
+    "blocked",
+    "p",
+  ];
+
+  if (filter && !allowedStatuses.includes(filter)) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      `Invalid filter value. Allowed values are: ${allowedStatuses.join(", ")}`
+    );
+  }
+
+  if (filter) {
+    req.query.verificationStatus = filter;
+  }
+
   const results = await getAllUsersByAdmin({ req, model: HotelManagerModel });
 
   const ids = results.data.map((u) => u._id);

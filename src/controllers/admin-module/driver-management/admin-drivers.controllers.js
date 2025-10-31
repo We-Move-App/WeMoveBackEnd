@@ -53,7 +53,7 @@ const getAllDrivers = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const { vehicleType, search } = req.query;
+    const { vehicleType, search, filter } = req.query;
     console.log("Query Params:", req.query);
 
     // ✅ Validate vehicleType
@@ -71,6 +71,15 @@ const getAllDrivers = async (req, res) => {
       });
     }
 
+    // ✅ Validate filter (optional)
+    const allowedFilters = ["pending", "approved"];
+    if (filter && !allowedFilters.includes(filter)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid filter value. Allowed values: ${allowedFilters.join(", ")}`,
+      });
+    }
+
     // ✅ Vehicle filter
     const vehicleMatch = { "vehicleInfo.vehicleType": vehicleType };
 
@@ -80,19 +89,25 @@ const getAllDrivers = async (req, res) => {
       branchFilter = { branch: req.user.branch };
     }
 
-    // ✅ Search across multiple fields (case-insensitive, partial)
+    // ✅ Search filter
     let searchFilter = {};
     if (search) {
       const regex = { $regex: search, $options: "i" };
       searchFilter = {
         $or: [
-          { fullName: regex }, // driver name
-          { email: regex }, // driver email
-          { phoneNo: regex }, // driver mobile
-          { status: regex }, // driver status
-          { "vehicleInfo.registrationNo": regex }, // vehicle registration
+          { fullName: regex },
+          { email: regex },
+          { phoneNo: regex },
+          { status: regex },
+          { "vehicleInfo.registrationNo": regex },
         ],
       };
+    }
+
+    // ✅ Status filter (pending / approved)
+    let statusFilter = {};
+    if (filter) {
+      statusFilter = { status: filter };
     }
 
     // ✅ Fetch drivers with pagination (+ wallets)
@@ -108,23 +123,29 @@ const getAllDrivers = async (req, res) => {
       },
       { $unwind: { path: "$vehicleInfo", preserveNullAndEmptyArrays: true } },
 
-      // 🔗 join wallets (assuming wallets.userId === driverId)
+      // join wallets
       {
         $lookup: {
-          from: "wallets", // <-- ensure this matches your actual collection name
-          localField: "driverId", // <-- switch to the correct local field if needed (see note below)
+          from: "wallets",
+          localField: "driverId",
           foreignField: "userId",
           as: "wallet",
         },
       },
       { $unwind: { path: "$wallet", preserveNullAndEmptyArrays: true } },
 
-      { $match: { ...vehicleMatch, ...branchFilter, ...searchFilter } },
+      {
+        $match: {
+          ...vehicleMatch,
+          ...branchFilter,
+          ...searchFilter,
+          ...statusFilter,
+        },
+      },
       { $sort: { createdAt: -1 } },
       { $skip: skip },
       { $limit: limit },
 
-      // final shape
       {
         $project: {
           _id: 0,
@@ -138,14 +159,13 @@ const getAllDrivers = async (req, res) => {
           registrationNumber: "$vehicleInfo.registrationNo",
           createdAt: 1,
 
-          // 🆕 wallet fields
           cardNumber: "$wallet.cardNumber",
           balance: { $ifNull: ["$wallet.balance", 0] },
         },
       },
     ]);
 
-    // ✅ Count total results (no need to join wallets for counting)
+    // ✅ Count total results
     const totalCount = await DriverBasicDetails.aggregate([
       {
         $lookup: {
@@ -156,7 +176,14 @@ const getAllDrivers = async (req, res) => {
         },
       },
       { $unwind: { path: "$vehicleInfo", preserveNullAndEmptyArrays: true } },
-      { $match: { ...vehicleMatch, ...branchFilter, ...searchFilter } },
+      {
+        $match: {
+          ...vehicleMatch,
+          ...branchFilter,
+          ...searchFilter,
+          ...statusFilter,
+        },
+      },
       { $group: { _id: "$driverId" } },
       { $count: "total" },
     ]);
@@ -171,6 +198,7 @@ const getAllDrivers = async (req, res) => {
       limit,
       sortBy: "createdAt",
       order: "desc",
+      filter: filter || null,
       data: drivers,
     });
   } catch (error) {

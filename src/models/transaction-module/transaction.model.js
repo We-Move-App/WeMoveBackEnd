@@ -61,4 +61,15 @@ const transactionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+transactionSchema.index({ adminId: 1, createdAt: -1 });
+transactionSchema.index({ transactionId: 1 });
+transactionSchema.index({ bookingId: 1 });
+transactionSchema.index({ userId: 1 });
+transactionSchema.index({ type: 1 });
+transactionSchema.index({ status: 1 });
+transactionSchema.index({ driverId: 1 });
+transactionSchema.index({ busOperatorId: 1 });
+transactionSchema.index({ hotelManagerId: 1 });
+transactionSchema.index({ usernameLower: 1 });
+
 module.exports = mongoose.model("Transaction", transactionSchema);

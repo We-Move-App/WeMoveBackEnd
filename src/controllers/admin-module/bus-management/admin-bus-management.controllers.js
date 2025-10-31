@@ -45,7 +45,29 @@ const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
 const walletsModel = require("../../../models/wallet-module/wallets.model");
 
 const getAllBusOperators = catchAsyncError(async (req, res, next) => {
+  const { filter } = req.query;
+
+  const allowedStatuses = [
+    "approved",
+    "processing",
+    "pending",
+    "submitted",
+    "rejected",
+    "blocked",
+  ];
+  if (filter && !allowedStatuses.includes(filter)) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      `Invalid filter value. Allowed values are: ${allowedStatuses.join(", ")}`
+    );
+  }
+
+  if (filter) {
+    req.query.verificationStatus = filter;
+  }
+
   let results = await getAllUsersByAdmin({ req, model: BusOperatorModel });
+
   const dataWithBusCount = await Promise.all(
     results.data.map(async (operator) => {
       const [busCount, wallet] = await Promise.all([

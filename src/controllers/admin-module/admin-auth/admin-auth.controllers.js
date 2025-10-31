@@ -59,6 +59,13 @@ const Transaction = require("../../../models/transaction-module/transaction.mode
 const generateCustomId = require("../../../utils/customId/generateCustomId");
 const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
 const moment = require("moment");
+const {
+  sendOtpToEmail,
+  verifyEmailOtp,
+} = require("../../../utils/otpService/otpService");
+const {
+  decodeAccessToken,
+} = require("../../../utils/jwtToken/customTokenService");
 
 // Register Admin
 // const addAdmins = catchAsyncError(async (req, res, next) => {
@@ -346,13 +353,15 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
   );
   setTokenCookies(res, accessToken, refreshToken);
 
-  return res.status(200).json(
-    new ApiResponse(
-      200,
-      { accessToken, refreshToken, user: userObject, logs },
-      `${role} created successfully`
-    )
-  );
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        { accessToken, refreshToken, user: userObject, logs },
+        `${role} created successfully`
+      )
+    );
 });
 // ======================|| LOGIN USER ||========================
 const loginAdmin = catchAsyncError(async (req, res, next) => {
@@ -526,14 +535,14 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
   // Search
   const searchQuery = search
     ? {
-      $or: [
-        { userName: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { phoneNumber: { $regex: search, $options: "i" } },
-        { role: { $regex: search, $options: "i" } },
-        { "branchData.name": { $regex: search, $options: "i" } },
-      ],
-    }
+        $or: [
+          { userName: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { phoneNumber: { $regex: search, $options: "i" } },
+          { role: { $regex: search, $options: "i" } },
+          { "branchData.name": { $regex: search, $options: "i" } },
+        ],
+      }
     : {};
 
   // Aggregation
@@ -595,11 +604,11 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
       createdAt: user.createdAt,
       branch: user.branchData
         ? {
-          branchId: user.branchData._id,
-          name: user.branchData.name,
-          location: user.branchData.location,
-          createdAt: user.branchData.createdAt,
-        }
+            branchId: user.branchData._id,
+            name: user.branchData.name,
+            location: user.branchData.location,
+            createdAt: user.branchData.createdAt,
+          }
         : null,
     };
   });
@@ -639,21 +648,20 @@ const getSubAdminsByBranch = catchAsyncError(async (req, res) => {
     .select("-password");
 
   if (subAdmins.length === 0) {
-    throw new ApiError(
-      404,
-      "No SubAdmins found in your branch",
-      { branch: admin.branch }
-    );
+    throw new ApiError(404, "No SubAdmins found in your branch", {
+      branch: admin.branch,
+    });
   }
 
   const subAdminsWithActivity = await Promise.all(
     subAdmins.map(async (subAdmin) => {
-      const lastActivity = await UserActivityModel.findOne({ userId: subAdmin._id })
+      const lastActivity = await UserActivityModel.findOne({
+        userId: subAdmin._id,
+      })
         .sort({ createdAt: -1 })
         .populate("performedBy", "email role")
         .select("activity createdAt -_id")
         .lean();
-
 
       let logs = null;
       if (lastActivity) {
@@ -666,7 +674,6 @@ const getSubAdminsByBranch = catchAsyncError(async (req, res) => {
           },
         };
       }
-
 
       return {
         ...subAdmin.toObject(),
@@ -715,28 +722,28 @@ const getAdminById = catchAsyncError(async (req, res, next) => {
     updatedAt: admin.updatedAt,
     branch: admin.branch
       ? {
-        branchId: admin.branch?._id,
-        name: admin.branch.name || null,
-        location: admin.branch.location || null,
-      }
+          branchId: admin.branch?._id,
+          name: admin.branch.name || null,
+          location: admin.branch.location || null,
+        }
       : {
-        branchId: null,
-        name: null,
-        location: null,
-      },
+          branchId: null,
+          name: null,
+          location: null,
+        },
     reportingManager: admin.reportingManager
       ? {
-        id: admin.reportingManager._id,
-        userName: admin.reportingManager.userName,
-        phoneNumber: admin.reportingManager.phoneNumber,
-        email: admin.reportingManager.email,
-      }
+          id: admin.reportingManager._id,
+          userName: admin.reportingManager.userName,
+          phoneNumber: admin.reportingManager.phoneNumber,
+          email: admin.reportingManager.email,
+        }
       : null,
     UserActivity: lastActivity
       ? {
-        activity: lastActivity.activity,
-        time: lastActivity.createdAt,
-      }
+          activity: lastActivity.activity,
+          time: lastActivity.createdAt,
+        }
       : null,
   };
 
@@ -806,6 +813,7 @@ const changePassword = catchAsyncError(async (req, res, next) => {
     UserActivity: activityLog,
   });
 });
+
 const resetPassword = catchAsyncError(async (req, res, next) => {
   const result = await resetPasswordFunc({
     req,
@@ -1135,7 +1143,10 @@ const createCoupon = catchAsyncError(async (req, res) => {
 
   // Check that start date is not in the past
   if (start < today) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Start date cannot be in the past");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Start date cannot be in the past"
+    );
   }
 
   // Check that expiry date is after start date
@@ -1457,11 +1468,11 @@ const getUserActivities = async (req, res) => {
       time: formatActivityTime(act.createdAt),
       performedBy: act.performedBy
         ? {
-          _id: act.performedBy._id,
-          name: act.performedBy.name,
-          email: act.performedBy.email,
-          role: act.performedBy.role,
-        }
+            _id: act.performedBy._id,
+            name: act.performedBy.name,
+            email: act.performedBy.email,
+            role: act.performedBy.role,
+          }
         : null,
     }));
 
@@ -1717,13 +1728,8 @@ const getTransactionHistory = async (req, res) => {
       query.status = { $regex: new RegExp(`^${status}$`, "i") }; // case-insensitive
     }
 
-
-
-
-
     // Fetch transactions (LIFO)
-    const transactions = await Transaction.find(query)
-      .sort({ createdAt: -1 });
+    const transactions = await Transaction.find(query).sort({ createdAt: -1 });
     const results = [];
 
     for (const txn of transactions) {
@@ -1775,7 +1781,7 @@ const getTransactionHistory = async (req, res) => {
         description: txn.description,
       });
     }
-    const filteredResults = results.filter(item => {
+    const filteredResults = results.filter((item) => {
       if (!search) return true;
       const s = search.toLowerCase();
 
@@ -1785,7 +1791,6 @@ const getTransactionHistory = async (req, res) => {
         (item.role || "").toLowerCase().includes(s)
       );
     });
-
 
     // Pagination after search
     const paginatedResults = filteredResults.slice(skip, skip + limit);
@@ -1806,7 +1811,6 @@ const getTransactionHistory = async (req, res) => {
       { $group: { _id: null, total: { $sum: "$amount" } } },
     ]);
 
-
     const creditTotal = creditAgg.length > 0 ? creditAgg[0].total : 0;
     const debitTotal = debitAgg.length > 0 ? debitAgg[0].total : 0;
 
@@ -1824,6 +1828,160 @@ const getTransactionHistory = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
+const adminAuthSendOtp = catchAsyncError(async (req, res) => {
+  const { email } = req.body;
+  if (!email) {
+    return res
+      .status(400)
+      .json({ success: false, message: "email is required" });
+  }
+
+  const admin = await AdminModel.findOne({ email: email });
+  if (!admin) {
+    return res.status(404).json({ success: false, message: "Admin not found" });
+  }
+
+  await sendOtpToEmail(email);
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.CREATED,
+        null,
+        "OTP sent to email successfully"
+      )
+    );
+});
+
+const adminAuthVerifyOtp = catchAsyncError(async (req, res) => {
+  const { email, otp } = req.body;
+  if (!email || !otp) {
+    return res
+      .status(400)
+      .json({ success: false, message: "email and otp is required" });
+  }
+
+  await verifyEmailOtp(email, otp);
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(statusCode.CREATED, null, "OTP verified successfully")
+    );
+});
+
+const passwordRegex = /^(?=.*[0-9])(?=.*[!@#$%^&*])[A-Za-z0-9!@#$%^&*]{8,}$/;
+
+const adminResetPassword = catchAsyncError(async (req, res) => {
+  const { email, newPassword, confirmPassword } = req.body;
+
+  if (!email || !newPassword || !confirmPassword) {
+    return res.status(400).json({
+      success: false,
+      message: "email, newPassword and confirmPassword are required",
+    });
+  }
+
+  if (!passwordRegex.test(newPassword)) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Password must be at least 8 characters long and include at least one number and one special character",
+    });
+  }
+
+  if (newPassword !== confirmPassword) {
+    return res.status(400).json({
+      success: false,
+      message: "Confirm password should match new password",
+    });
+  }
+
+  const admin = await AdminModel.findOne({ email });
+  if (!admin) {
+    return res.status(404).json({
+      success: false,
+      message: "Admin not found",
+    });
+  }
+
+  admin.password = newPassword;
+  await admin.save();
+
+  return res
+    .status(statusCode.OK)
+    .json(new ApiResponse(statusCode.CREATED, null, "Reset successful"));
+});
+
+const adminUpdatePassword = catchAsyncError(async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const adminId = decoded?._id;
+
+  if (!adminId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  const admin = await AdminModel.findById(adminId);
+  if (!admin) {
+    throw new ApiError(statusCode.NOT_FOUND, "Admin not found");
+  }
+
+  const { oldPassword, newPassword, confirmPassword } = req.body;
+
+  if (!oldPassword || !newPassword || !confirmPassword) {
+    return res.status(400).json({
+      success: false,
+      message: "oldPassword, newPassword and confirmPassword are required",
+    });
+  }
+
+  if (!passwordRegex.test(newPassword)) {
+    return res.status(400).json({
+      success: false,
+      message:
+        "Password must be at least 8 characters long and include at least one number and one special character",
+    });
+  }
+
+  const isPasswordMatch = await admin.comparePassword(oldPassword);
+  if (!isPasswordMatch) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid old password");
+  }
+
+  if (newPassword !== confirmPassword) {
+    return res.status(400).json({
+      success: false,
+      message: "Confirm password should match new password",
+    });
+  }
+
+  if (oldPassword === newPassword) {
+    return res.status(400).json({
+      success: false,
+      message: "New password should not be the same as old password",
+    });
+  }
+
+  admin.password = newPassword;
+  await admin.save();
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(statusCode.CREATED, null, "Password updated successfully")
+    );
+});
 
 module.exports = {
   addAdmins,
@@ -1849,4 +2007,8 @@ module.exports = {
   getAllCoupons,
   getSubAdminsByBranch,
   getTransactionHistory,
+  adminAuthSendOtp,
+  adminAuthVerifyOtp,
+  adminResetPassword,
+  adminUpdatePassword,
 };

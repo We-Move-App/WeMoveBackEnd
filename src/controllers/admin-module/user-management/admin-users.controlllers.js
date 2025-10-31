@@ -454,6 +454,32 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
         "Transactions fetched successfully"
       );
 
+    case "count": {
+      // reuse the same search-aware queries
+      const busQuery = buildSearchQuery({ bookedBy: userId });
+      const hotelQuery = buildSearchQuery({ bookedBy: userId });
+      const rideQuery = buildSearchQuery({ userId });
+
+      const [busTotal, hotelTotal, rideTotal] = await Promise.all([
+        BusBookingModel.countDocuments(busQuery),
+        HotelBookingModel.countDocuments(hotelQuery),
+        RideBookingDetail.countDocuments(rideQuery),
+      ]);
+
+      const total = busTotal + hotelTotal + rideTotal;
+
+      return res.status(statusCode.OK).json(
+        new ApiResponse(
+          statusCode.OK,
+          {
+            countsByType: { bus: busTotal, hotel: hotelTotal, ride: rideTotal },
+            total,
+          },
+          "Booking counts fetched successfully"
+        )
+      );
+    }
+
     case "all": {
       // each collection uses same search prefix logic
       const busQuery = buildSearchQuery({ bookedBy: userId });
