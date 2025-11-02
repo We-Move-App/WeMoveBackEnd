@@ -23,6 +23,7 @@ const { AdminModel } = require("../../models/admin-module/admin/admin.model");
 const {
   generateTransactionPDFBase64,
 } = require("../../utils/services/invoice.service");
+const Commission = require("../../models/admin-module/commission-management/commission.model");
 
 const deductfromUserWallet = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -147,6 +148,7 @@ const refundToUserWallet = catchAsyncError(async (req, res) => {
 });
 
 const userInternalTransaction = catchAsyncError(async (req, res) => {
+  // ---- Auth ----
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
     throw new ApiError(
@@ -154,100 +156,174 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
       "Access token is missing or invalid"
     );
   }
-
   const jwtToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(jwtToken);
-  console.log(decoded);
 
-  const senderId = decoded?.userId;
-
+  const senderId = decoded?.userId; // <- keep this consistent
   if (!senderId) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
 
-  const sender = await UserModel.findOne({ userId: senderId });
-  if (!sender) {
-    throw new ApiError(statusCode.NOT_FOUND, "Sender not found");
-  }
-
+  // ---- Inputs ----
   const { userId: receiverId, amount } = req.body;
-  if (!receiverId || !amount || amount <= 0) {
+  if (!receiverId || !amount || Number(amount) <= 0) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid receiver or amount");
   }
-
   if (String(senderId) === String(receiverId)) {
     throw new ApiError(statusCode.BAD_REQUEST, "Cannot send to yourself");
   }
 
-  const receiver = await UserModel.findOne({ userId: receiverId });
-  if (!receiver) {
-    throw new ApiError(statusCode.NOT_FOUND, "Receiver not found");
-  }
+  // ---- Basic validations ----
+  const [sender, receiver] = await Promise.all([
+    UserModel.findOne({ userId: senderId }),
+    UserModel.findOne({ userId: receiverId }),
+  ]);
+  if (!sender) throw new ApiError(statusCode.NOT_FOUND, "Sender not found");
+  if (!receiver) throw new ApiError(statusCode.NOT_FOUND, "Receiver not found");
 
+  // ---- Commission: find active rule for "user" transfers ----
+  // NOTE: start a session BEFORE using .session(session)
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const senderWallet = await Wallet.findOne({ userId: decoded._id }).session(
-      session
-    );
-    if (!senderWallet) {
-      throw new ApiError(statusCode.NOT_FOUND, "Sender wallet not found");
+    const commission = await Commission.findOne({
+      serviceType: "user",
+      status: "active",
+    }).session(session);
+
+    // Compute commission amount
+    const amt = Number(amount);
+    let platformFee = 0;
+
+    if (commission) {
+      if (
+        commission.commissionType === "percentage" &&
+        commission.commissionPercentage != null
+      ) {
+        platformFee = Number(
+          ((amt * Number(commission.commissionPercentage)) / 100).toFixed(2)
+        );
+      } else if (
+        commission.commissionType === "fixed" &&
+        commission.commissionRate != null
+      ) {
+        platformFee = Number(Number(commission.commissionRate).toFixed(2));
+      }
     }
 
-    if (senderWallet.balance < amount) {
+    const totalDebit = Number((amt + platformFee).toFixed(2)); // what the sender must have & pay
+
+    // ---- Load wallets (lock by reading inside txn) ----
+    const [senderWallet, receiverWallet] = await Promise.all([
+      Wallet.findOne({ userId: sender._id }).session(session),
+      Wallet.findOne({ userId: receiver._id }).session(session),
+    ]);
+
+    if (!senderWallet)
+      throw new ApiError(statusCode.NOT_FOUND, "Sender wallet not found");
+    if (!receiverWallet)
+      throw new ApiError(statusCode.NOT_FOUND, "Receiver wallet not found");
+
+    // Optional: enforce same currency; otherwise handle conversion here
+    const currency = senderWallet.currency || process.env.MOMO_CURRENCY;
+
+    // ---- Sufficient balance? ----
+    if (Number(senderWallet.balance) < totalDebit) {
       throw new ApiError(statusCode.BAD_REQUEST, "Insufficient balance");
     }
 
-    const receiverWallet = await Wallet.findOne({
-      userId: receiver._id,
-    }).session(session);
-    if (!receiverWallet) {
-      throw new ApiError(statusCode.NOT_FOUND, "Receiver wallet not found");
+    // ---- Find admin for fee credit ----
+    const superAdmin = await AdminModel.findOne({ role: "SuperAdmin" }).session(
+      session
+    );
+    const adminId = superAdmin?._id || "ADM001";
+
+    // ---- Apply atomic wallet updates ----
+    // Deduct totalDebit from sender
+    await Wallet.findOneAndUpdate(
+      { _id: senderWallet._id },
+      { $inc: { balance: -totalDebit } },
+      { session, new: true }
+    );
+
+    // Credit receiver with transfer amount
+    await Wallet.findOneAndUpdate(
+      { _id: receiverWallet._id },
+      { $inc: { balance: amt } },
+      { session, new: true }
+    );
+
+    // Credit admin with platform fee (if any)
+    if (platformFee > 0) {
+      await Wallet.findOneAndUpdate(
+        { userId: adminId },
+        { $inc: { balance: platformFee } },
+        { session, new: true, upsert: true, setDefaultsOnInsert: true }
+      );
     }
 
-    senderWallet.balance -= amount;
-    await senderWallet.save({ session });
+    // ---- Create transactions (3 rows) ----
+    const baseMeta = {
+      status: PaymentStatusEnum.SUCCESS,
+      currency,
+    };
 
-    receiverWallet.balance += amount;
-    await receiverWallet.save({ session });
+    const senderTx = {
+      userId: sender._id,
+      transactionId: uuidv4(),
+      type: TransactionTypeEnum.DEBIT,
+      amount: totalDebit, // user paid amount + fee
+      description:
+        platformFee > 0
+          ? `Sent ${amt} to ${receiver.fullName} (includes fee ${platformFee})`
+          : `Sent ${amt} to ${receiver.fullName}`,
+      ...baseMeta,
+    };
 
-    await Transaction.create(
-      [
-        {
-          userId: decoded._id,
-          transactionId: uuidv4(),
-          type: TransactionTypeEnum.DEBIT,
-          amount,
-          currency: senderWallet.currency,
-          description: `Sent to ${receiver.fullName}, email:${receiver.email}`,
-          status: PaymentStatusEnum.SUCCESS,
-        },
-      ],
-      { session }
-    );
+    const receiverTx = {
+      userId: receiver._id,
+      transactionId: uuidv4(),
+      type: TransactionTypeEnum.CREDIT,
+      amount: amt,
+      description: `Received from ${sender.fullName}, email:${sender.email}`,
+      ...baseMeta,
+    };
 
-    await Transaction.create(
-      [
-        {
-          userId: receiver._id,
-          transactionId: uuidv4(),
-          type: TransactionTypeEnum.CREDIT,
-          amount,
-          currency: receiverWallet.currency,
-          description: `Received from ${sender.fullName}, email:${sender.email}`,
-          status: PaymentStatusEnum.SUCCESS,
-        },
-      ],
-      { session }
-    );
+    const adminTx =
+      platformFee > 0
+        ? {
+            adminId, // keep a dedicated field if your schema supports it
+            transactionId: uuidv4(),
+            type: TransactionTypeEnum.CREDIT,
+            amount: platformFee,
+            description: `Commission from user transfer: sender=${sender.userId} → receiver=${receiver.userId}`,
+            ...baseMeta,
+          }
+        : null;
 
+    // insertMany ignores nulls if you filter them out
+    const txDocs = adminTx
+      ? [senderTx, receiverTx, adminTx]
+      : [senderTx, receiverTx];
+    const transactionsList = await Transaction.insertMany(txDocs, { session });
+
+    // ---- Commit ----
     await session.commitTransaction();
     session.endSession();
 
-    return res
-      .status(statusCode.OK)
-      .json(new ApiResponse(statusCode.OK, {}, "Transfer successful"));
+    return res.status(statusCode.OK).json(
+      new ApiResponse(
+        statusCode.OK,
+        {
+          amountSent: amt,
+          platformFee,
+          totalDebitedFromSender: totalDebit,
+          transactionsList,
+        },
+        "Transfer successful"
+      )
+    );
   } catch (err) {
     await session.abortTransaction();
     session.endSession();
