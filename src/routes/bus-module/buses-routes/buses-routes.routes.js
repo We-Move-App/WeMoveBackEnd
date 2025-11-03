@@ -10,6 +10,7 @@ const {
   getRoutesOfBusOperator,
   getSingleBusRoutesByBusId,
   updateRouteStatus,
+  updateRoutePrice,
 } = require("../../../controllers/bus-module/buses-routes/buses-routes.controllers");
 const {
   isBusOperatorAuthenticated,
@@ -51,7 +52,7 @@ busesRoutesRoutes
   .route("/all-routes")
   .get(
     isBusOperatorAuthenticated,
-    authorizeRole(["bus-operator","bus-operator-member"]),
+    authorizeRole(["bus-operator", "bus-operator-member"]),
     getRoutesOfBusOperator
   );
 busesRoutesRoutes
@@ -89,6 +90,14 @@ busesRoutesRoutes
     isBusOperatorAuthenticated,
     authorizeRole(["bus-operator"]),
     updateRouteStatus
+  );
+
+busesRoutesRoutes
+  .route("/update-price")
+  .post(
+    isBusOperatorAuthenticated,
+    authorizeRole(["bus-operator"]),
+    updateRoutePrice
   );
 
 module.exports = busesRoutesRoutes;

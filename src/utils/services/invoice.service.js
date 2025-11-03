@@ -5,6 +5,7 @@ const ApiError = require("../response/ApiError");
 const ApiResponse = require("../response/ApiResponse");
 const statusCode = require("../constants/statusCode");
 const HotelBookingModel = require("../../models/hotel-module/hotel-bookings/hotel-bookings.model");
+const QRCode = require("qrcode");
 
 const getBusInvoice = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
@@ -54,102 +55,349 @@ const getHotelInvoice = catchAsyncError(async (req, res, next) => {
     );
 });
 
+const LINE = 24;
+const GAP = 6;
+
+const fmtDate = (d) =>
+  d
+    ? new Date(d)
+        .toLocaleDateString(undefined, {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+        })
+        .toUpperCase()
+    : "-";
+
+const fmtTime = (d) =>
+  d ? new Date(d).toLocaleTimeString(undefined, { hour12: false }) : "-";
+
+const drawLabelValue = (page, { x, y, label, value, font, size = 14 }) => {
+  page.drawText(`${label} :`, { x, y, size, font, color: rgb(0, 0, 0) });
+  page.drawText(String(value ?? "-"), {
+    x: x + 80, // more room so values never touch the label
+    y,
+    size,
+    font,
+    color: rgb(0, 0, 0),
+  });
+  return y - (LINE + GAP);
+};
+
+/* ---------- main ---------- */
 const generateBusBookingInvoiceBase64 = async (booking) => {
   const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([600, 800]);
+  const page = pdfDoc.addPage([900, 520]); // wide ticket style
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-  const { height } = page.getSize();
+  const bold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  let y = height - 50;
+  const { width, height } = page.getSize();
 
-  page.drawText("Booking Invoice", {
-    x: 200,
-    y,
-    size: 22,
-    font,
-    color: rgb(0, 0, 0),
+  // Colors close to the reference
+  const orange = rgb(0.95, 0.6, 0.1);
+  const green = rgb(0.08, 0.38, 0.31);
+  const dark = rgb(0.1, 0.1, 0.1);
+
+  // Outer border
+  page.drawRectangle({
+    x: 30,
+    y: 30,
+    width: width - 60,
+    height: height - 60,
+    borderColor: dark,
+    borderWidth: 1,
   });
 
-  y -= 50;
+  // Geometry
+  const BORDER_X = 30,
+    BORDER_Y = 30;
+  const BORDER_W = width - 60,
+    BORDER_H = height - 60;
+  const TOP_H = 60; // taller header to avoid crowding
+  const FOOT_H = 48; // taller footer for bigger font
 
-  page.drawText(`Booking ID: ${booking._id}`, { x: 50, y, size: 12, font });
-  y -= 20;
-  page.drawText(`From: ${booking.from}`, { x: 50, y, size: 12, font });
-  y -= 20;
-  page.drawText(`To: ${booking.to}`, { x: 50, y, size: 12, font });
-  y -= 20;
+  // Top banner (orange)
+  page.drawRectangle({
+    x: BORDER_X,
+    y: BORDER_Y + BORDER_H - TOP_H,
+    width: BORDER_W,
+    height: TOP_H,
+    color: orange,
+    borderColor: dark,
+    borderWidth: 1,
+  });
+
+  // Company (left)
+  page.drawText(booking.companyName || "WemoveAll", {
+    x: BORDER_X + 18,
+    y: BORDER_Y + BORDER_H - TOP_H + 18,
+    size: 18,
+    font: bold,
+    color: rgb(0, 0.3, 0.2),
+  });
+
+  // Right green block
+  const rightBannerWidth = 200;
+  page.drawRectangle({
+    x: BORDER_X + BORDER_W - rightBannerWidth,
+    y: BORDER_Y + BORDER_H - TOP_H,
+    width: rightBannerWidth,
+    height: TOP_H,
+    color: green,
+    borderColor: dark,
+    borderWidth: 1,
+  });
+
+  // // Center ticket no
+  // const ticketNo = String(booking?.ticketNo || booking?._id || "")
+  //   .toString()
+  //   .slice(-6);
+  // page.drawText(`Ticket No. ${ticketNo}`, {
+  //   x: BORDER_X + BORDER_W / 2 - 80,
+  //   y: BORDER_Y + BORDER_H - TOP_H + 20,
+  //   size: 13,
+  //   font,
+  //   color: rgb(0, 0, 0),
+  // });
+
+  // Right "BUS TICKET"
+  page.drawText("BUS TICKET", {
+    x: BORDER_X + BORDER_W - rightBannerWidth + 18,
+    y: BORDER_Y + BORDER_H - TOP_H + 18,
+    size: 18,
+    font: bold,
+    color: rgb(1, 1, 1),
+  });
+
+  // Main content area
+  const contentTopY = BORDER_Y + BORDER_H - TOP_H - 30; // generous padding below header
+  const contentLeftX = BORDER_X + 18;
+
+  // 3 equal columns
+  const colW = (BORDER_W - 36) / 3;
+  const col1X = contentLeftX;
+  const col2X = contentLeftX + colW;
+  const col3X = contentLeftX + 2 * colW;
+
+  /* -------- LEFT COLUMN -------- */
+  let y1 = contentTopY;
+
+  const firstPassenger = booking?.passengers?.[0];
+  y1 = drawLabelValue(page, {
+    x: col1X,
+    y: y1,
+    label: "Name",
+    value: firstPassenger?.name || booking?.bookingBy || "-",
+    font,
+  });
+
+  const jDate = fmtDate(booking?.journeyDate || booking?.createdAt);
+  const jTime = fmtTime(booking?.journeyDate || booking?.createdAt);
+  y1 = drawLabelValue(page, {
+    x: col1X,
+    y: y1,
+    label: "Date",
+    value: jDate,
+    font,
+  });
+  y1 = drawLabelValue(page, {
+    x: col1X,
+    y: y1,
+    label: "Time",
+    value: jTime,
+    font,
+  });
+
+  const busReg =
+    booking?.bus?.regNumber || booking?.busRegNumber || booking?.bus || "-";
+  y1 = drawLabelValue(page, {
+    x: col1X,
+    y: y1,
+    label: "Bus",
+    value: busReg,
+    font,
+  });
+
+  const stationLeft =
+    booking?.station || booking?.from || booking?.route?.startLocation || "-";
+  y1 = drawLabelValue(page, {
+    x: col1X,
+    y: y1,
+    label: "Station",
+    value: stationLeft,
+    font,
+  });
+
+  const seatText =
+    (booking?.passengers || [])
+      .map((p) => p?.seatNumber)
+      .filter(Boolean)
+      .join(", ") || "-";
+  y1 = drawLabelValue(page, {
+    x: col1X,
+    y: y1,
+    label: "Seat",
+    value: seatText,
+    font,
+  });
+
+  /* -------- MIDDLE COLUMN (From/To + QR) -------- */
+  let y2 = contentTopY;
+
   page.drawText(
-    `Journey Date: ${new Date(booking.journeyDate).toLocaleDateString()}`,
-    {
-      x: 50,
-      y,
-      size: 12,
-      font,
-    }
+    `From: ${booking?.from || booking?.route?.startLocation || "-"}`,
+    { x: col2X, y: y2, size: 14, font }
   );
-  y -= 20;
-  page.drawText(`Booking By: ${booking.bookingBy}`, {
-    x: 50,
-    y,
-    size: 12,
-    font,
-  });
-  y -= 20;
-  page.drawText(`Status: ${booking.status}`, { x: 50, y, size: 12, font });
-  y -= 20;
-  page.drawText(`No of Passengers: ${booking.noOfPassengers}`, {
-    x: 50,
-    y,
-    size: 12,
-    font,
-  });
-  y -= 20;
-  page.drawText(`Price: ${booking.price} ${process.env.MOMO_CURRENCY}`, {
-    x: 50,
-    y,
-    size: 12,
-    font,
-  });
-  y -= 20;
-  page.drawText(`Payment Status: ${booking.paymentStatus}`, {
-    x: 50,
-    y,
-    size: 12,
-    font,
-  });
-  y -= 40;
-
-  page.drawText("Passengers:", {
-    x: 50,
-    y,
+  y2 -= LINE;
+  page.drawText(`To:   ${booking?.to || booking?.route?.endLocation || "-"}`, {
+    x: col2X,
+    y: y2,
     size: 14,
     font,
-    color: rgb(0, 0, 0),
   });
-  y -= 25;
+  y2 -= LINE / 2;
 
-  booking.passengers.forEach((p, idx) => {
-    page.drawText(`${idx + 1}. ${p.name}`, { x: 70, y, size: 12, font });
-    y -= 20;
-    page.drawText(`   Seat: ${p.seatNumber}`, { x: 70, y, size: 12, font });
-    y -= 20;
-    page.drawText(`   Email: ${p.email}`, { x: 70, y, size: 12, font });
-    y -= 20;
-    page.drawText(`   Contact: ${p.contactNumber}`, {
-      x: 70,
-      y,
-      size: 12,
-      font,
-    });
-    y -= 30;
+  // QR code (booking._id)
+  const qrPng = await QRCode.toBuffer(String(booking?._id || ""), {
+    errorCorrectionLevel: "M",
+    width: 200,
+    margin: 1,
+  });
+  const qrImg = await pdfDoc.embedPng(qrPng);
+
+  // Compute a safe Y so it never hits the footer
+  let qrSize = 170; // visual size on PDF
+  const qrTopGap = 10;
+  const minBottomGap = FOOT_H + 40; // keep QR well above footer
+  let qrY = y2 - qrTopGap - qrSize;
+
+  if (qrY < BORDER_Y + minBottomGap) {
+    // shift up (or slightly reduce) to preserve bottom clearance
+    const deficit = BORDER_Y + minBottomGap - qrY;
+    qrY += deficit;
+    if (qrY + qrSize > contentTopY - 2 * LINE) {
+      // In a very tight scenario, shrink QR a bit
+      const maxSize =
+        contentTopY - 2 * LINE - (BORDER_Y + minBottomGap) - qrTopGap;
+      if (maxSize > 120) qrSize = Math.min(qrSize, maxSize);
+    }
+  }
+
+  page.drawImage(qrImg, {
+    x: col2X + (colW - qrSize) / 2,
+    y: qrY,
+    width: qrSize,
+    height: qrSize,
   });
 
-  page.drawText(`Created At: ${new Date(booking.createdAt).toLocaleString()}`, {
-    x: 50,
-    y,
-    size: 10,
+  page.drawText("Scan To Validate Ticket", {
+    x: col2X + colW / 2 - 70,
+    y: qrY - 16,
+    size: 11,
     font,
-    color: rgb(0.4, 0.4, 0.4),
+    color: rgb(0.25, 0.25, 0.25),
+  });
+
+  /* -------- RIGHT COLUMN -------- */
+  let y3 = contentTopY;
+
+  const departStation =
+    booking?.departureAddress ||
+    booking?.from ||
+    booking?.route?.startLocation ||
+    "-";
+  y3 = drawLabelValue(page, {
+    x: col3X,
+    y: y3,
+    label: "Station",
+    value: departStation,
+    font,
+  });
+
+  const arrDate = fmtDate(booking?.arrivalDate || booking?.journeyDate);
+  const arrTime = fmtTime(booking?.arrivalTime || booking?.journeyDate);
+  y3 = drawLabelValue(page, {
+    x: col3X,
+    y: y3,
+    label: "Date",
+    value: arrDate,
+    font,
+  });
+  y3 = drawLabelValue(page, {
+    x: col3X,
+    y: y3,
+    label: "Time",
+    value: arrTime,
+    font,
+  });
+
+  const currency = process.env.MOMO_CURRENCY || "";
+  y3 = drawLabelValue(page, {
+    x: col3X,
+    y: y3,
+    label: "Price",
+    value: `${booking?.price ?? "-"} ${currency}`.trim(),
+    font,
+  });
+
+  const arrStation = booking?.to || booking?.route?.endLocation || "-";
+  y3 = drawLabelValue(page, {
+    x: col3X,
+    y: y3,
+    label: "Station",
+    value: arrStation,
+    font,
+  });
+
+  const klass = booking?.class || "Regular";
+  y3 = drawLabelValue(page, {
+    x: col3X,
+    y: y3,
+    label: "Class",
+    value: klass,
+    font,
+  });
+
+  // Footer
+  page.drawRectangle({
+    x: BORDER_X,
+    y: BORDER_Y,
+    width: BORDER_W,
+    height: FOOT_H,
+    color: green,
+    borderColor: dark,
+    borderWidth: 1,
+  });
+
+  page.drawText("GATES WILL CLOSE 25 MINUTES TO DEPARTURE TIME", {
+    x: BORDER_X + 18,
+    y: BORDER_Y + 16,
+    size: 14,
+    font: bold,
+    color: rgb(1, 1, 1),
+  });
+
+  const boardingTime = booking?.boardingTime
+    ? fmtTime(booking.boardingTime)
+    : booking?.journeyDate
+      ? fmtTime(booking.journeyDate)
+      : "-";
+
+  page.drawText(`BOARDING TIME: ${boardingTime}`, {
+    x: BORDER_X + BORDER_W - 280,
+    y: BORDER_Y + 16,
+    size: 14,
+    font: bold,
+    color: rgb(1, 1, 1),
+  });
+
+  // Small center label above orange bar (optional, like the sample)
+  page.drawText("", {
+    x: width / 2 - 55,
+    y: height - 36,
+    size: 12,
+    font: bold,
+    color: dark,
   });
 
   const pdfBytes = await pdfDoc.save();

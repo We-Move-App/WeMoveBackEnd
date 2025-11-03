@@ -215,7 +215,6 @@ const updateBusRoute = catchAsyncError(async (req, res, next) => {
 const deleteBusRoute = catchAsyncError(async (req, res, next) => {
   const { routeId } = req.params;
 
-
   // Find the route by ID
   const existingRoute = await BusRouteModel.findById(routeId);
   if (!existingRoute) {
@@ -243,7 +242,6 @@ const deleteBusRoute = catchAsyncError(async (req, res, next) => {
 // =============|| GET ALL BUS ROUTES ||=============================
 const getAllBusRoutes = catchAsyncError(async (req, res, next) => {
   const { busId } = req.params;
-
 
   const busRoutes = await BusRouteModel.find({ busId });
   console.log("Bus Routes:", busRoutes);
@@ -383,7 +381,6 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
   const startIndex = (page - 1) * limit;
   let { status, search, filter } = req.query;
 
-
   status = status || "active";
 
   const query = { createdBy: _id, status };
@@ -424,7 +421,6 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
 
   const newRoutes = await Promise.all(
     routes?.map(async (route) => {
-
       const pricePerSeat = await getFinalPrice(
         "bus",
         route.pricePerSeat,
@@ -435,8 +431,7 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
         pricePerSeat,
       };
     })
-  )
-
+  );
 
   const result = {
     routes: newRoutes,
@@ -473,6 +468,43 @@ const updateRouteStatus = catchAsyncError(async (req, res, next) => {
     );
 });
 
+const updateRoutePrice = catchAsyncError(async (req, res, next) => {
+  const { routeId, pricePerSeat } = req.body;
+
+  if (!routeId || pricePerSeat === undefined) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "routeId and pricePerSeat are required"
+    );
+  }
+
+  const price = Number(pricePerSeat);
+  if (!Number.isFinite(price) || price < 0) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "pricePerSeat must be a positive number"
+    );
+  }
+
+  const busRoute = await BusRouteModel.findById(routeId);
+  if (!busRoute) {
+    throw new ApiError(statusCode.NOT_FOUND, "Bus route not found");
+  }
+
+  busRoute.pricePerSeat = price;
+  await busRoute.save();
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        busRoute,
+        "Bus route price updated successfully"
+      )
+    );
+});
+
 module.exports = {
   createBusRoute,
   updateBusRoute,
@@ -484,4 +516,5 @@ module.exports = {
   getRoutesOfBusOperator,
   getSingleBusRoutesByBusId,
   updateRouteStatus,
+  updateRoutePrice,
 };

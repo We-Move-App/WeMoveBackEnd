@@ -2,7 +2,7 @@ const BusDriverModel = require("../../../models/bus-module/bus-drivers/bus-drive
 const BusOperatorModel = require("../../../models/bus-module/bus-operator/bus-operator.model");
 
 const {
-    busOperatorAuthoritiesFields,
+  busOperatorAuthoritiesFields,
 } = require("../../../utils/constants/constants");
 const statusCode = require("../../../utils/constants/statusCode");
 const ApiError = require("../../../utils/response/ApiError");
@@ -15,7 +15,6 @@ const mongoose = require("mongoose");
 const moment = require("moment");
 const BusSeatsLayoutModel = require("../../../models/bus-module/bus-seats-management/buses-seats.model");
 const BusActivityLogModel = require("../../../models/bus-module/busActivityonBoardModel/busActivityModel");
-
 
 // const onboardUserByQR = catchAsyncError(async (req, res, next) => {
 //   const { bookingId, phoneNo } = req.body;
@@ -73,7 +72,6 @@ const BusActivityLogModel = require("../../../models/bus-module/busActivityonBoa
 //   const driverId = req.user_id;
 //   const { bookingId } = req.body;
 
-
 //   if (!driverId) {
 //     throw new ApiError(statusCode.UNAUTHORIZED, "Driver not authenticated");
 //   }
@@ -127,37 +125,40 @@ const BusActivityLogModel = require("../../../models/bus-module/busActivityonBoa
 //   // Send only passenger details
 //   return res.status(statusCode.OK).json({
 //     message: "Passenger onboarded successfully",
-//     passengerDetails: booking.passengers, 
+//     passengerDetails: booking.passengers,
 //   });
 // });
 const onboardUserByQR = catchAsyncError(async (req, res, next) => {
-   const driverId = req.user_id;
+  const driverId = req.user_id;
   const { bookingId } = req.body;
- 
 
- 
   const booking = await BusBookingModel.findById(bookingId);
-  const driver = await BusDriverModel.findById(driverId).populate("assignedBus");
-console.log("Booking:", booking);
-console.log("Driver:", driver);
-console.log("Driver.assignedBus:", driver?.assignedBus);
+  const driver =
+    await BusDriverModel.findById(driverId).populate("assignedBus");
+  console.log("Booking:", booking);
+  console.log("Driver:", driver);
+  console.log("Driver.assignedBus:", driver?.assignedBus);
 
   if (!booking || !driver || !driver.assignedBus) {
-    throw new ApiError(statusCode.NOT_FOUND, "Driver or booking not found, or bus not assigned to driver");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      "Driver or booking not found, or bus not assigned to driver"
+    );
   }
-// ✅ FIXED HERE:
-if (String(driver.assignedBus._id) !== String(booking.busId._id)) {
-  throw new ApiError(statusCode.FORBIDDEN, "Driver is not assigned to this bus");
-}
- 
- 
-if (booking.isUseronboarded) {
+  // ✅ FIXED HERE:
+  if (String(driver.assignedBus._id) !== String(booking.busId._id)) {
+    throw new ApiError(
+      statusCode.FORBIDDEN,
+      "Driver is not assigned to this bus"
+    );
+  }
+
+  if (booking.isUseronboarded) {
     throw new ApiError(statusCode.BAD_REQUEST, "User is already onboarded");
   }
 
   booking.isUseronboarded = true;
   await booking.save();
-
 
   await BusActivityLogModel.create({
     action: "onboard_user",
@@ -179,10 +180,14 @@ const getOnboardedUsersSummary = catchAsyncError(async (req, res, next) => {
   const driverId = req.user_id;
   console.log("Driver ID:", driverId);
 
-  const driver = await BusDriverModel.findById(driverId).populate("assignedBus");
+  const driver =
+    await BusDriverModel.findById(driverId).populate("assignedBus");
 
   if (!driver || !driver.assignedBus) {
-    throw new ApiError(statusCode.NOT_FOUND, "Driver or assigned bus not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      "Driver or assigned bus not found"
+    );
   }
 
   const assignedBusId = driver.assignedBus._id;
@@ -231,9 +236,7 @@ const getOnboardedUsersSummary = catchAsyncError(async (req, res, next) => {
   });
 });
 
-
-module.exports =
-{
-onboardUserByQR,
-getOnboardedUsersSummary
+module.exports = {
+  onboardUserByQR,
+  getOnboardedUsersSummary,
 };

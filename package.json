@@ -26,6 +26,7 @@
     "cors": "^2.8.5",
     "crypto": "^1.0.1",
     "date-fns": "^4.1.0",
+    "dayjs": "^1.11.19",
     "dotenv": "^16.4.7",
     "ejs": "^3.1.10",
     "express": "^4.21.2",
@@ -52,6 +53,7 @@
     "nodemailer": "^6.10.1",
     "pdf-lib": "^1.17.1",
     "pdfkit": "^0.17.0",
+    "qrcode": "^1.5.4",
     "redis": "^4.7.0",
     "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
@@ -59,7 +61,8 @@
     "swagger-ui-express": "^5.0.1",
     "twilio": "^5.5.0",
     "uuid": "^11.1.0",
-    "winston": "^3.17.0"
+    "winston": "^3.17.0",
+    "wkhtmltopdf": "^0.4.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.9",
