@@ -26,9 +26,6 @@ const createCommissionValidation = Joi.object({
     otherwise: Joi.forbidden(),
   }),
 
-  startDate: Joi.date().required(),
-  endDate: Joi.date().greater(Joi.ref("startDate")).optional(),
-
   status: Joi.string()
     .valid(...Object.values(CommissionStatusEnum))
     .default(CommissionStatusEnum.ACTIVE),

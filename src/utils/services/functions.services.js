@@ -723,6 +723,9 @@ const verifyOtpFunc = async ({
   // ✅ Tokens
   const { accessToken, refreshToken } = await generateTokens(user, typeOfUser);
 
+  // console.log("accessToken", accessToken);
+  // console.log("refreshToken", refreshToken);
+
   res.clearCookie("accessToken");
   res.clearCookie("refreshToken");
 

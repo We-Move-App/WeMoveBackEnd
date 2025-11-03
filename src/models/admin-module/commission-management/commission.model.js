@@ -11,8 +11,6 @@ const commissionSchema = new mongoose.Schema(
     commissionType: { type: String, enum: CommissionTypeEnum },
     commissionPercentage: { type: Number, min: 0, max: 100, default: null },
     commissionRate: { type: Number, default: null },
-    startDate: { type: Date },
-    endDate: { type: Date },
     status: {
       type: String,
       enum: CommissionStatusEnum,

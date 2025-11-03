@@ -13,7 +13,7 @@ const {
   removeDeviceTokens,
   verifyOTPWithoutAuth,
   resendOtpWithoutAuth,
-  verifyEmailExist
+  verifyEmailExist,
 } = require("../../../controllers/user-module/user-auth/user-auth.controllers");
 const { isUserAuthenticated } = require("../../../middlewares/authUser");
 const authDeviceToken = require("../../../middlewares/authDeviceToken");
@@ -43,8 +43,6 @@ userAuthRoutest
 userAuthRoutest
   .route("/delete-device-token")
   .put(isUserAuthenticated, removeDeviceTokens);
-userAuthRoutest
-  .route("/check-email-exist")
-  .get(verifyEmailExist);
+userAuthRoutest.route("/check-email-exist").get(verifyEmailExist);
 
 module.exports = userAuthRoutest;
