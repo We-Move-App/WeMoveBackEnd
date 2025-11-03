@@ -4,11 +4,18 @@ const {
   getPlaceAutocomplete,
   getFromCoordinates,
   getDirection,
-  getPlaceDetail
+  getPlaceDetail,
 } = require("../../../controllers/new-driver-module/location/location.controller");
+const {
+  isNDriverAuthenticated,
+} = require("../../../middlewares/authNewDriver");
 const locationRouter = express.Router();
 
-locationRouter.patch("/driver-status", updateDriverStatus);
+locationRouter.patch(
+  "/driver-status",
+  isNDriverAuthenticated,
+  updateDriverStatus
+);
 locationRouter.get("/autocomplete", getPlaceAutocomplete);
 locationRouter.get("/reverse-geocode", getFromCoordinates);
 locationRouter.get("/directions", getDirection);

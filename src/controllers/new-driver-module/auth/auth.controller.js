@@ -17,6 +17,7 @@ const {
 const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
+const { AccessTokenModel } = require("../../../models/token/token.model");
 
 const sendOtpToPhoneHandler = catchAsyncError(async (req, res) => {
   const { phoneNo } = req.body;
@@ -67,10 +68,7 @@ const sendotpToUpdatephone = catchAsyncError(async (req, res) => {
   const driverId = decoded.driverId;
 
   if (!driverId) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Valid token is required"
-    );
+    throw new ApiError(statusCode.BAD_REQUEST, "Valid token is required");
   }
 
   // ✅ Step 3: Fetch driver by driverId
@@ -96,7 +94,6 @@ const sendotpToUpdatephone = catchAsyncError(async (req, res) => {
     .json(new ApiResponse(statusCode.CREATED, null, "OTP sent successfully"));
 });
 
-
 const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
   const { phoneNo, otp } = req.body;
 
@@ -116,6 +113,17 @@ const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
   }
 
   const { accessToken, refreshToken } = generateTokens(driver);
+
+  await AccessTokenModel.findOneAndUpdate(
+    { user: driver.driverId },
+    { token: accessToken },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true,
+      runValidators: true,
+    }
+  );
 
   await saveRefreshToken({
     userId: driver.driverId,

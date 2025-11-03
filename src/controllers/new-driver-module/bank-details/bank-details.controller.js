@@ -116,29 +116,11 @@ const addDriverBankDetails = catchAsyncError(async (req, res) => {
 });
 
 const getDriverBankDetails = catchAsyncError(async (req, res) => {
-  const authHeader = req.headers.authorization;
-
-  if (!authHeader?.startsWith("Bearer ")) {
-    throw new ApiError(
-      statusCode.UNAUTHORIZED,
-      "Access token is missing or invalid"
-    );
+  if (!req.user) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Not authenticated");
   }
 
-  const accessToken = authHeader.split(" ")[1];
-  const decoded = decodeAccessToken(accessToken);
-  const driverId = decoded?.driverId;
-
-  if (!driverId) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
-  }
-
-  const driverExists = await DriverBasicDetails.exists({ driverId });
-
-  if (!driverExists) {
-    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
-  }
-
+  const driverId = req.user.driverId;
   const aggregatedData = await getDriverBankWithPassbook(driverId);
 
   return res

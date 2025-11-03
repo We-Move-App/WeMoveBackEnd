@@ -4,10 +4,25 @@ const {
   addVehicleDetails,
   getDriverVehicleDetails,
 } = require("../../../controllers/new-driver-module/vehicle-details/vehicle-details.controller");
+const {
+  isNDriverAuthenticated,
+} = require("../../../middlewares/authNewDriver");
 const vehicleDetailsRoute = express.Router();
 
-vehicleDetailsRoute.get("/vehicle-static-images", getVehicleImages);
-vehicleDetailsRoute.post("/vehicle-details", addVehicleDetails);
-vehicleDetailsRoute.get("/vehicle-details", getDriverVehicleDetails);
+vehicleDetailsRoute.get(
+  "/vehicle-static-images",
+  isNDriverAuthenticated,
+  getVehicleImages
+);
+vehicleDetailsRoute.post(
+  "/vehicle-details",
+  isNDriverAuthenticated,
+  addVehicleDetails
+);
+vehicleDetailsRoute.get(
+  "/vehicle-details",
+  isNDriverAuthenticated,
+  getDriverVehicleDetails
+);
 
 module.exports = vehicleDetailsRoute;

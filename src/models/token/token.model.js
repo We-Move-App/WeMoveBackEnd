@@ -4,7 +4,7 @@ const { Schema } = mongoose;
 const accessTokenSchema = new Schema(
   {
     user: {
-      type: Schema.Types.ObjectId,
+      type: String,
       required: true,
     },
     token: {

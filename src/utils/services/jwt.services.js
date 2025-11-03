@@ -3,9 +3,11 @@ const BlackListTokenModel = require("../../models/global-module/blacklist-tokens
 const DeviceTokensModel = require("../../models/global-module/device-tokens/device-tokens.model");
 const { AccessTokenModel } = require("../../models/token/token.model");
 const statusCode = require("../constants/statusCode");
+const { decodeAccessToken } = require("../jwtToken/customTokenService");
 const logger = require("../logger/logger");
 const ApiError = require("../response/ApiError");
 const jwt = require("jsonwebtoken");
+const DriverBasicDetails = require("../../models/new-driver-module/basic-details/basic-details.model");
 
 const message = {
   processing: `You are in processing. Please wait for the Admin's Approval `,
@@ -157,7 +159,55 @@ const verifyTokenResultUser = async (req, model, next) => {
   );
 };
 
+const verifyTokenResultDriver = async (req) => {
+  logger.info("Hitting isAuthenticated driver middleware");
+
+  const auth = req.get?.("authorization") || req.headers?.authorization || "";
+  const [scheme, rawToken] = auth.split(" ");
+
+  if (!rawToken || !/^Bearer$/i.test(scheme)) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Authorization header missing or not using Bearer scheme"
+    );
+  }
+
+  const token = rawToken.trim();
+
+  let decodedToken;
+  try {
+    decodedToken = decodeAccessToken(token);
+  } catch {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid access token");
+  }
+
+  const driver = await DriverBasicDetails.findOne({
+    driverId: decodedToken.driverId,
+  });
+  if (!driver) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Driver not found");
+  }
+
+  const deviceRecord = await AccessTokenModel.findOne({
+    user: driver.driverId,
+    token: token,
+  }).lean();
+
+  if (!deviceRecord) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Token expired or you have logged in with another device"
+    );
+  }
+
+  req.user = driver;
+  req.token = token;
+
+  return;
+};
+
 module.exports = {
   verifyTokenResult,
   verifyTokenResultUser,
+  verifyTokenResultDriver,
 };
