@@ -347,13 +347,13 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
     $and: [
       {
         $or: [
-          { startLocation: { $regex: from, $options: "i" } }, // Keep original field name in query
+          { startLocation: { $regex: from, $options: "i" } },
           { "pickups.name": { $regex: from, $options: "i" } },
         ],
       },
       {
         $or: [
-          { endLocation: { $regex: to, $options: "i" } }, // Keep original field name in query
+          { endLocation: { $regex: to, $options: "i" } }, 
           { "drops.name": { $regex: to, $options: "i" } },
         ],
       },
@@ -402,6 +402,32 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
     .populate("busId", "busRegNumber busName busModelNumber rating")
     .lean();
 
+  // 🟢 Add proper seat layout details for each bus route
+  const BusSeatsLayoutModel = require("../../../models/bus-module/bus-seats-management/buses-seats.model");
+
+  await Promise.all(
+    findRoutes.map(async (route) => {
+      const seatLayout = await BusSeatsLayoutModel.findOne({
+        routeId: route._id,
+        journeyDate: new Date(dateOfJourney),
+      })
+        .select("seats bookedSeats availableSeats noOfSeats")
+        .lean();
+
+      if (seatLayout) {
+        route.seats = {
+          bookedSeats: seatLayout.bookedSeats,
+          availableSeats: seatLayout.availableSeats,
+          noOfSeats: seatLayout.noOfSeats,
+        };
+        route.seatLayout = seatLayout.seats; // 👈 full seat details (seatNumber, status, type, etc.)
+      } else {
+        route.seatLayout = []; // No seat layout found
+      }
+    })
+  );
+
+
   // Add bus images
   await Promise.all(
     findRoutes.map(async (route) => {
@@ -448,13 +474,13 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
       // Transform the route object
       const transformedRoute = {
         ...route,
-        // Rename location fields
+      
         from: route.startLocation,
         to: route.endLocation,
-        // Remove original fields
+        
         startLocation: undefined,
         endLocation: undefined,
-        // Add calculated fields
+      
         pricePerSeat,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),

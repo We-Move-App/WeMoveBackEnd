@@ -143,13 +143,24 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
   session.startTransaction();
 
   try {
-    // 3️⃣ Seat availability & auto assignment
+    // ✅ Step 3: Seat availability & auto assignment
+    const busObjectId = new mongoose.Types.ObjectId(busId);
+    const routeObjectId = new mongoose.Types.ObjectId(routeId);
+
+    // Normalize date range (avoid timezone mismatch)
+    const startOfDay = new Date(journeyDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(journeyDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    // Find layout for same bus, route, and date
     let seatAvailability = await BusSeatsLayoutModel.findOne({
-      busId,
-      journeyDate: journeyDateNormalized,
-      routeId,
+      busId: busObjectId,
+      routeId: routeObjectId,
+      journeyDate: { $gte: startOfDay, $lte: endOfDay },
     }).session(session);
 
+    // If layout doesn’t exist → create it
     if (!seatAvailability) {
       const busSeats = Array.from({ length: findBus.noOfSeats }, (_, i) => ({
         seatNumber: `S${i + 1}`,
@@ -161,19 +172,20 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       seatAvailability = await BusSeatsLayoutModel.create(
         [
           {
-            busId,
+            busId: busObjectId,
+            routeId: routeObjectId,
             seats: busSeats,
             noOfSeats: findBus.noOfSeats,
             bookedSeats: 0,
             availableSeats: findBus.noOfSeats,
-            journeyDate: journeyDateNormalized,
-            routeId,
+            journeyDate: startOfDay,
           },
         ],
         { session }
       );
       seatAvailability = seatAvailability[0];
     }
+
 
     const availableSeats = seatAvailability.seats.filter(
       (seat) => seat.isAvailable
@@ -280,15 +292,15 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           seatNumbers: assignedSeats,
           coupon: appliedCoupon
             ? {
-                couponId: appliedCoupon._id,
-                couponCode: appliedCoupon.couponCode,
-                discountType: appliedCoupon.discountType,
-                discountValue:
-                  appliedCoupon.discountType === "Percentage"
-                    ? appliedCoupon.discountPercentage
-                    : appliedCoupon.discountAmount,
-                discountApplied,
-              }
+              couponId: appliedCoupon._id,
+              couponCode: appliedCoupon.couponCode,
+              discountType: appliedCoupon.discountType,
+              discountValue:
+                appliedCoupon.discountType === "Percentage"
+                  ? appliedCoupon.discountPercentage
+                  : appliedCoupon.discountAmount,
+              discountApplied,
+            }
             : null,
         },
       ],
@@ -621,13 +633,13 @@ const calculateBusBooking = catchAsyncError(async (req, res, next) => {
         finalAmount,
         coupon: appliedCoupon
           ? {
-              couponCode: appliedCoupon.couponCode,
-              discountType: appliedCoupon.discountType,
-              discountValue:
-                appliedCoupon.discountType === "Percentage"
-                  ? appliedCoupon.discountPercentage
-                  : appliedCoupon.discountAmount,
-            }
+            couponCode: appliedCoupon.couponCode,
+            discountType: appliedCoupon.discountType,
+            discountValue:
+              appliedCoupon.discountType === "Percentage"
+                ? appliedCoupon.discountPercentage
+                : appliedCoupon.discountAmount,
+          }
           : null,
       },
     });
@@ -667,6 +679,38 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
     ).lean();
     booking.busId.busImages = busImagesDoc?.images?.map((img) => img.url) || [];
   }
+
+
+  const journeyDate = new Date(booking.journeyDate);
+
+  let startDate = new Date(journeyDate);
+  if (booking.routeId?.departureTime) {
+    const [dh, dm] = booking.routeId.departureTime.split(":").map(Number);
+    startDate.setHours(dh || 0, dm || 0, 0, 0);
+  }
+
+  let endDate = new Date(journeyDate);
+  if (booking.routeId?.arrivalTime) {
+    const [ah, am] = booking.routeId.arrivalTime.split(":").map(Number);
+    endDate.setHours(ah || 0, am || 0, 0, 0);
+    if (endDate <= startDate) {
+      endDate.setDate(endDate.getDate() + 1);
+    }
+  }
+
+  const now = new Date();
+  const diffMs = startDate - now;
+  const hoursLeft = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
+
+  const cancellationWindow = booking.busId?.cancellationWindowInHours ?? 24;
+  const isCancellable = hoursLeft >= cancellationWindow;
+
+  // ✅ Attach computed fields
+  booking.startDate = startDate;
+  booking.endDate = endDate;
+  booking.hoursLeft = hoursLeft;
+  booking.isCancellable = isCancellable;
+
 
   return res
     .status(statusCode.OK)
