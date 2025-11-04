@@ -4,6 +4,7 @@ const RideBookingDetail = require("../../models/new-driver-module/booking-detail
 
 const jwt = require("jsonwebtoken");
 const { RideBookStatusEnum } = require("../../utils/constants/ENUM");
+// const { sessionHandler } = require("../handlers/sessionHandler");
 
 const setupUserNamespace = (userNamespace, io) => {
   userNamespace.use((socket, next) => {
@@ -32,6 +33,8 @@ const setupUserNamespace = (userNamespace, io) => {
     console.log("socket.data.userId", socket.data.userId);
 
     const userId = socket.data.userId;
+    console.log(userId);
+
     if (!userId) {
       socket.disconnect(true);
       return;
@@ -66,6 +69,7 @@ const setupUserNamespace = (userNamespace, io) => {
     });
 
     chatHandler(socket, io);
+    // sessionHandler(socket, io);
     rideHandler(socket, io, "user");
 
     socket.on("disconnect", () => {

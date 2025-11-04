@@ -140,10 +140,7 @@ const ChangeSecurePin = catchAsyncError(async (req, res, next) => {
   );
 
   if (!isOldPinMatch) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Old Secure Pin is incorrect."
-    );
+    throw new ApiError(statusCode.BAD_REQUEST, "Old Secure Pin is incorrect.");
   }
 
   // Save new pin (hashing handled by pre-save hook)
@@ -158,18 +155,16 @@ const ChangeSecurePin = catchAsyncError(async (req, res, next) => {
 });
 
 const ResetSecurePin = catchAsyncError(async (req, res, next) => {
-  const { otp, newSecurePin, confirmSecurePin } = req.body;
+  const { newSecurePin, confirmSecurePin } = req.body;
   const { _id } = req.user;
 
-  // ✅ Check required fields
-  if (!newSecurePin || !confirmSecurePin || !otp) {
+  if (!newSecurePin || !confirmSecurePin) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Please enter your OTP, new PIN, and confirm PIN"
+      "Please enter your new PIN, and confirm PIN"
     );
   }
 
-  // ✅ Check length
   if (newSecurePin?.length !== 4 || confirmSecurePin?.length !== 4) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -177,16 +172,20 @@ const ResetSecurePin = catchAsyncError(async (req, res, next) => {
     );
   }
 
-  // ✅ Validate digits only
   const validatePIN = securePinValidator(newSecurePin);
   const validateConfirm = securePinValidator(confirmSecurePin);
   if (!validatePIN || !validateConfirm) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Enter valid PIN (only numbers)");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Enter valid PIN (only numbers)"
+    );
   }
 
-  // ✅ Confirm match
   if (newSecurePin !== confirmSecurePin) {
-    throw new ApiError(statusCode.BAD_REQUEST, "New PIN and confirm PIN do not match");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "New PIN and confirm PIN do not match"
+    );
   }
 
   // ✅ Find user
@@ -195,32 +194,34 @@ const ResetSecurePin = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.NOT_FOUND, "User not found");
   }
 
-  // ✅ OTP query
-  let otpQuery = { otp, isUsed: false };
-  if (user.email) otpQuery.email = user.email.toLowerCase();
-  else if (user.phoneNumber) otpQuery.phoneNumber = user.phoneNumber;
+  // // ✅ OTP query
+  // let otpQuery = { otp, isUsed: false };
+  // if (user.email) otpQuery.email = user.email.toLowerCase();
+  // else if (user.phoneNumber) otpQuery.phoneNumber = user.phoneNumber;
 
-  const otpData = await OtpModel.findOne(otpQuery);
+  // const otpData = await OtpModel.findOne(otpQuery);
 
-  if (!otpData) throw new ApiError(statusCode.BAD_REQUEST, "Wrong OTP");
-  if (new Date(otpData.expiresAt) < new Date())
-    throw new ApiError(statusCode.BAD_REQUEST, "Expired OTP");
+  // if (!otpData) throw new ApiError(statusCode.BAD_REQUEST, "Wrong OTP");
+  // if (new Date(otpData.expiresAt) < new Date())
+  //   throw new ApiError(statusCode.BAD_REQUEST, "Expired OTP");
 
   // ✅ Update secure PIN
   const securePinData = await SecurePinModel.findOne({ userId: _id });
   if (!securePinData)
-    throw new ApiError(statusCode.NOT_FOUND, "Secure PIN not found for this user");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      "Secure PIN not found for this user"
+    );
 
-  securePinData.securePin = newSecurePin; // You can hash here if needed
-  otpData.isUsed = true;
+  securePinData.securePin = newSecurePin;
 
   await securePinData.save();
-  await otpData.save();
 
   return res
     .status(statusCode.OK)
-    .json(new ApiResponse(statusCode.OK, {}, "Secure PIN updated successfully"));
+    .json(
+      new ApiResponse(statusCode.OK, {}, "Secure PIN updated successfully")
+    );
 });
-
 
 module.exports = { CreateSecurePin, ChangeSecurePin, ResetSecurePin };

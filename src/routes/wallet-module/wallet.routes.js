@@ -8,20 +8,25 @@ const {
   getAnalytics,
   userInternalTransaction,
   getWalletAdmin,
-  getTransactionsSuperAdmin,
   getTransactionInvoice,
 } = require("../../controllers/wallet-module/wallet.controller");
-const { isUserAuthenticated } = require("../../middlewares/authUser");
+const {
+  conditionalAuth,
+} = require("../../middlewares/authRoles/authorizeRole");
 const walletRouter = express.Router();
 
-walletRouter.post("/deduct", deductfromUserWallet);
-walletRouter.post("/refund", refundToUserWallet);
-walletRouter.get("/transactions", getTransactions);
-walletRouter.get("/details", getWallet);
-walletRouter.get("/details/admin", getWalletAdmin);
-walletRouter.post("/verify-pin", validatePin);
-walletRouter.get("/analytics", getAnalytics);
-walletRouter.post("/send-to-user", userInternalTransaction);
-walletRouter.get("/transaction-invoice/:transactionId", getTransactionInvoice);
+walletRouter.post("/deduct", conditionalAuth, deductfromUserWallet);
+walletRouter.post("/refund", conditionalAuth, refundToUserWallet);
+walletRouter.get("/transactions", conditionalAuth, getTransactions);
+walletRouter.get("/details", conditionalAuth, getWallet);
+walletRouter.get("/details/admin", conditionalAuth, getWalletAdmin);
+walletRouter.post("/verify-pin", conditionalAuth, validatePin);
+walletRouter.get("/analytics", conditionalAuth, getAnalytics);
+walletRouter.post("/send-to-user", conditionalAuth, userInternalTransaction);
+walletRouter.get(
+  "/transaction-invoice/:transactionId",
+  conditionalAuth,
+  getTransactionInvoice
+);
 
 module.exports = walletRouter;
