@@ -1,3 +1,4 @@
+const jwt = require("jsonwebtoken");
 const DriverBasicDetails = require("../../../models/new-driver-module/basic-details/basic-details.model");
 const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
 const statusCode = require("../../../utils/constants/statusCode");
@@ -18,6 +19,7 @@ const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const { AccessTokenModel } = require("../../../models/token/token.model");
+const { getIO } = require("../../../socket");
 
 const sendOtpToPhoneHandler = catchAsyncError(async (req, res) => {
   const { phoneNo } = req.body;
@@ -124,6 +126,21 @@ const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
       runValidators: true,
     }
   );
+
+  try {
+    const io = getIO();
+    const driverRoom = driver.driverId.toString();
+    console.log(driverRoom);
+
+    io.to(driverRoom).emit("session:logout", {
+      token: accessToken,
+      reason: "replaced",
+    });
+
+    console.log("session:logout", accessToken);
+  } catch (e) {
+    console.warn("⚠️ Socket emit skipped:", e.message);
+  }
 
   await saveRefreshToken({
     userId: driver.driverId,
@@ -264,8 +281,23 @@ const refreshAccessTokenHandler = catchAsyncError(async (req, res) => {
     );
   }
 
+  const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+
   const { accessToken, refreshToken: newRefreshToken } =
     await refreshAccessToken(refreshToken);
+
+  const newTokens = await AccessTokenModel.findOneAndUpdate(
+    { user: decoded.id },
+    { token: accessToken },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true,
+      runValidators: true,
+    }
+  );
+
+  console.log("newTokens", newTokens);
 
   return res
     .status(statusCode.OK)

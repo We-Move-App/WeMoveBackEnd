@@ -56,6 +56,7 @@ const {
 const {
   UserAddressModel,
 } = require("../../models/user-module/user-address/user-address.model");
+const { getIO } = require("../../socket");
 // ==============================================
 const registerUserWithEmailAndPhoneNumber = async ({
   req,
@@ -671,34 +672,18 @@ const verifyOtpFunc = async ({
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid email or phone number");
   }
 
-  // ✅ Find the user
   const user = await reqModel.findOne(
     isEmail ? { email: identifier } : { phoneNumber: identifier }
   );
 
-  // const existingHistory = await historyModel.findOne(
-  //   isEmail
-  //     ? { $or: [{ previousEmail: emailOrPhone.toLowerCase() }, { newEmail: emailOrPhone.toLowerCase() }] }
-  //     : { $or: [{ previousPhoneNumber: emailOrPhone }, { newPhoneNumber: emailOrPhone }] }
-  // );
-
-  // if (existingHistory) {
-  //   throw new ApiError(
-  //     statusCode.BAD_REQUEST,
-  //     `This ${isEmail ? "email" : "phone number"} was used previously and cannot be registered again`
-  //   );
-  // }
-
-  if (!user) {
-    throw new ApiError(statusCode.NOT_FOUND, "User not found");
-  }
+  if (!user) throw new ApiError(statusCode.NOT_FOUND, "User not found");
   if (["blocked", "rejected"].includes(user.verificationStatus)) {
     throw new ApiError(
       statusCode.FORBIDDEN,
       `Your account is ${user.verificationStatus}. Please contact support.`
     );
   }
-  // ✅ Verify OTP using reusable functions
+
   if (isEmail) {
     await verifyEmailOtp(identifier, otp);
     user.emailVerified = true;
@@ -709,7 +694,6 @@ const verifyOtpFunc = async ({
 
   await user.save();
 
-  // ✅ Create wallet if not exists
   let wallet = await Wallet.findOne({ userId: user._id });
   if (!wallet) {
     wallet = await Wallet.create({
@@ -719,29 +703,33 @@ const verifyOtpFunc = async ({
       cardNumber: await generateUniqueCardNumber(),
     });
   }
-  const hashToken = require("../../utils/hashToken/hashToken");
-  // ✅ Tokens
-  const { accessToken, refreshToken } = await generateTokens(user, typeOfUser);
 
-  // console.log("accessToken", accessToken);
-  // console.log("refreshToken", refreshToken);
+  const { accessToken, refreshToken } = await generateTokens(user, typeOfUser);
 
   res.clearCookie("accessToken");
   res.clearCookie("refreshToken");
-
   setTokenCookies(res, accessToken, refreshToken);
-  // ✅ Save device session
-
-  // Create new device session entry
-  // const deviceType = req.body.deviceType || "web";
-  const ip = req.ip || req.headers["x-forwarded-for"] || null;
-  const userAgent = req.headers["user-agent"] || null;
 
   await deviceTokenModel.findOneAndUpdate(
     { user: user._id },
     { token: accessToken },
     { upsert: true, new: true, setDefaultsOnInsert: true, runValidators: true }
   );
+
+  try {
+    const io = getIO();
+    const userRoom = user.userId.toString();
+    console.log(userRoom);
+
+    io.to(userRoom).emit("session:logout", {
+      token: accessToken,
+      reason: "replaced",
+    });
+
+    console.log("session:logout", accessToken);
+  } catch (e) {
+    console.warn("⚠️ Socket emit skipped:", e.message);
+  }
 
   const bankDetails = await UserBankModel.findOne({ userId: user._id });
   const pinDetails = await SecurePinModel.findOne({ userId: user._id });

@@ -30,6 +30,11 @@ const {
 } = require("../../../utils/services/functions.services");
 const userHistoryModel = require("../../../models/user-module/users/userHistory.model");
 const { AccessTokenModel } = require("../../../models/token/token.model");
+const {
+  sendOtpToPhone,
+  verifyPhoneOtp,
+} = require("../../../utils/otpService/otpService");
+const ApiError = require("../../../utils/response/ApiError");
 
 //=====================|| REGISTER USER ||============================
 // const registerUserWithOtp = catchAsyncError(async (req, res, next) => {
@@ -129,6 +134,37 @@ const refreshToken = catchAsyncError(async (req, res, next) => {
   });
 
   return res.status(statusCode.OK).json(result);
+});
+
+const sendOtpToPhoneHandler = catchAsyncError(async (req, res) => {
+  const { phoneNo } = req.body;
+
+  if (!phoneNo) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Phone number is required");
+  }
+
+  await sendOtpToPhone(phoneNo);
+
+  return res
+    .status(statusCode.CREATED)
+    .json(new ApiResponse(statusCode.CREATED, null, "Otp Sent successfully"));
+});
+
+const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
+  const { phoneNo, otp } = req.body;
+
+  if (!phoneNo || !otp) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Phone number and OTP are required"
+    );
+  }
+
+  await verifyPhoneOtp(phoneNo, otp);
+
+  return res
+    .status(statusCode.OK)
+    .json(new ApiResponse(statusCode.OK, {}, "Phone verified successfully"));
 });
 
 // =====================|| RESEND OTP ||=====================================
@@ -255,6 +291,7 @@ module.exports = {
   logoutUser,
   refreshToken,
   registerUser,
+  sendOtpToPhoneHandler,
   resendOtp,
   // verifyOTP,
   verifyStatus,
@@ -264,4 +301,5 @@ module.exports = {
   verifyOTPWithoutAuth,
   resendOtpWithoutAuth,
   verifyEmailExist,
+  verifyPhoneOtpHandler,
 };
