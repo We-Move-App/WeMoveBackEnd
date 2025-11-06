@@ -169,6 +169,25 @@ const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
   );
 });
 
+const verifyPhoneOtpFPin = catchAsyncError(async (req, res) => {
+  const { phoneNo, otp } = req.body;
+
+  if (!phoneNo || !otp) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Phone number and OTP are required"
+    );
+  }
+
+  await verifyPhoneOtp(phoneNo, otp);
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(statusCode.CREATED, {}, "Phone verified successfully")
+    );
+});
+
 const sendOtpToEmailHandler = catchAsyncError(async (req, res) => {
   const { email } = req.body;
   const authHeader = req.headers.authorization;
@@ -317,4 +336,5 @@ module.exports = {
   sendOtpToEmailHandler,
   verifyEmailOtpHandler,
   refreshAccessTokenHandler,
+  verifyPhoneOtpFPin,
 };

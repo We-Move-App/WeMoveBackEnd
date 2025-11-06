@@ -224,17 +224,17 @@ const getDriverProfileDetails = catchAsyncError(async (req, res) => {
       },
       bankDetails: bankDetails
         ? {
-          ...bankDetails,
-          passbook: findDoc("passbook"),
-        }
+            ...bankDetails,
+            passbook: findDoc("passbook"),
+          }
         : null,
       vehicleDetails: vehicleDetails
         ? {
-          ...vehicleDetails,
-          insurance: findDoc("insurance"),
-          registration: findDoc("registration"),
-          vehicle_photo: findDoc("vehicle_photo"),
-        }
+            ...vehicleDetails,
+            insurance: findDoc("insurance"),
+            registration: findDoc("registration"),
+            vehicle_photo: findDoc("vehicle_photo"),
+          }
         : null,
     },
   };
@@ -378,16 +378,9 @@ const updatePin = catchAsyncError(async (req, res) => {
   await driver.save();
 
   // ----------------- Step 7: Response -----------------
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      {
-        driverId: driver.driverId,
-        isPinExist: driver.isPinExist,
-      },
-      "Pin updated successfully"
-    )
-  );
+  return res
+    .status(statusCode.OK)
+    .json(new ApiResponse(statusCode.OK, {}, "Pin updated successfully"));
 });
 
 const verifyPin = catchAsyncError(async (req, res) => {
@@ -505,23 +498,11 @@ const resetSecurePin = catchAsyncError(async (req, res) => {
   }
 
   // ----------------- Step 3: Extract Body -----------------
-  const { otp, newPin, confirmPin } = req.body;
-  if (!otp || !newPin || !confirmPin) {
+  const { newPin, confirmPin } = req.body;
+  if (!newPin || !confirmPin) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "otp, newPin and confirmPin are required"
-    );
-  }
-
-  // ----------------- Step 4: Verify OTP -----------------
-  if (driver.phoneNo) {
-    await verifyPhoneOtp(driver.phoneNo, otp);
-  } else if (driver.email) {
-    await verifyEmailOtp(driver.email, otp);
-  } else {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Driver does not have phone or email registered for OTP verification"
+      "newPin and confirmPin are required"
     );
   }
 
@@ -553,17 +534,11 @@ const resetSecurePin = catchAsyncError(async (req, res) => {
   await driver.save();
 
   // ----------------- Step 7: Response -----------------
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      {
-        driverId: driver.driverId,
-        isPinExist: driver.isPinExist,
-      },
-      "Pin reset successfully"
-    )
-  );
+  return res
+    .status(statusCode.OK)
+    .json(new ApiResponse(statusCode.OK, {}, "Pin reset successfully"));
 });
+
 const deleteDriverProfile = catchAsyncError(async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
@@ -663,7 +638,6 @@ const updateDriverPhoneNumber = catchAsyncError(async (req, res) => {
   }
 
   if (existingDriver && String(existingDriver.driverId) !== String(driverId)) {
-   
     throw new ApiError(
       statusCode.CONFLICT,
       "This phone number is already registered with another driver"
@@ -711,10 +685,7 @@ const updateDriverEmail = catchAsyncError(async (req, res) => {
   const driverId = decoded.driverId;
 
   if (!driverId) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Valid token is required"
-    );
+    throw new ApiError(statusCode.BAD_REQUEST, "Valid token is required");
   }
 
   const { newEmail, otp } = req.body;
@@ -741,7 +712,9 @@ const updateDriverEmail = catchAsyncError(async (req, res) => {
   }
 
   // Step 4: Prevent using another driver's email
-  const existingDriver = await DriverBasicDetails.findOne({ email: newEmail.toLowerCase() });
+  const existingDriver = await DriverBasicDetails.findOne({
+    email: newEmail.toLowerCase(),
+  });
   if (existingDriver && String(existingDriver.driverId) !== String(driverId)) {
     throw new ApiError(
       statusCode.CONFLICT,
@@ -776,8 +749,6 @@ const updateDriverEmail = catchAsyncError(async (req, res) => {
     )
   );
 });
-
-
 
 module.exports = {
   addDriverBasicDetails,

@@ -32,35 +32,51 @@ const authorizeRole = (roles) => (req, res, next) => {
 };
 
 const conditionalAuth = async (req, res, next) => {
-  let token = null;
-  const authHeader = req.headers.authorization;
-  if (authHeader?.startsWith("Bearer ")) token = authHeader.split(" ")[1];
-  if (!token && req?.cookies?.accessToken) token = req.cookies.accessToken;
+  try {
+    let token = null;
 
-  if (!token) {
-    throw new ApiError(
-      statusCode.UNAUTHORIZED,
-      "Access token is missing or invalid"
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith("Bearer ")) token = authHeader.split(" ")[1];
+    if (!token && req?.cookies?.accessToken) token = req.cookies.accessToken;
+
+    if (!token) {
+      return next(
+        new ApiError(
+          statusCode.UNAUTHORIZED,
+          "Access token is missing or invalid"
+        )
+      );
+    }
+
+    // IMPORTANT: await this if it returns a Promise
+    const decoded = await decodeAccessToken(token);
+    if (!decoded) {
+      return next(
+        new ApiError(statusCode.UNAUTHORIZED, "Invalid access token")
+      );
+    }
+
+    req.decodedToken = decoded;
+    // normalize role to avoid "Driver" vs "driver" mismatches
+    const role = (decoded.role || "").toLowerCase();
+    req.authRole = decoded.role || null;
+
+    if (role === "user") {
+      return isUserAuthenticated(req, res, next);
+    } else if (role === "driver") {
+      return isNDriverAuthenticated(req, res, next);
+    }
+
+    return next();
+  } catch (err) {
+    // Ensure every failure hits Express error handler, not process.on('unhandledRejection')
+    return next(
+      new ApiError(
+        statusCode.UNAUTHORIZED,
+        err?.message || "Invalid access token"
+      )
     );
   }
-
-  let decoded;
-  try {
-    decoded = decodeAccessToken(token);
-  } catch {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid access token");
-  }
-
-  req.decodedToken = decoded;
-  req.authRole = decoded?.role || null;
-
-  if (req.authRole === "user") {
-    return isUserAuthenticated(req, res, next);
-  } else if (req.authRole === "Driver") {
-    return isNDriverAuthenticated(req, res, next);
-  }
-
-  return next();
 };
 
 module.exports = { authorizeRole, conditionalAuth };
