@@ -49,7 +49,7 @@ const conditionalAuth = async (req, res, next) => {
     }
 
     // IMPORTANT: await this if it returns a Promise
-    const decoded = await decodeAccessToken(token);
+    const decoded = decodeAccessToken(token);
     if (!decoded) {
       return next(
         new ApiError(statusCode.UNAUTHORIZED, "Invalid access token")
