@@ -12,12 +12,7 @@ const {
   getUpcomingBookings,
   getPastBookings,
   cancelHotelBooking,
-  getCancelReasons
-
-
-
-
-
+  getCancelReasons,a
 
 } = require("../../../controllers/hotel-module/hotel-booking/hotel-booking.controller");
 

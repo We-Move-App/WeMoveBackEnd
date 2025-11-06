@@ -1032,6 +1032,14 @@ const UpcomingBusBookings = catchAsyncError(async (req, res) => {
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
+
+  const booking = await BusBookingModel.findOne({ _id: "69099a0eb73bab08d57ba363" })
+    .populate("busId", "busName busModelNumber busRegNumber")
+    .lean();
+
+  console.log(booking.busId);
+
+
   const bookings = await BusBookingModel.find(query)
     .sort({ journeyDate: 1 })
     .skip(skip)
@@ -1127,8 +1135,6 @@ const UpcomingBusBookings = catchAsyncError(async (req, res) => {
     )
   );
 });
-
-// ----
 const OldBusBookings = catchAsyncError(async (req, res) => {
   const { page = 1, limit = 10 } = req.query;
   const userId = req.user._id;

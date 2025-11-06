@@ -1728,6 +1728,14 @@ const getTransactionHistory = async (req, res) => {
       query.status = { $regex: new RegExp(`^${status}$`, "i") }; // case-insensitive
     }
 
+    if (search) {
+      const regex = new RegExp(search, "i"); // case-insensitive partial match
+      query.$or = [
+        { transactionId: regex },  // 🔍 search by transactionId
+        { description: regex },    // 🔍 search by description
+      ];
+    }
+
     // Fetch transactions (LIFO)
     const transactions = await Transaction.find(query).sort({ createdAt: -1 });
     const results = [];

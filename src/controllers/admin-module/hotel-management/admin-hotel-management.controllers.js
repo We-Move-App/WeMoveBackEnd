@@ -122,7 +122,7 @@ const getHotelByManagerId = catchAsyncError(async (req, res, next) => {
 
   try {
     const manager = await HotelManagerModel.findById(ownerId)
-      .populate("branch", "name location") // ✅ populate branch with name & location
+      .populate("branch", "name location")
       .lean();
 
     if (!manager) throw new ApiError(404, "Manager not found");

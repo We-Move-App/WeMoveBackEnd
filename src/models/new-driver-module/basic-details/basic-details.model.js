@@ -42,6 +42,27 @@ const driverBasicDetailSchema = new mongoose.Schema(
     createdBy: { type: String, enum: ["user", "admin"], default: "user" },
     createdById: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
     updatedAtById: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+    verifiedBy: {
+      // createdAt: { type: Date },
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin"
+    },
+    batchVerified: {
+      type: Boolean,
+      default: false,
+    },
+    remarks: {
+      type: String,
+      default: "", // optional by default
+      trim: true,
+    },
+    batchVerifiedBy: {
+      // admin: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
+      default: null,
+      // },
+    },
   },
   { timestamps: true }
 );

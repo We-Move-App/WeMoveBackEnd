@@ -1272,11 +1272,11 @@ const getHotelById = catchAsyncError(async (req, res) => {
         roomTypes: roomTypesWithAvailability,
         ...(checkIn && checkOut
           ? {
-              dateFilter: {
-                checkInDate: checkIn.toISOString(),
-                checkOutDate: checkOut.toISOString(),
-              },
-            }
+            dateFilter: {
+              checkInDate: checkIn.toISOString(),
+              checkOutDate: checkOut.toISOString(),
+            },
+          }
           : {}),
       },
       "Hotel details fetched successfully."

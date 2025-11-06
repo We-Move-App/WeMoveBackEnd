@@ -1,6 +1,8 @@
 const DriverBasicStatus = {
   PENDING: "pending",
   APPROVED: "approved",
+  REJECTED: "rejected",
+  BLOCKED: "blocked",
 };
 
 const EntityCodeEnum = {

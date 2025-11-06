@@ -163,5 +163,39 @@ const getAllNotificationsAdmin = catchAsyncError(async (req, res) => {
     )
   );
 });
+const deleteAllNotificationsAdmin = catchAsyncError(async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
 
-module.exports = { updateReadStatusAdmin, getAllNotificationsAdmin };
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const adminId = decoded?._id;
+  if (!adminId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  const adminExists = await AdminModel.findById(adminId);
+  if (!adminExists) {
+    throw new ApiError(statusCode.NOT_FOUND, "Admin not found");
+  }
+
+  // ✅ Delete all notifications where this admin is a recipient
+  const result = await NotificationModel.deleteMany({
+    "recipients.adminId": adminId,
+  });
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      { deletedCount: result.deletedCount },
+      "All notifications deleted successfully"
+    )
+  );
+});
+
+module.exports = { updateReadStatusAdmin, getAllNotificationsAdmin , deleteAllNotificationsAdmin};
