@@ -195,8 +195,7 @@ const createBooking = catchAsyncError(async (req, res) => {
   if (!room) throw new ApiError(statusCode.NOT_FOUND, "Invalid room type");
   // Calculate total amount
   const totalAmount = room.roomPrice * noOfRoom * nights;
-
-  console.log("totalAmount===", totalAmount);
+  
 
   const session = await mongoose.startSession();
   session.startTransaction();

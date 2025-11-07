@@ -87,8 +87,7 @@ const sendotpToUpdatephone = catchAsyncError(async (req, res) => {
       "This phone number is already registered with another driver"
     );
   }
-
-  // ✅ Step 5: Send OTP
+    // ✅ Step 5: Send OTP
   await sendOtpToPhone(phoneNo);
 
   return res
@@ -162,13 +161,13 @@ const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
           phoneNo: driver.phoneNo,
           email: driver.email,
           status: driver.status || null,
+      
         },
       },
       "Phone verified successfully"
     )
   );
 });
-
 const verifyPhoneOtpFPin = catchAsyncError(async (req, res) => {
   const { phoneNo, otp } = req.body;
 
