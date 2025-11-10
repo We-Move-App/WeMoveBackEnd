@@ -44,7 +44,7 @@ const initializeSocket = (io) => {
 
         console.log(`Driver connected: ${socket.data.driverId}`);
       } else if (decoded.role === "user") {
-        socket.data.userId = decoded.userId || decoded._id;
+        socket.data.userId = decoded._id;
         socket.join(socket.data.userId);
         rideHandler(socket, io, "user");
         chatHandler(socket, io);
