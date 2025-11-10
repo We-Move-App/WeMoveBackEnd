@@ -198,7 +198,9 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
         { bookingId: regex },
         { email: regex }, // in case models store it at root (hotel/bus)
         { phoneNumber: regex }, // same
-        { userId: regex }, // ride.userId (string) or any model exposing userId at root
+        { userId: regex },
+
+        // ride.userId (string) or any model exposing userId at root
       ];
     }
     return filter;
@@ -239,8 +241,8 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
 
   const busHotelUsers = busHotelObjectIds.length
     ? await UserModel.find({ _id: { $in: busHotelObjectIds } })
-        .select("_id userId fullName email phoneNumber")
-        .lean()
+      .select("_id userId fullName email phoneNumber")
+      .lean()
     : [];
   const userByObjectId = new Map(busHotelUsers.map((u) => [String(u._id), u]));
 
@@ -264,13 +266,13 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
   const [usersByRideObjectId, usersByRideAppUserId] = await Promise.all([
     rideObjectIds.length
       ? UserModel.find({ _id: { $in: rideObjectIds } })
-          .select("_id userId fullName email phoneNumber")
-          .lean()
+        .select("_id userId fullName email phoneNumber")
+        .lean()
       : Promise.resolve([]),
     rideAppUserIds.length
       ? UserModel.find({ userId: { $in: rideAppUserIds } })
-          .select("_id userId fullName email phoneNumber")
-          .lean()
+        .select("_id userId fullName email phoneNumber")
+        .lean()
       : Promise.resolve([]),
   ]);
 
@@ -394,12 +396,15 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
   }
 
   // build a case-insensitive prefix regex if search present
+  // build a case-insensitive prefix regex if search present
   const buildSearchQuery = (base = {}) => {
     if (search && search.trim() !== "") {
-      base.bookingId = { $regex: `^${search}`, $options: "i" };
+      const regex = search;
+      base.$or = [{ bookingId: regex }, { transactionId: regex }];
     }
     return base;
   };
+
 
   const paginate = async (Model, query, message) => {
     const [items, total] = await Promise.all([
@@ -424,6 +429,7 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
       )
     );
   };
+
 
   switch (filter) {
     case "bus":

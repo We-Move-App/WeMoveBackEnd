@@ -195,8 +195,7 @@ const createBooking = catchAsyncError(async (req, res) => {
   if (!room) throw new ApiError(statusCode.NOT_FOUND, "Invalid room type");
   // Calculate total amount
   const totalAmount = room.roomPrice * noOfRoom * nights;
-
-  console.log("totalAmount===", totalAmount);
+  
 
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -1272,11 +1271,11 @@ const getHotelById = catchAsyncError(async (req, res) => {
         roomTypes: roomTypesWithAvailability,
         ...(checkIn && checkOut
           ? {
-              dateFilter: {
-                checkInDate: checkIn.toISOString(),
-                checkOutDate: checkOut.toISOString(),
-              },
-            }
+            dateFilter: {
+              checkInDate: checkIn.toISOString(),
+              checkOutDate: checkOut.toISOString(),
+            },
+          }
           : {}),
       },
       "Hotel details fetched successfully."

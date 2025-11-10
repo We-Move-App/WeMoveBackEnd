@@ -85,6 +85,17 @@ const hotelManagerSchema = new mongoose.Schema(
       default: "", // optional by default
       trim: true,
     },
+    batchVerified: {
+      type: Boolean,
+      default: false,
+    },
+    batchVerifiedBy: {
+      admin: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Admin", // or "User" if your admin model is in the same collection
+        default: null,
+      },
+    },
 
 
     authorities: { type: Schema.Types.Mixed, default: {} },

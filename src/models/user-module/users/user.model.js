@@ -70,6 +70,17 @@ const userSchema = new mongoose.Schema(
       ],
       default: "submitted",
     },
+    batchVerified: {
+      type: Boolean,
+      default: false,
+    },
+    batchVerifiedBy: {
+      // admin: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
+      default: null,
+      // },
+    },
     remarks: {
       type: String,
       default: "", // optional by default

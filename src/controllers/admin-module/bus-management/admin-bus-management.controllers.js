@@ -43,6 +43,7 @@ const generateUniqueCardNumber = require("../../../utils/customId/generateUnique
 const generateCustomId = require("../../../utils/customId/generateCustomId");
 const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
 const walletsModel = require("../../../models/wallet-module/wallets.model");
+const { Batch } = require("mongodb");
 
 const getAllBusOperators = catchAsyncError(async (req, res, next) => {
   const { filter } = req.query;
@@ -66,7 +67,11 @@ const getAllBusOperators = catchAsyncError(async (req, res, next) => {
     req.query.verificationStatus = filter;
   }
 
-  let results = await getAllUsersByAdmin({ req, model: BusOperatorModel });
+  let results = await getAllUsersByAdmin({
+    req,
+    model: BusOperatorModel
+  });
+
 
   const dataWithBusCount = await Promise.all(
     results.data.map(async (operator) => {
@@ -77,6 +82,9 @@ const getAllBusOperators = catchAsyncError(async (req, res, next) => {
       return {
         _id: operator._id,
         fullName: operator.fullName,
+        batchVerified: operator.batchVerified,
+        verifiedBy: operator.verifiedBy,
+        batchVerifiedBy: operator.batchVerifiedBy,
         email: operator.email,
         phoneNumber: operator.phoneNumber,
         verificationStatus: operator.verificationStatus,
@@ -689,10 +697,10 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
       branch: booking.busOperator?.branch || null, // ✅ branch comes from operator
       bookedBy: booking.bookedBy
         ? {
-            fullName: booking.bookedBy.fullName,
-            email: booking.bookedBy.email,
-            phoneNumber: booking.bookedBy.phoneNumber,
-          }
+          fullName: booking.bookedBy.fullName,
+          email: booking.bookedBy.email,
+          phoneNumber: booking.bookedBy.phoneNumber,
+        }
         : null,
       from: booking.from,
       to: booking.to,
@@ -704,15 +712,15 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
       createdAt: booking.createdAt,
       passengers: booking.passengers
         ? [
-            {
-              name: booking.passengers.name,
-              age: booking.passengers.age,
-              gender: booking.passengers.gender,
-              contactNumber: booking.passengers.contactNumber,
-              seatNumber: booking.passengers.seatNumber,
-              email: booking.passengers.email,
-            },
-          ]
+          {
+            name: booking.passengers.name,
+            age: booking.passengers.age,
+            gender: booking.passengers.gender,
+            contactNumber: booking.passengers.contactNumber,
+            seatNumber: booking.passengers.seatNumber,
+            email: booking.passengers.email,
+          },
+        ]
         : [],
     })),
   });

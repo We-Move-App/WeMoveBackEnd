@@ -119,6 +119,18 @@ const busOperatorSchema = new mongoose.Schema(
       ref: "Admin",
       default: null,
     },
+    batchVerified: {
+      type: Boolean,
+      default: false,
+    },
+    batchVerifiedBy: {
+      // admin: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
+      default: null,
+      // },
+    },
+
 
     idNumber: { type: String },
     nationality: { type: String },
@@ -135,8 +147,9 @@ const busOperatorSchema = new mongoose.Schema(
       type: String,
     },
     verifiedBy: {
-      createdAt: { type: Date },
-      admin: { type: Schema.Types.ObjectId, ref: "Admin" },
+      // createdAt: { type: Date },
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin"
     },
     gender: {
       type: String,

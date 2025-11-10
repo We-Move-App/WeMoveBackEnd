@@ -83,7 +83,10 @@ const getAllUsersByAdmin = async ({ req, model }) => {
     .sort({ [sortBy]: order.toLowerCase() === "asc" ? 1 : -1 })
     .skip(skip)
     .limit(limit)
-    .select("avatar email phoneNumber fullName verificationStatus branchId");
+    .select("avatar email phoneNumber fullName verificationStatus branchId batchVerified").populate([
+      { path: "verifiedBy", select: "userName email" },
+      { path: "batchVerifiedBy", select: "userName email" },
+    ]);
 
   return {
     success: true,
@@ -128,8 +131,10 @@ const getUserByIdByAdmin = async ({
   return new ApiResponse(statusCode.OK, result, `Data found Successfully`);
 };
 const userVerifiedByAdmin = async ({ req, model }) => {
-  const { status, remarks } = req.body;
+  const { status, remarks, batchVerified } = req.body;
+
   const { userId } = req.params;
+
   if (!userId || !status) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -153,10 +158,7 @@ const userVerifiedByAdmin = async ({ req, model }) => {
   }
   isUser.verificationStatus = status;
 
-  isUser.verifiedBy = {
-    createdAt: new Date().toISOString(),
-    admin: req.user._id,
-  };
+  isUser.verifiedBy = req.user._id;
 
   if (remarks) {
     isUser.remarks = remarks.trim();
@@ -165,11 +167,28 @@ const userVerifiedByAdmin = async ({ req, model }) => {
     isUser.remarks = "";
   }
 
+  // ✅ Handle batch verification independently
+  if (typeof batchVerified === "boolean") {
+    isUser.batchVerified = batchVerified;
+
+    if (batchVerified) {
+      // Set admin and date when batch verified
+      isUser.batchVerifiedBy = req.user._id;
+    } else {
+      // Reset if turned off
+      isUser.batchVerifiedBy = null;
+
+    }
+  }
+
+
+
   await isUser.save();
+
 
   return new ApiResponse(
     statusCode.OK,
-    isUser,
+
     `User status updated Successfully`
   );
 };
