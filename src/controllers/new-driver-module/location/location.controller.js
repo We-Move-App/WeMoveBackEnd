@@ -95,6 +95,7 @@ const getPlaceAutocomplete = catchAsyncError(async (req, res) => {
 
 const getFromCoordinates = catchAsyncError(async (req, res) => {
   const { lat, lng } = req.query;
+ 
 
   if (!lat || !lng) {
     throw new ApiError(
