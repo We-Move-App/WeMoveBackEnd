@@ -148,130 +148,34 @@ async function isLatLngInCameroon(lat, lng) {
   }
 }
 // for Camerron  restriction Api 
-// const getAutocomplete = async (input, lat = null, lng = null) => {
-
-//   const baseUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json`;
-//   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-
-//   // If lat/lng provided, ensure they are valid decimal numbers
-//   const latNum = lat ? Number(lat) : null;
-//   const lngNum = lng ? Number(lng) : null;
-
-//   // If lat/lng present but not valid numbers -> reject early
-//   if ((lat && !latNum && latNum !== 0) || (lng && !lngNum && lngNum !== 0)) {
-//     return { message: "No services available", places: [] };
-//   }
-
-//   // If lat/lng provided -> verify they are inside Cameroon
-//   if (latNum !== null && lngNum !== null) {
-//     const insideCM = await isLatLngInCameroon(latNum, lngNum);
-//     if (!insideCM) {
-//       // coordinates are outside Cameroon -> return no service
-//       return { message: "No services available", places: [] };
-//     }
-//   }
-
-//   // Build autocomplete URL (Cameroon only)
-//   let url = `${baseUrl}?input=${encodeURIComponent(input)}&components=country:CM&key=${apiKey}`;
-
-//   if (latNum !== null && lngNum !== null) {
-//     // include location bias only when lat/lng are valid and inside Cameroon
-//     url += `&location=${latNum},${lngNum}&radius=10000`;
-//   }
-
-//   try {
-//     const response = await axios.get(url);
-//     const { status, predictions } = response.data;
-
-//     if (status !== "OK" || !predictions || !predictions.length) {
-//       return { message: "No services available", places: [] };
-//     }
-
-//     const filteredPlaces = predictions
-//       .filter((p) => p.description.toLowerCase().includes("cameroon"))
-//       .map((place) => ({
-//         description: place.description,
-//         place_id: place.place_id,
-//         main_text: place.structured_formatting?.main_text || "",
-//         secondaryText: place.structured_formatting?.secondary_text || "",
-//       }));
-
-//     if (!filteredPlaces.length) {
-//       return { message: "No services available", places: [] };
-//     }
-
-//     return { message: "Places fetched successfully", places: filteredPlaces };
-//   } catch (error) {
-//     console.error("Get Autocomplete Error:", error.message);
-//     throw new Error("Failed to fetch autocomplete places");
-//   }
-// };
-
-//for both India and Cameroon restriction Api
-
 const getAutocomplete = async (input, lat = null, lng = null) => {
+
   const baseUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json`;
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
 
-  // 🌍 Allowed countries: Cameroon + India
-  const allowedCountries = ["CM", "IN"];
-
-  // Convert lat/lng safely
+  // If lat/lng provided, ensure they are valid decimal numbers
   const latNum = lat ? Number(lat) : null;
   const lngNum = lng ? Number(lng) : null;
 
-  // Invalid lat/lng check
-  if ((lat && isNaN(latNum)) || (lng && isNaN(lngNum))) {
+  // If lat/lng present but not valid numbers -> reject early
+  if ((lat && !latNum && latNum !== 0) || (lng && !lngNum && lngNum !== 0)) {
     return { message: "No services available", places: [] };
   }
 
-  // 🧭 Helper: detect if lat/lng are inside India or Cameroon
-  const isLatLngInAllowedCountry = async (lat, lng) => {
-    try {
-      const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`;
-      const resp = await axios.get(geoUrl);
-      const results = resp.data.results || [];
-
-      for (const r of results) {
-        const countryComp = (r.address_components || []).find((c) =>
-          c.types.includes("country")
-        );
-        if (countryComp && allowedCountries.includes(countryComp.short_name)) {
-          return true;
-        }
-      }
-      return false;
-    } catch (err) {
-      console.error("Reverse geocode error:", err.message);
-      return false;
-    }
-  };
-
-  // 🧩 Verify if provided coordinates are inside allowed region
+  // If lat/lng provided -> verify they are inside Cameroon
   if (latNum !== null && lngNum !== null) {
-    const insideAllowed = await isLatLngInAllowedCountry(latNum, lngNum);
-    if (!insideAllowed) {
-      return { message: "No services available (outside allowed countries)", places: [] };
+    const insideCM = await isLatLngInCameroon(latNum, lngNum);
+    if (!insideCM) {
+      // coordinates are outside Cameroon -> return no service
+      return { message: "No services available", places: [] };
     }
   }
 
-  // 🗺️ Build autocomplete URL with India + Cameroon restriction
-  // Note: Google API doesn't support multiple countries directly — so we’ll default to India for test when lat/lng are in India, else Cameroon.
-  let countryCode = "CM";
-  if (latNum !== null && lngNum !== null) {
-    const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latNum},${lngNum}&key=${apiKey}`;
-    const resp = await axios.get(geoUrl);
-    const countryComp = resp.data.results?.[0]?.address_components?.find((c) =>
-      c.types.includes("country")
-    );
-    if (countryComp && allowedCountries.includes(countryComp.short_name)) {
-      countryCode = countryComp.short_name;
-    }
-  }
-
-  let url = `${baseUrl}?input=${encodeURIComponent(input)}&components=country:${countryCode}&key=${apiKey}`;
+  // Build autocomplete URL (Cameroon only)
+  let url = `${baseUrl}?input=${encodeURIComponent(input)}&components=country:CM&key=${apiKey}`;
 
   if (latNum !== null && lngNum !== null) {
+    // include location bias only when lat/lng are valid and inside Cameroon
     url += `&location=${latNum},${lngNum}&radius=10000`;
   }
 
@@ -283,12 +187,8 @@ const getAutocomplete = async (input, lat = null, lng = null) => {
       return { message: "No services available", places: [] };
     }
 
-    // 🧹 Filter: keep only results that belong to India or Cameroon
     const filteredPlaces = predictions
-      .filter((p) => {
-        const desc = p.description.toLowerCase();
-        return desc.includes("cameroon") || desc.includes("india");
-      })
+      .filter((p) => p.description.toLowerCase().includes("cameroon"))
       .map((place) => ({
         description: place.description,
         place_id: place.place_id,
@@ -306,6 +206,106 @@ const getAutocomplete = async (input, lat = null, lng = null) => {
     throw new Error("Failed to fetch autocomplete places");
   }
 };
+
+//for both India and Cameroon restriction Api
+
+// const getAutocomplete = async (input, lat = null, lng = null) => {
+//   const baseUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json`;
+//   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
+
+//   // 🌍 Allowed countries: Cameroon + India
+//   const allowedCountries = ["CM", "IN"];
+
+//   // Convert lat/lng safely
+//   const latNum = lat ? Number(lat) : null;
+//   const lngNum = lng ? Number(lng) : null;
+
+//   // Invalid lat/lng check
+//   if ((lat && isNaN(latNum)) || (lng && isNaN(lngNum))) {
+//     return { message: "No services available", places: [] };
+//   }
+
+//   // 🧭 Helper: detect if lat/lng are inside India or Cameroon
+//   const isLatLngInAllowedCountry = async (lat, lng) => {
+//     try {
+//       const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`;
+//       const resp = await axios.get(geoUrl);
+//       const results = resp.data.results || [];
+
+//       for (const r of results) {
+//         const countryComp = (r.address_components || []).find((c) =>
+//           c.types.includes("country")
+//         );
+//         if (countryComp && allowedCountries.includes(countryComp.short_name)) {
+//           return true;
+//         }
+//       }
+//       return false;
+//     } catch (err) {
+//       console.error("Reverse geocode error:", err.message);
+//       return false;
+//     }
+//   };
+
+//   // 🧩 Verify if provided coordinates are inside allowed region
+//   if (latNum !== null && lngNum !== null) {
+//     const insideAllowed = await isLatLngInAllowedCountry(latNum, lngNum);
+//     if (!insideAllowed) {
+//       return { message: "No services available (outside allowed countries)", places: [] };
+//     }
+//   }
+
+//   // 🗺️ Build autocomplete URL with India + Cameroon restriction
+//   // Note: Google API doesn't support multiple countries directly — so we’ll default to India for test when lat/lng are in India, else Cameroon.
+//   let countryCode = "CM";
+//   if (latNum !== null && lngNum !== null) {
+//     const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latNum},${lngNum}&key=${apiKey}`;
+//     const resp = await axios.get(geoUrl);
+//     const countryComp = resp.data.results?.[0]?.address_components?.find((c) =>
+//       c.types.includes("country")
+//     );
+//     if (countryComp && allowedCountries.includes(countryComp.short_name)) {
+//       countryCode = countryComp.short_name;
+//     }
+//   }
+
+//   let url = `${baseUrl}?input=${encodeURIComponent(input)}&components=country:${countryCode}&key=${apiKey}`;
+
+//   if (latNum !== null && lngNum !== null) {
+//     url += `&location=${latNum},${lngNum}&radius=10000`;
+//   }
+
+//   try {
+//     const response = await axios.get(url);
+//     const { status, predictions } = response.data;
+
+//     if (status !== "OK" || !predictions || !predictions.length) {
+//       return { message: "No services available", places: [] };
+//     }
+
+//     // 🧹 Filter: keep only results that belong to India or Cameroon
+//     const filteredPlaces = predictions
+//       .filter((p) => {
+//         const desc = p.description.toLowerCase();
+//         return desc.includes("cameroon") || desc.includes("india");
+//       })
+//       .map((place) => ({
+//         description: place.description,
+//         place_id: place.place_id,
+//         main_text: place.structured_formatting?.main_text || "",
+//         secondaryText: place.structured_formatting?.secondary_text || "",
+//       }));
+
+//     if (!filteredPlaces.length) {
+//       return { message: "No services available", places: [] };
+//     }
+
+//     return { message: "Places fetched successfully", places: filteredPlaces };
+//   } catch (error) {
+//     console.error("Get Autocomplete Error:", error.message);
+//     throw new Error("Failed to fetch autocomplete places");
+//   }
+// };
 
 // const getAddressFromCoordinates = async (lat, lng) => {
 //   // const apiKey = process.env.GOOGLE_MAPS_API_KEY;

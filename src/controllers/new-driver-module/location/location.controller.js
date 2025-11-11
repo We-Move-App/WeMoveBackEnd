@@ -80,8 +80,8 @@ const getPlaceAutocomplete = catchAsyncError(async (req, res) => {
       .json(
         new ApiResponse(
           statusCode.OK,
-          { places: suggestions },
-          `Places fetched successfully`
+          { places: suggestions.places },
+          suggestions.message
         )
       );
   } catch (err) {
@@ -95,7 +95,7 @@ const getPlaceAutocomplete = catchAsyncError(async (req, res) => {
 
 const getFromCoordinates = catchAsyncError(async (req, res) => {
   const { lat, lng } = req.query;
- 
+
 
   if (!lat || !lng) {
     throw new ApiError(
@@ -117,7 +117,7 @@ const getFromCoordinates = catchAsyncError(async (req, res) => {
     return res
       .status(statusCode.OK)
       .json(
-        new ApiResponse(statusCode.OK, address, `Address fetched successfully`)
+        new ApiResponse(statusCode.OK, address.address, `Address fetched successfully`)
       );
   } catch (err) {
     console.error("Reverse Geocode Error:", err.message);
