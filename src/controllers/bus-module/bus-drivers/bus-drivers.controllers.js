@@ -299,7 +299,11 @@ const getBusDrivers = catchAsyncError(async (req, res, next) => {
   const startIndex = (page - 1) * limit;
 
   // Base query
-  const query = { busOperator: userId, status: status || "assigned" };
+  const query = { busOperator: userId };
+  if (status) query.status = status;
+
+
+  console.log("Querying bus drivers with:", query);
 
   // Search by driverId
   if (search && mongoose.Types.ObjectId.isValid(search)) {
