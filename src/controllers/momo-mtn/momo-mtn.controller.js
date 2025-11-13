@@ -140,7 +140,7 @@ const requestTopay = catchAsyncError(async (req, res) => {
           console.error("Message:", err.message);
         }
       }
-    }, 5000); // 5 seconds simulated delay
+    }, 2000); // 2 seconds simulated delay
   }
 
   // Fallback timeout (350s) in case webhook does not arrive
