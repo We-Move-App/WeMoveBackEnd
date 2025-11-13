@@ -153,13 +153,13 @@ const loginUser = catchAsyncError(async (req, res, next) => {
     // Step 3: Verify password
     const isPasswordMatch = await existingUser.comparePassword(password);
     if (!isPasswordMatch) {
-        throw new ApiError(statusCode.UNAUTHORIZED, "Invalid credentials");
+        throw new ApiError(statusCode.BAD_REQUEST, "Invalid credentials");
     }
 
     // Step 4: Verify user status
     if (!["approved"].includes(existingUser.verificationStatus)) {
         throw new ApiError(
-            statusCode.UNAUTHORIZED,
+            statusCode.FORBIDDEN,
             getStatusMessage(existingUser.verificationStatus)
         );
     }
