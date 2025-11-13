@@ -353,7 +353,7 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
       },
       {
         $or: [
-          { endLocation: { $regex: to, $options: "i" } }, 
+          { endLocation: { $regex: to, $options: "i" } },
           { "drops.name": { $regex: to, $options: "i" } },
         ],
       },
@@ -474,14 +474,16 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
       // Transform the route object
       const transformedRoute = {
         ...route,
-      
+
         from: route.startLocation,
         to: route.endLocation,
-        
+
         startLocation: undefined,
         endLocation: undefined,
-      
-        pricePerSeat,
+
+        pricePerSeat: {
+          finalAmount: pricePerSeat.toString(),
+        },
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
       };

@@ -1,5 +1,5 @@
 const express = require("express");
- 
+
 const {
   isBusOperatorAuthenticated,
 } = require("../../../middlewares/authBusOperator");
@@ -24,17 +24,17 @@ const {
   verifyOtpBusDriverLogin,
   getBusDriverProfile,
 } = require("../../../controllers/bus-module/bus-drivers/busDriverAuth");
-const {isBusDriverAuthenticated} = require("../../../middlewares/authBusDrivers");
+const { isBusDriverAuthenticated } = require("../../../middlewares/authBusDrivers");
 
-const{onboardUserByQR, getOnboardedUsersSummary} = require("../../../controllers/bus-module/bus-drivers/busDriversOnbaord");
+const { onboardUserByQR, getOnboardedUsersSummary } = require("../../../controllers/bus-module/bus-drivers/busDriversOnbaord");
 
 const busDriverRoutes = express.Router();
 
 busDriverRoutes.route("/sendbusdriverotp").post(sendOtpToBusDriver);
 busDriverRoutes.route("/verifybusdriverotp").post(verifyOtpBusDriverLogin);
-busDriverRoutes.route("/busdriverprofile").get( isBusDriverAuthenticated,getBusDriverProfile);
-busDriverRoutes.route("/onboard-User").post( isBusDriverAuthenticated,onboardUserByQR);
-busDriverRoutes.route("/getonboardedUser").get( isBusDriverAuthenticated,getOnboardedUsersSummary);
+busDriverRoutes.route("/busdriverprofile").get(isBusDriverAuthenticated, getBusDriverProfile);
+busDriverRoutes.route("/onboard-User").post(isBusDriverAuthenticated, onboardUserByQR);
+busDriverRoutes.route("/getonboardedUser").get(isBusDriverAuthenticated, getOnboardedUsersSummary);
 
 
 busDriverRoutes
@@ -50,6 +50,12 @@ busDriverRoutes
     uploadDocuments,
     registerBusDriver
   );
+
+busDriverRoutes
+  .route("/unassign")
+  .put(isBusOperatorAuthenticated, authorizeRole(["bus-operator", "bus-operator-member"]), unassignDriver);
+
+
 
 busDriverRoutes
   .route("/assign-driver")
@@ -78,14 +84,8 @@ busDriverRoutes
     authorizeRole(["bus-operator", "bus-operator-member"]),
     deleteDrivers
   );
-  busDriverRoutes
-  .route("/unassign/:id")
-  .put(
-    isBusOperatorAuthenticated,
-    authorizeRole(["bus-operator", "bus-operator-member"]),
-    unassignDriver
-  );
 
- 
+
+
 
 module.exports = busDriverRoutes;
