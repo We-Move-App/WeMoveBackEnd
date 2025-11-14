@@ -75,6 +75,17 @@ const getPlaceAutocomplete = catchAsyncError(async (req, res) => {
   try {
     const suggestions = await getAutocomplete(input, lat, lng);
 
+
+    if (!suggestions.places || suggestions.places.length === 0) {
+      return res.status(404).json({
+        success: false,
+        statusCode: 404,
+        message: "No services available in this area",
+        errors: [],
+        data: null
+      });
+    }
+
     return res
       .status(statusCode.OK)
       .json(
@@ -139,6 +150,17 @@ const getDirection = catchAsyncError(async (req, res) => {
   }
 
   const directions = await getDirections(origin, destination);
+
+  if (directions.success === false) {
+    return res.status(404).json({
+      success: false,
+      statusCode: 404,
+      message: directions.message || "No services available in this area",
+      errors: [],
+      data: null,
+    });
+  }
+
 
   return res
     .status(statusCode.OK)
