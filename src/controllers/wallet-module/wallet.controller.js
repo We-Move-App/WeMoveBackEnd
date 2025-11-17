@@ -68,7 +68,7 @@ const deductfromUserWallet = catchAsyncError(async (req, res) => {
 
   const transaction = await Transaction.create({
     userId,
-    transactionId: uuidv4(),
+    transactionId: await Transaction.generateTransactionId(),
     type: TransactionTypeEnum.DEBIT,
     amount,
     currency: currency || userWallet.currency,
@@ -127,7 +127,7 @@ const refundToUserWallet = catchAsyncError(async (req, res) => {
 
   const transaction = await Transaction.create({
     userId,
-    transactionId: uuidv4(),
+    transactionId: await Transaction.generateTransactionId(),
     type: TransactionTypeEnum.CREDIT,
     amount,
     currency: currency || userWallet.currency,
@@ -271,7 +271,7 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
 
     const senderTx = {
       userId: sender._id,
-      transactionId: uuidv4(),
+      transactionId: await Transaction.generateTransactionId(),
       type: TransactionTypeEnum.DEBIT,
       amount: totalDebit, // user paid amount + fee
       description:
@@ -283,7 +283,7 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
 
     const receiverTx = {
       userId: receiver._id,
-      transactionId: uuidv4(),
+      transactionId: await Transaction.generateTransactionId(),
       type: TransactionTypeEnum.CREDIT,
       amount: amt,
       description: `Received from ${sender.fullName}, email:${sender.email}`,
@@ -294,7 +294,7 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
       platformFee > 0
         ? {
             adminId, // keep a dedicated field if your schema supports it
-            transactionId: uuidv4(),
+            transactionId: await Transaction.generateTransactionId(),
             type: TransactionTypeEnum.CREDIT,
             amount: platformFee,
             description: `Commission from user transfer: sender=${sender.userId} → receiver=${receiver.userId}`,

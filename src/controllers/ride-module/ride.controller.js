@@ -583,7 +583,7 @@ const completeRide = catchAsyncError(async (req, res, next) => {
     await TransactionModel.insertMany(
       [
         {
-          transactionId: uuidv4(),
+          transactionId: await Transaction.generateTransactionId(),
           userId: booking.userId,
           bookingId: booking.bookingId,
           type: "DEBIT",
@@ -593,7 +593,7 @@ const completeRide = catchAsyncError(async (req, res, next) => {
           description: `${booking.vehicleType} Ride from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
         },
         {
-          transactionId: uuidv4(),
+          transactionId: await Transaction.generateTransactionId(),
           driverId: booking.driverId,
           bookingId: booking.bookingId,
           type: "CREDIT",
@@ -603,7 +603,7 @@ const completeRide = catchAsyncError(async (req, res, next) => {
           description: `${booking.vehicleType} Ride from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
         },
         {
-          transactionId: uuidv4(),
+          transactionId: await Transaction.generateTransactionId(),
           adminId: adminId,
           bookingId: booking.bookingId,
           type: "CREDIT",

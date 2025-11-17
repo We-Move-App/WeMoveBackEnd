@@ -186,7 +186,6 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       seatAvailability = seatAvailability[0];
     }
 
-
     const availableSeats = seatAvailability.seats.filter(
       (seat) => seat.isAvailable
     );
@@ -254,7 +253,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       await TransactionModel.create(
         [
           {
-            transactionId: uuidv4(),
+            transactionId: await Transaction.generateTransactionId(),
             userId,
             bookingId: null,
             type: "DEBIT",
@@ -292,15 +291,15 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           seatNumbers: assignedSeats,
           coupon: appliedCoupon
             ? {
-              couponId: appliedCoupon._id,
-              couponCode: appliedCoupon.couponCode,
-              discountType: appliedCoupon.discountType,
-              discountValue:
-                appliedCoupon.discountType === "Percentage"
-                  ? appliedCoupon.discountPercentage
-                  : appliedCoupon.discountAmount,
-              discountApplied,
-            }
+                couponId: appliedCoupon._id,
+                couponCode: appliedCoupon.couponCode,
+                discountType: appliedCoupon.discountType,
+                discountValue:
+                  appliedCoupon.discountType === "Percentage"
+                    ? appliedCoupon.discountPercentage
+                    : appliedCoupon.discountAmount,
+                discountApplied,
+              }
             : null,
         },
       ],
@@ -364,7 +363,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     await TransactionModel.insertMany(
       [
         {
-          transactionId: uuidv4(),
+          transactionId: await Transaction.generateTransactionId(),
           userId,
           bookingId: newBooking._id,
           type: "DEBIT",
@@ -374,7 +373,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           description: `Bus booking ${from} → ${to}`,
         },
         {
-          transactionId: uuidv4(),
+          transactionId: await Transaction.generateTransactionId(),
           busOperatorId: ownerId,
           bookingId: newBooking._id,
           type: "CREDIT",
@@ -384,7 +383,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           description: "Earnings from booking",
         },
         {
-          transactionId: uuidv4(),
+          transactionId: await Transaction.generateTransactionId(),
           adminId,
           bookingId: newBooking._id,
           type: "CREDIT",
@@ -633,13 +632,13 @@ const calculateBusBooking = catchAsyncError(async (req, res, next) => {
         finalAmount,
         coupon: appliedCoupon
           ? {
-            couponCode: appliedCoupon.couponCode,
-            discountType: appliedCoupon.discountType,
-            discountValue:
-              appliedCoupon.discountType === "Percentage"
-                ? appliedCoupon.discountPercentage
-                : appliedCoupon.discountAmount,
-          }
+              couponCode: appliedCoupon.couponCode,
+              discountType: appliedCoupon.discountType,
+              discountValue:
+                appliedCoupon.discountType === "Percentage"
+                  ? appliedCoupon.discountPercentage
+                  : appliedCoupon.discountAmount,
+            }
           : null,
       },
     });
@@ -680,7 +679,6 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
     booking.busId.busImages = busImagesDoc?.images?.map((img) => img.url) || [];
   }
 
-
   const journeyDate = new Date(booking.journeyDate);
 
   let startDate = new Date(journeyDate);
@@ -710,7 +708,6 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
   booking.endDate = endDate;
   booking.hoursLeft = hoursLeft;
   booking.isCancellable = isCancellable;
-
 
   return res
     .status(statusCode.OK)
@@ -792,7 +789,7 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
     await TransactionModel.create({
       userId: booking.bookedBy,
       bookingId,
-      transactionId: uuidv4(),
+      transactionId: await Transaction.generateTransactionId(),
       type: TransactionTypeEnum.CREDIT,
       amount: refundAmount,
       currency: userWallet.currency,
@@ -821,7 +818,7 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
     await TransactionModel.create({
       busOperatorId,
       bookingId,
-      transactionId: uuidv4(),
+      transactionId: await Transaction.generateTransactionId(),
       type: TransactionTypeEnum.DEBIT,
       amount: refundAmount,
       currency: operatorWallet.currency,
@@ -1032,13 +1029,13 @@ const UpcomingBusBookings = catchAsyncError(async (req, res) => {
 
   const skip = (parseInt(page) - 1) * parseInt(limit);
 
-
-  const booking = await BusBookingModel.findOne({ _id: "69099a0eb73bab08d57ba363" })
+  const booking = await BusBookingModel.findOne({
+    _id: "69099a0eb73bab08d57ba363",
+  })
     .populate("busId", "busName busModelNumber busRegNumber")
     .lean();
 
   console.log(booking.busId);
-
 
   const bookings = await BusBookingModel.find(query)
     .sort({ journeyDate: 1 })

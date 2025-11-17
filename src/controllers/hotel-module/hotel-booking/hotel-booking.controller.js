@@ -195,7 +195,6 @@ const createBooking = catchAsyncError(async (req, res) => {
   if (!room) throw new ApiError(statusCode.NOT_FOUND, "Invalid room type");
   // Calculate total amount
   const totalAmount = room.roomPrice * noOfRoom * nights;
-  
 
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -262,7 +261,7 @@ const createBooking = catchAsyncError(async (req, res) => {
       await TransactionModel.create(
         [
           {
-            transactionId: uuidv4(),
+            transactionId: await Transaction.generateTransactionId(),
             userId: bookedBy,
             bookingId: null,
             type: "DEBIT",
@@ -368,7 +367,7 @@ const createBooking = catchAsyncError(async (req, res) => {
     await TransactionModel.insertMany(
       [
         {
-          transactionId: uuidv4(),
+          transactionId: await Transaction.generateTransactionId(),
           userId: bookedBy,
           bookingId: newBooking._id,
           type: "DEBIT",
@@ -378,7 +377,7 @@ const createBooking = catchAsyncError(async (req, res) => {
           description: `Hotel booking ${hotelExists.hotelName}`,
         },
         {
-          transactionId: uuidv4(),
+          transactionId: await Transaction.generateTransactionId(),
           hotelManagerId,
           bookingId: newBooking._id,
           type: "CREDIT",
@@ -389,7 +388,7 @@ const createBooking = catchAsyncError(async (req, res) => {
           operatorShare,
         },
         {
-          transactionId: uuidv4(),
+          transactionId: await Transaction.generateTransactionId(),
           adminId: adminId,
           bookingId: newBooking._id,
           type: "CREDIT",
@@ -1271,11 +1270,11 @@ const getHotelById = catchAsyncError(async (req, res) => {
         roomTypes: roomTypesWithAvailability,
         ...(checkIn && checkOut
           ? {
-            dateFilter: {
-              checkInDate: checkIn.toISOString(),
-              checkOutDate: checkOut.toISOString(),
-            },
-          }
+              dateFilter: {
+                checkInDate: checkIn.toISOString(),
+                checkOutDate: checkOut.toISOString(),
+              },
+            }
           : {}),
       },
       "Hotel details fetched successfully."
@@ -1519,7 +1518,7 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
       userId: hotelManagerId,
       hotelManagerId,
       bookingId,
-      transactionId: uuidv4(),
+      transactionId: await Transaction.generateTransactionId(),
       type: TransactionTypeEnum.DEBIT,
       amount: refundAmount,
       currency: hotelWallet.currency,
@@ -1535,7 +1534,7 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
     await TransactionModel.create({
       userId,
       bookingId,
-      transactionId: uuidv4(),
+      transactionId: await Transaction.generateTransactionId(),
       type: TransactionTypeEnum.CREDIT,
       amount: refundAmount,
       currency: userWallet.currency,
