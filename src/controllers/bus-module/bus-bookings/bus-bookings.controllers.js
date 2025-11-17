@@ -374,7 +374,7 @@ const cancelBooking = catchAsyncError(async (req, res, next) => {
 
     await Transaction.create({
       userId: booking.bookedBy,
-      transactionId: uuidv4(),
+      transactionId: await Transaction.generateTransactionId(),
       type: TransactionTypeEnum.CREDIT,
       amount: refundAmount,
       currency: userWallet.currency,
@@ -405,7 +405,7 @@ const cancelBooking = catchAsyncError(async (req, res, next) => {
 
     await Transaction.create({
       busOperatorId: booking.busOperatorId,
-      transactionId: uuidv4(),
+      transactionId: await Transaction.generateTransactionId(),
       type: TransactionTypeEnum.DEBIT,
       amount: refundAmount,
       currency: operatorWallet.currency,

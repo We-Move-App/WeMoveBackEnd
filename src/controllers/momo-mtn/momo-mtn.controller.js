@@ -93,7 +93,7 @@ const requestTopay = catchAsyncError(async (req, res) => {
 
   const transaction = await Transaction.create({
     userId,
-    transactionId: uuidv4(),
+    transactionId: await Transaction.generateTransactionId(),
     momoRefId: referenceId,
     type: TransactionTypeEnum.CREDIT,
     amount,
@@ -304,7 +304,7 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
     if (momoResponse.status === 202) {
       // ----------------- Step 5: Record transaction -----------------
       const transactionPayload = {
-        transactionId: uuidv4(),
+        transactionId: await Transaction.generateTransactionId(),
         momoRefId: referenceId,
         type: TransactionTypeEnum.DEBIT,
         amount,

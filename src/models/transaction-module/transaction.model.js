@@ -4,6 +4,7 @@ const {
   TransactionTypeEnum,
   PaymentStatusEnum,
 } = require("../../utils/constants/ENUM");
+const TransactionCounterModel = require("./counter.model");
 
 const transactionSchema = new mongoose.Schema(
   {
@@ -73,5 +74,16 @@ transactionSchema.index({ driverId: 1 });
 transactionSchema.index({ busOperatorId: 1 });
 transactionSchema.index({ hotelManagerId: 1 });
 transactionSchema.index({ usernameLower: 1 });
+
+transactionSchema.statics.generateTransactionId = async function () {
+  const counter = await TransactionCounterModel.findByIdAndUpdate(
+    { _id: "transactionId" },
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true }
+  );
+
+  const padded = counter.seq.toString().padStart(10, "0");
+  return `T${padded}`;
+};
 
 module.exports = mongoose.model("Transaction", transactionSchema);
