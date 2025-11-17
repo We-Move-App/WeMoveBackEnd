@@ -298,6 +298,7 @@ const getAutocomplete = async (input, lat = null, lng = null) => {
 
 
 // const getAddressFromCoordinates = async (lat, lng) => {
+  
 //   // const apiKey = process.env.GOOGLE_MAPS_API_KEY;
 //   const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`;
 
@@ -317,6 +318,8 @@ const getAutocomplete = async (input, lat = null, lng = null) => {
 //     throw new Error("Failed to fetch address from coordinates");
 //   }
 // };
+
+
 
 //Api restriction for Cameroon and India
 const getAddressFromCoordinates = async (lat, lng) => {
@@ -364,6 +367,7 @@ const getAddressFromCoordinates = async (lat, lng) => {
 
     // ✅ Return formatted address if valid
     const address = results[0].formatted_address;
+    console.log("Fetched address:", address);
     return {
       success: true,
       countryCode,
@@ -541,76 +545,6 @@ const getPlaceDetails = async (placeId) => {
 };
 
 
-// const getPlaceDetails = async (placeId) => {
-//   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
-
-//   // 🧭 Define which countries you allow (India + Cameroon)
-//   const allowedCountries = ["IN", "CM"];
-
-//   try {
-//     // Step 1️⃣ — Fetch Place Details
-//     const placeUrl = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&key=${apiKey}`;
-//     const response = await axios.get(placeUrl);
-
-//     if (response.data.status !== "OK") {
-//       throw new Error(`Google Place Details API Error: ${response.data.status}`);
-//     }
-
-//     const result = response.data.result;
-//     if (!result) {
-//       throw new Error("No details found for the given Place ID.");
-//     }
-
-//     const { lat, lng } = result.geometry?.location || {};
-
-//     if (!lat || !lng) {
-//       throw new Error("No coordinates found for the given Place ID.");
-//     }
-
-//     // Step 2️⃣ — Reverse geocode to find the country
-//     const geoUrl = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`;
-//     const geoResponse = await axios.get(geoUrl);
-//     const geoResults = geoResponse.data.results || [];
-
-//     let countryCode = null;
-//     for (const res of geoResults) {
-//       const country = (res.address_components || []).find((c) =>
-//         c.types.includes("country")
-//       );
-//       if (country) {
-//         countryCode = country.short_name;
-//         break;
-//       }
-//     }
-
-//     // Step 3️⃣ — Check restriction
-//     if (!allowedCountries.includes(countryCode)) {
-//       return {
-//         success: false,
-//         message: `❌ Service not available in this region (${countryCode}). Allowed: ${allowedCountries.join(", ")}.`,
-//       };
-//     }
-
-//     // Step 4️⃣ — Build response
-//     const trimmedData = {
-//       success: true,
-//       name: result.name,
-//       address: result.formatted_address,
-//       location: result.geometry?.location || {},
-//       place_id: result.place_id,
-//       types: result.types || [],
-//       phoneNumber: result.formatted_phone_number || null,
-//       rating: result.rating || null,
-//       website: result.website || null,
-//       country: countryCode,
-//     };
-
-//     return trimmedData;
-//   } catch (error) {
-//     console.error("Get Place Details Error:", error.message);
-//     throw new Error("Failed to fetch place details");
-//   }
-// };
 
 
 module.exports = {

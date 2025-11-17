@@ -704,13 +704,15 @@ const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
   const savedDriver = await DriverBasicDetails.findOne({ driverId });
   if (!savedDriver)
     throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
-
+  const branch = basicDriverDetails?.branch;
+  console.log("branch", branch);
   if (branch) {
     const branchDoc = await BranchModel.findById(branch);
+
     if (!branchDoc) {
       throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
     }
-    basicDriverDetails.branch = branchDoc._id; // assign to basicDriverDetails
+    basicDriverDetails.branch = branchDoc._id;
   }
 
   // 2️⃣ Update driver basic details

@@ -1017,34 +1017,59 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
 
       const filteredRoomTypes = await Promise.all(
         roomTypes.map(async (roomType) => {
+          // Step 1️⃣: Fetch all rooms for this hotel and room type
           const rooms = await individualRoomModule
             .find({ hotelId: hotel._id, roomTypeId: roomType._id })
             .select("_id")
             .lean();
 
           const roomIds = rooms.map((r) => r._id);
+
+          // Step 2️⃣: Set check-in/check-out datetime properly
+          const checkInStart = new Date(checkIn);
+          checkInStart.setHours(0, 0, 0, 0);
+
+          const checkOutEnd = new Date(checkOut);
+          checkOutEnd.setHours(23, 59, 59, 999);
+
+          // Step 3️⃣: Find conflicting bookings
           const conflictingBookings = await HotelBooking.find({
-            roomId: { $in: roomIds },
-            checkInDate: { $lt: checkOut },
-            checkOutDate: { $gt: checkIn },
+            assignedRooms: { $in: roomIds }, // ✅ use assignedRooms array
+            status: "Booked", // ✅ only consider active bookings
+            checkInDate: { $lt: checkOutEnd },
+            checkOutDate: { $gt: checkInStart },
           })
-            .select("roomId")
+            .select("assignedRooms")
             .lean();
 
-          const bookedRoomIds = new Set(
-            conflictingBookings.map((b) => String(b.roomId))
-          );
+          // Step 4️⃣: Build a set of booked room IDs
+          const bookedRoomIds = new Set();
+          conflictingBookings.forEach((booking) => {
+            booking.assignedRooms.forEach((roomId) =>
+              bookedRoomIds.add(String(roomId))
+            );
+          });
+
+          // Step 5️⃣: Calculate availability
           const availableRooms = roomIds.filter(
             (id) => !bookedRoomIds.has(String(id))
           ).length;
+          const totalRooms = rooms.length;
+          const bookedRooms = totalRooms - availableRooms;
 
+          console.log(
+            `Room Type: ${roomType.roomType}, Total: ${totalRooms}, Booked: ${bookedRooms}, Available: ${availableRooms}`
+          );
+
+          // Step 6️⃣: Only return room type if enough rooms are available
           if (availableRooms >= requiredRoomCount) {
             return {
               _id: roomType._id,
               roomType: roomType.roomType,
-              numberOfRoom: roomType.numberOfRoom,
+              numberOfRoom: totalRooms,
               roomPrice: roomType.roomPrice,
               availableRooms,
+              bookedRooms,
             };
           }
           return null;
@@ -1126,7 +1151,6 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
   );
 });
 
-//-------------------- get hotel by id --------------------
 const getHotelById = catchAsyncError(async (req, res) => {
   const { hotelId } = req.params;
   const { checkInDate, checkOutDate } = req.query;
@@ -1155,6 +1179,7 @@ const getHotelById = catchAsyncError(async (req, res) => {
       );
     }
   }
+
   // Get basic hotel info
   const hotel = await Hotel.findById(hotelId)
     .select("hotelName rating totalRoom")
@@ -1163,6 +1188,7 @@ const getHotelById = catchAsyncError(async (req, res) => {
   if (!hotel) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
   }
+
   const now = new Date();
   const activeBookings = await HotelBookingModel.find({
     hotelId,
@@ -1194,14 +1220,15 @@ const getHotelById = catchAsyncError(async (req, res) => {
         .lean(),
       HotelFeedbackModel.find({ hotelId }).select("rating").lean(),
       Room.find({ hotelId })
-        .select("roomType  amenities roomPrice  numberOfRoom")
+        .select("roomType amenities roomPrice numberOfRoom")
         .lean(),
     ]);
+
   const allHotelImages = hotelImages?.images || [];
 
-  // Process room types with availability check if dates provided
   const roomTypesWithAvailability = await Promise.all(
     roomTypes.map(async (room) => {
+      // Room Images
       const roomImageData = await HotelRoomImagesModel.findOne({
         roomId: room._id,
         roomType: room.roomType,
@@ -1211,44 +1238,69 @@ const getHotelById = catchAsyncError(async (req, res) => {
 
       const allImages = roomImageData?.images || [];
 
-      // If dates provided, check availability
-      let availableRooms = room.numberOfRoom;
+      const individualRooms = await individualRoomModule
+        .find({
+          hotelId,
+          roomTypeId: room._id,
+        })
+        .select("_id status")
+        .lean();
+
+      const totalRoomsForType = individualRooms.length;
+
+      const bookedByStatus = new Set(
+        individualRooms
+          .filter((r) => r.status === "booked")
+          .map((r) => r._id.toString())
+      );
+
+      let dateFilter = {};
       if (checkIn && checkOut) {
-        const individualRooms = await individualRoomModule
-          .find({ hotelId, roomTypeId: room._id })
-          .select("_id")
-          .lean();
-
-        const roomIds = individualRooms.map((r) => r._id);
-
-        if (roomIds.length > 0) {
-          const conflictingBookings = await HotelBooking.find({
-            roomId: { $in: roomIds },
-            checkInDate: { $lt: checkOut },
-            checkOutDate: { $gt: checkIn },
-          })
-            .select("roomId")
-            .lean();
-
-          const bookedRoomIds = new Set(
-            conflictingBookings.map((b) => b.roomId.toString())
-          );
-          availableRooms = roomIds.filter(
-            (id) => !bookedRoomIds.has(id.toString())
-          ).length;
-        } else {
-          availableRooms = 0;
-        }
+        dateFilter = {
+          checkInDate: { $lt: checkOut },
+          checkOutDate: { $gt: checkIn },
+        };
+      } else {
+        const now = new Date();
+        dateFilter = {
+          checkInDate: { $lte: now },
+          checkOutDate: { $gte: now },
+        };
       }
+
+      const activeBookingsForType = await HotelBooking.find({
+        hotelId,
+        roomTypeId: room._id,
+        status: "Booked",
+        ...dateFilter,
+      })
+        .select("assignedRooms")
+        .lean();
+
+      const bookedByAssigned = new Set();
+      activeBookingsForType.forEach((b) => {
+        b.assignedRooms?.forEach((rid) => bookedByAssigned.add(rid.toString()));
+      });
+
+      const totalBookedForType = new Set([
+        ...bookedByStatus,
+        ...bookedByAssigned,
+      ]).size;
+
+      const availableRoomsForType = Math.max(
+        totalRoomsForType - totalBookedForType,
+        0
+      );
 
       return {
         _id: room._id,
         roomType: room.roomType,
         roomPrice: room.roomPrice,
-        totalRooms: Number(room.numberOfRoom),
-        availableRooms: Number(availableRooms),
+        totalRooms: totalRoomsForType,
+        bookedRooms: totalBookedForType,
+        availableRooms: availableRoomsForType,
         images: allImages,
-        isAvailable: availableRooms > 0,
+        isAvailable: availableRoomsForType > 0,
       };
     })
   );
@@ -1281,6 +1333,161 @@ const getHotelById = catchAsyncError(async (req, res) => {
     )
   );
 });
+
+// const getHotelById = catchAsyncError(async (req, res) => {
+//   const { hotelId } = req.params;
+//   const { checkInDate, checkOutDate } = req.query;
+
+//   if (!hotelId) {
+//     throw new ApiError(statusCode.BAD_REQUEST, "Hotel ID is required.");
+//   }
+
+//   // Validate dates if provided
+//   let checkIn, checkOut;
+//   if (checkInDate || checkOutDate) {
+//     if (!checkInDate || !checkOutDate) {
+//       throw new ApiError(
+//         statusCode.BAD_REQUEST,
+//         "Both checkInDate and checkOutDate are required when filtering by dates."
+//       );
+//     }
+
+//     checkIn = new Date(checkInDate);
+//     checkOut = new Date(checkOutDate);
+
+//     if (checkOut <= checkIn) {
+//       throw new ApiError(
+//         statusCode.BAD_REQUEST,
+//         "checkOutDate must be after checkInDate."
+//       );
+//     }
+//   }
+//   // Get basic hotel info
+//   const hotel = await Hotel.findById(hotelId)
+//     .select("hotelName rating totalRoom")
+//     .lean();
+
+//   if (!hotel) {
+//     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
+//   }
+//   const now = new Date();
+//   const activeBookings = await HotelBookingModel.find({
+//     hotelId,
+//     status: "Booked",
+//     checkInDate: { $lte: now },
+//     checkOutDate: { $gte: now },
+//   })
+//     .select("noOfRoom")
+//     .lean();
+
+//   const bookedRoomCount = activeBookings.reduce((total, booking) => {
+//     return total + (booking.noOfRoom || 0);
+//   }, 0);
+
+//   const availableRoomCount = Math.max(
+//     (hotel.totalRoom || 0) - bookedRoomCount,
+//     0
+//   );
+
+//   const [hotelImages, hotelAddress, hotelPolicies, hotelFeedbacks, roomTypes] =
+//     await Promise.all([
+//       hotelImagesModel.findOne({ hotelId }).select("images").lean(),
+//       HotelAddressModel.findOne({ hotelId })
+//         .populate("address", "townCity address landmark")
+//         .select("address")
+//         .lean(),
+//       HotelPolicyModel.findOne({ hotelId })
+//         .select("amenities checkInTime checkOutTime")
+//         .lean(),
+//       HotelFeedbackModel.find({ hotelId }).select("rating").lean(),
+//       Room.find({ hotelId })
+//         .select("roomType  amenities roomPrice  numberOfRoom")
+//         .lean(),
+//     ]);
+//   const allHotelImages = hotelImages?.images || [];
+
+//   // Process room types with availability check if dates provided
+//   const roomTypesWithAvailability = await Promise.all(
+//     roomTypes.map(async (room) => {
+//       const roomImageData = await HotelRoomImagesModel.findOne({
+//         roomId: room._id,
+//         roomType: room.roomType,
+//       })
+//         .select("images")
+//         .lean();
+
+//       const allImages = roomImageData?.images || [];
+
+//       // If dates provided, check availability
+//       let availableRooms = room.numberOfRoom;
+//       if (checkIn && checkOut) {
+//         const individualRooms = await individualRoomModule
+//           .find({ hotelId, roomTypeId: room._id })
+//           .select("_id")
+//           .lean();
+
+//         const roomIds = individualRooms.map((r) => r._id);
+
+//         if (roomIds.length > 0) {
+//           const conflictingBookings = await HotelBooking.find({
+//             roomId: { $in: roomIds },
+//             checkInDate: { $lt: checkOut },
+//             checkOutDate: { $gt: checkIn },
+//           })
+//             .select("roomId")
+//             .lean();
+
+//           const bookedRoomIds = new Set(
+//             conflictingBookings.map((b) => b.roomId.toString())
+//           );
+//           availableRooms = roomIds.filter(
+//             (id) => !bookedRoomIds.has(id.toString())
+//           ).length;
+//         } else {
+//           availableRooms = 0;
+//         }
+//       }
+
+//       return {
+//         _id: room._id,
+//         roomType: room.roomType,
+//         roomPrice: room.roomPrice,
+//         totalRooms: Number(room.numberOfRoom),
+//         availableRooms: Number(availableRooms),
+//         images: allImages,
+//         isAvailable: availableRooms > 0,
+//       };
+//     })
+//   );
+
+//   return res.status(statusCode.OK).json(
+//     new ApiResponse(
+//       statusCode.OK,
+//       {
+//         hotel: {
+//           hotelId,
+//           hotelName: hotel.hotelName,
+//           rating: hotel.rating,
+//           totalRoom: hotel.totalRoom,
+//         },
+//         hotelImages: allHotelImages,
+//         hotelAddress,
+//         hotelPolicies,
+//         hotelFeedbacks,
+//         roomTypes: roomTypesWithAvailability,
+//         ...(checkIn && checkOut
+//           ? {
+//             dateFilter: {
+//               checkInDate: checkIn.toISOString(),
+//               checkOutDate: checkOut.toISOString(),
+//             },
+//           }
+//           : {}),
+//       },
+//       "Hotel details fetched successfully."
+//     )
+//   );
+// });
 
 const getUpcomingBookings = catchAsyncError(async (req, res) => {
   const { page = 1, limit = 10 } = req.query;
