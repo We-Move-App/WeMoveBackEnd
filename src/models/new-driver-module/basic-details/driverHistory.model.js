@@ -6,7 +6,7 @@ const driverHistorySchema = new Schema(
         driverId: {
             type: String, // custom driverId, not ObjectId
             required: true,
-            index: true,
+            // index: true,
         },
         previousEmail: {
             type: String,
@@ -33,7 +33,7 @@ const driverHistorySchema = new Schema(
         changedAt: {
             type: Date,
             default: Date.now,
-            index: true,
+            // index: true,
         },
     },
     {

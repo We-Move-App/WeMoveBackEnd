@@ -8,6 +8,8 @@ const { allowed_origin, node_env } = require("./config/config");
 const helmet = require("helmet");
 const logger = require("./utils/logger/logger");
 const path = require("path");
+const { cacheMiddleware } = require("./middlewares/redisMiddleware");
+
 
 // User Routes Path
 const userAuthRoutes = require("./routes/user-module/user-auth/user-auth.routes");

@@ -5,6 +5,8 @@ const connectDatabase = require("./config/database");
 const logger = require("./utils/logger/logger");
 const http = require("http");
 const { initSuperAdmin } = require("./utils/services/SuperAdminInit");
+const { connectRedis } = require("./config/redisClient");
+
 
 const PORT = port || 8000;
 const server = http.createServer(app);
@@ -53,6 +55,8 @@ process.on("unhandledRejection", (reason) => {
 const startServer = async () => {
   try {
     await connectDatabase();
+    await connectRedis();
+
 
     //SuperAmdin
     await initSuperAdmin();

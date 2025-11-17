@@ -7,24 +7,24 @@ const {
 
 const transactionSchema = new mongoose.Schema(
   {
-    transactionId: { type: String, required: true, unique: true }, // UUID
+    transactionId: { type: String, required: true,}, // UUID
     momoRefId: { type: String, default: null },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      index: true,
+      // index: true,
       default: null,
     },
     busOperatorId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "BusOperator",
-      index: true,
+      // index: true,
       default: null,
     },
     hotelManagerId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Hotel-Manager",
-      index: true,
+      // index: true,
       default: null,
     },
     adminId: {
@@ -33,10 +33,12 @@ const transactionSchema = new mongoose.Schema(
     },
     driverId: {
       type: String,
-      index: true,
+      // index: true,
       default: null,
     },
-    bookingId: { type: String, index: true, required: false },
+    bookingId: { type: String,
+      //  index: true,
+        required: false },
     type: { type: String, enum: TransactionTypeEnum, required: true }, // CREDIT or DEBIT
     status: {
       type: String,

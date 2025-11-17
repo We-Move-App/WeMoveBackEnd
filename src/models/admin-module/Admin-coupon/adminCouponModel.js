@@ -135,9 +135,8 @@ CouponSchema.methods.resetForUser = function (userId) {
   return Promise.resolve(this); // Nothing to reset
 };
 
-// Unique indexes
-CouponSchema.index({ couponCode: 1 }, { unique: true });
-CouponSchema.index({ couponName: 1 }, { unique: true });
+
+
 
 const CouponModel = mongoose.model("Coupon", CouponSchema);
 
