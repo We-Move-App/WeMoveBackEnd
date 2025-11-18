@@ -40,6 +40,7 @@ const {
 } = require("../../../models/admin-module/admin/admin.model");
 const generateCustomId = require("../../../utils/customId/generateCustomId");
 const HotelManagerModel = require("../../../models/hotel-module/hotel-manager/hotel-manager.model");
+const Transaction = require('../../../models/transaction-module/transaction.model');
 
 //-------------------- create booking --------------------
 const createBooking = catchAsyncError(async (req, res) => {
@@ -1322,11 +1323,11 @@ const getHotelById = catchAsyncError(async (req, res) => {
         roomTypes: roomTypesWithAvailability,
         ...(checkIn && checkOut
           ? {
-              dateFilter: {
-                checkInDate: checkIn.toISOString(),
-                checkOutDate: checkOut.toISOString(),
-              },
-            }
+            dateFilter: {
+              checkInDate: checkIn.toISOString(),
+              checkOutDate: checkOut.toISOString(),
+            },
+          }
           : {}),
       },
       "Hotel details fetched successfully."

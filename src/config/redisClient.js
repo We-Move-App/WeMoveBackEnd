@@ -3,10 +3,7 @@ const { redis_host, redis_port } = require("./config");
 const logger = require("../utils/logger/logger");
 
 const redisClient = createClient({
-  socket: {
-    host: redis_host,
-    port: redis_port,
-  },
+  url: process.env.REDIS_URL || "redis://localhost:6379"
 });
 
 redisClient.on("connect", () => logger.info(" Redis Connected"));

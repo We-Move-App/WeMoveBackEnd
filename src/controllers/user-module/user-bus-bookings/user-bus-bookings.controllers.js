@@ -33,6 +33,7 @@ const {
   AdminModel,
 } = require("../../../models/admin-module/admin/admin.model");
 const generateCustomId = require("../../../utils/customId/generateCustomId");
+const Transaction = require("../../../models/transaction-module/transaction.model");
 
 const getUserBusBookings = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
