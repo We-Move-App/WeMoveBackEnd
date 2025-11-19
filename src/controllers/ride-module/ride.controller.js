@@ -516,6 +516,11 @@ const completeRide = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.BAD_REQUEST, "Ride already completed");
   }
 
+  const userExists = await UserModel.findById(booking.userId);
+  const driverExist = await DriverBasicDetails.findOne({
+    driverId: booking.driverId,
+  });
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -591,6 +596,17 @@ const completeRide = catchAsyncError(async (req, res, next) => {
           amount: booking.fare,
           currency: process.env.MOMO_CURRENCY,
           description: `${booking.vehicleType} Ride from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
+          platformFee,
+          meta: {
+            from: {
+              name: userExists.fullName,
+              id: userExists.userId,
+            },
+            to: {
+              name: driverExist.fullName,
+              id: driverExist.driverId,
+            },
+          },
         },
         {
           transactionId: await Transaction.generateTransactionId(),
@@ -601,6 +617,16 @@ const completeRide = catchAsyncError(async (req, res, next) => {
           amount: driverShare,
           currency: process.env.MOMO_CURRENCY,
           description: `${booking.vehicleType} Ride from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
+          meta: {
+            from: {
+              name: userExists.fullName,
+              id: userExists.userId,
+            },
+            to: {
+              name: driverExist.fullName,
+              id: driverExist.driverId,
+            },
+          },
         },
         {
           transactionId: await Transaction.generateTransactionId(),
@@ -611,6 +637,16 @@ const completeRide = catchAsyncError(async (req, res, next) => {
           amount: platformFee,
           currency: process.env.MOMO_CURRENCY,
           description: `Platform commission from ${booking.vehicleType} ride`,
+          meta: {
+            from: {
+              name: userExists.fullName,
+              id: userExists.userId,
+            },
+            to: {
+              name: driverExist.fullName,
+              id: driverExist.driverId,
+            },
+          },
         },
       ],
       { session }

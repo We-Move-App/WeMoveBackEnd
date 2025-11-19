@@ -34,6 +34,7 @@ const {
 } = require("../../../models/admin-module/admin/admin.model");
 const generateCustomId = require("../../../utils/customId/generateCustomId");
 const Transaction = require("../../../models/transaction-module/transaction.model");
+const UserModel = require("../../../models/user-module/users/user.model");
 
 const getUserBusBookings = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
@@ -106,6 +107,8 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     journeyDate,
     termAndConditions,
   } = req.body;
+
+  const userExists = await UserModel.findById(userId);
 
   // 1️⃣ Validate request
   validateRequestBody(
@@ -372,6 +375,17 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           amount: finalAmount,
           currency: process.env.MOMO_CURRENCY,
           description: `Bus booking ${from} → ${to}`,
+          platformFee,
+          meta: {
+            from: {
+              name: userExists.fullName,
+              id: userExists.userId,
+            },
+            to: {
+              name: findBus.busName,
+              id: findBus._id,
+            },
+          },
         },
         {
           transactionId: await Transaction.generateTransactionId(),
@@ -382,6 +396,16 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           amount: operatorShare,
           currency: process.env.MOMO_CURRENCY,
           description: "Earnings from booking",
+          meta: {
+            from: {
+              name: userExists.fullName,
+              id: userExists.userId,
+            },
+            to: {
+              name: findBus.busName,
+              id: findBus._id,
+            },
+          },
         },
         {
           transactionId: await Transaction.generateTransactionId(),
@@ -392,6 +416,16 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           amount: platformFee,
           currency: process.env.MOMO_CURRENCY,
           description: `Commission from bus booking ${busId}`,
+          meta: {
+            from: {
+              name: userExists.fullName,
+              id: userExists.userId,
+            },
+            to: {
+              name: findBus.busName,
+              id: findBus._id,
+            },
+          },
         },
       ],
       { session }

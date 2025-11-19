@@ -7,7 +7,6 @@ const http = require("http");
 const { initSuperAdmin } = require("./utils/services/SuperAdminInit");
 const { connectRedis } = require("./config/redisClient");
 
-
 const PORT = port || 8000;
 const server = http.createServer(app);
 
@@ -56,7 +55,6 @@ const startServer = async () => {
   try {
     await connectDatabase();
     await connectRedis();
-
 
     //SuperAmdin
     await initSuperAdmin();

@@ -274,11 +274,22 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
       transactionId: await Transaction.generateTransactionId(),
       type: TransactionTypeEnum.DEBIT,
       amount: totalDebit, // user paid amount + fee
+      platformFee: platformFee,
       description:
         platformFee > 0
-          ? `Sent ${amt} to ${receiver.fullName} (includes fee ${platformFee})`
+          ? `Sent ${amt} to ${receiver.fullName} (includes commission ${platformFee})`
           : `Sent ${amt} to ${receiver.fullName}`,
       ...baseMeta,
+      meta: {
+        from: {
+          name: sender.fullName,
+          id: sender.userId,
+        },
+        to: {
+          name: receiver.fullName,
+          id: receiver.userId,
+        },
+      },
     };
 
     const receiverTx = {
@@ -288,6 +299,16 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
       amount: amt,
       description: `Received from ${sender.fullName}, email:${sender.email}`,
       ...baseMeta,
+      meta: {
+        from: {
+          name: sender.fullName,
+          id: sender.userId,
+        },
+        to: {
+          name: receiver.fullName,
+          id: receiver.userId,
+        },
+      },
     };
 
     const adminTx =
