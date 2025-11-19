@@ -36,8 +36,23 @@ services:
       retries: 5
 
 
+  redis:
+    image: redis:7
+    container_name: wemove-redis
+    ports:
+      - "6379:6379"    
+    volumes:
+      - redis-data:/data
+    command: ["redis-server", "--appendonly", "yes"]
+    networks:
+      - wemove-network
+    restart: unless-stopped
+    
+
+
 volumes:
   mongo-data:
+  redis-data:
 
 networks:
   wemove-network:
