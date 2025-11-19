@@ -272,6 +272,7 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
     const senderTx = {
       userId: sender._id,
       transactionId: await Transaction.generateTransactionId(),
+      transactionType: "User to User Payment",
       type: TransactionTypeEnum.DEBIT,
       amount: totalDebit, // user paid amount + fee
       platformFee: platformFee,
@@ -295,6 +296,7 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
     const receiverTx = {
       userId: receiver._id,
       transactionId: await Transaction.generateTransactionId(),
+      transactionType: "User to User Payment",
       type: TransactionTypeEnum.CREDIT,
       amount: amt,
       description: `Received from ${sender.fullName}, email:${sender.email}`,
@@ -316,6 +318,7 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
         ? {
             adminId, // keep a dedicated field if your schema supports it
             transactionId: await Transaction.generateTransactionId(),
+            transactionType: "User to User Payment",
             type: TransactionTypeEnum.CREDIT,
             amount: platformFee,
             description: `Commission from user transfer: sender=${sender.userId} → receiver=${receiver.userId}`,

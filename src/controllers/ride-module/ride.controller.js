@@ -589,6 +589,7 @@ const completeRide = catchAsyncError(async (req, res, next) => {
       [
         {
           transactionId: await Transaction.generateTransactionId(),
+          transactionType: "Ride Booking",
           userId: booking.userId,
           bookingId: booking.bookingId,
           type: "DEBIT",
@@ -610,6 +611,7 @@ const completeRide = catchAsyncError(async (req, res, next) => {
         },
         {
           transactionId: await Transaction.generateTransactionId(),
+          transactionType: "Ride Booking",
           driverId: booking.driverId,
           bookingId: booking.bookingId,
           type: "CREDIT",
@@ -630,6 +632,7 @@ const completeRide = catchAsyncError(async (req, res, next) => {
         },
         {
           transactionId: await Transaction.generateTransactionId(),
+          transactionType: "Ride Booking",
           adminId: adminId,
           bookingId: booking.bookingId,
           type: "CREDIT",

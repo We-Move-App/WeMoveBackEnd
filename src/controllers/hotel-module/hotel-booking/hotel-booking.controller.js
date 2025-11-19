@@ -369,6 +369,7 @@ const createBooking = catchAsyncError(async (req, res) => {
       [
         {
           transactionId: await Transaction.generateTransactionId(),
+          transactionType: "Hotel Booking",
           userId: bookedBy,
           bookingId: newBooking._id,
           type: "DEBIT",
@@ -390,6 +391,7 @@ const createBooking = catchAsyncError(async (req, res) => {
         },
         {
           transactionId: await Transaction.generateTransactionId(),
+          transactionType: "Hotel Booking",
           hotelManagerId,
           bookingId: newBooking._id,
           type: "CREDIT",
@@ -411,6 +413,7 @@ const createBooking = catchAsyncError(async (req, res) => {
         },
         {
           transactionId: await Transaction.generateTransactionId(),
+          transactionType: "Hotel Booking",
           adminId: adminId,
           bookingId: newBooking._id,
           type: "CREDIT",

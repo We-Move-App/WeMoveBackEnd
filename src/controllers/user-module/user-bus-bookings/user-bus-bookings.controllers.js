@@ -368,6 +368,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       [
         {
           transactionId: await Transaction.generateTransactionId(),
+          transactionType: "Bus Booking",
           userId,
           bookingId: newBooking._id,
           type: "DEBIT",
@@ -389,6 +390,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
         },
         {
           transactionId: await Transaction.generateTransactionId(),
+          transactionType: "Bus Booking",
           busOperatorId: ownerId,
           bookingId: newBooking._id,
           type: "CREDIT",
@@ -409,6 +411,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
         },
         {
           transactionId: await Transaction.generateTransactionId(),
+          transactionType: "Bus Booking",
           adminId,
           bookingId: newBooking._id,
           type: "CREDIT",
