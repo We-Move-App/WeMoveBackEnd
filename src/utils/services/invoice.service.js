@@ -30,183 +30,209 @@ const formatDateTime = (date) => {
 };
 
 const generateTransactionReceiptBase64 = async (tx) => {
-  // Canvas size similar to screenshot (mobile style)
+  // --- PDF SETUP ---
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([358, 752]); // same as canvas size
+
   const width = 358;
   const height = 752;
 
-  const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext("2d");
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-  // Colors
-  const bgGrey = "#3b3b3b"; // outer background
-  const cardWhite = "#ffffff"; // inner card
-  const successGreen = "#1E6D4C";
-  const failRed = "#D64545";
-  const textDark = "#111111";
-  const mutedText = "#777777";
-  const divider = "#e4e4e4";
+  // COLORS
+  const bgGrey = rgb(0.23, 0.23, 0.23);
+  const white = rgb(1, 1, 1);
+  const successGreen = rgb(0.117, 0.427, 0.298);
+  const failRed = rgb(0.84, 0.27, 0.27);
 
-  // Global
-  ctx.textBaseline = "top";
-  ctx.antialias = "subpixel";
+  const textDark = rgb(0.07, 0.07, 0.07);
+  const mutedText = rgb(0.47, 0.47, 0.47);
+  const divider = rgb(0.89, 0.89, 0.89);
 
-  // Fill background
-  ctx.fillStyle = bgGrey;
-  ctx.fillRect(0, 0, width, height);
+  // --- BACKGROUND ---
+  page.drawRectangle({
+    x: 0,
+    y: 0,
+    width,
+    height,
+    color: bgGrey,
+  });
 
-  // Inner white card
+  // --- WHITE CARD ---
   const cardPadding = 14;
-  ctx.fillStyle = cardWhite;
-  ctx.beginPath();
-  const cardRadius = 4;
   const cardX = cardPadding;
   const cardY = cardPadding;
   const cardW = width - cardPadding * 2;
   const cardH = height - cardPadding * 2;
 
-  // Rounded rect
-  roundedRect(ctx, cardX, cardY, cardW, cardH, cardRadius);
-  ctx.fill();
+  page.drawRectangle({
+    x: cardX,
+    y: cardY,
+    width: cardW,
+    height: cardH,
+    color: white,
+  });
 
-  // Status color based on tx.status
+  // Status
   const isSuccess = tx.status === "SUCCESS" || tx.status === "COMPLETED";
   const mainColor = isSuccess ? successGreen : failRed;
   const statusText = isSuccess
     ? "Transaction Successful"
     : "Transaction Failed";
 
-  // --- TOP ICON (circle + check / cross) ---
+  // --- TOP ICON CIRCLE ---
   const centerX = width / 2;
-  let currentY = cardY + 60;
-  const iconRadius = 34;
+  let currentY = height - (cardY + 60); // in PDF y=bottom, so reverse
 
-  ctx.fillStyle = mainColor;
-  ctx.beginPath();
-  ctx.arc(centerX, currentY, iconRadius, 0, Math.PI * 2);
-  ctx.fill();
+  page.drawCircle({
+    x: centerX,
+    y: currentY,
+    size: 34,
+    color: mainColor,
+  });
 
-  // Check mark / cross
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 6;
-  ctx.lineCap = "round";
+  // Draw check or cross (simple lines)
+  const drawLine = (x1, y1, x2, y2) => {
+    page.drawLine({
+      start: { x: x1, y: y1 },
+      end: { x: x2, y: y2 },
+      thickness: 4,
+      color: white,
+    });
+  };
 
   if (isSuccess) {
     // ✓
-    ctx.beginPath();
-    ctx.moveTo(centerX - 15, currentY);
-    ctx.lineTo(centerX - 4, currentY + 13);
-    ctx.lineTo(centerX + 18, currentY - 12);
-    ctx.stroke();
+    drawLine(centerX - 12, currentY, centerX - 2, currentY - 12);
+    drawLine(centerX - 2, currentY - 12, centerX + 16, currentY + 10);
   } else {
     // ✕
-    ctx.beginPath();
-    ctx.moveTo(centerX - 15, currentY - 15);
-    ctx.lineTo(centerX + 15, currentY + 15);
-    ctx.moveTo(centerX + 15, currentY - 15);
-    ctx.lineTo(centerX - 15, currentY + 15);
-    ctx.stroke();
+    drawLine(centerX - 15, currentY + 15, centerX + 15, currentY - 15);
+    drawLine(centerX + 15, currentY + 15, centerX - 15, currentY - 15);
   }
 
   // --- TITLE ---
-  currentY += iconRadius + 26;
-  ctx.fillStyle = mainColor;
-  ctx.font = "bold 14px Helvetica";
-  const statusWidth = ctx.measureText(statusText).width;
-  ctx.fillText(statusText, centerX - statusWidth / 2, currentY);
+  currentY -= 60;
+  page.drawText(statusText, {
+    x: centerX - helveticaBold.widthOfTextAtSize(statusText, 14) / 2,
+    y: currentY,
+    size: 14,
+    font: helveticaBold,
+    color: mainColor,
+  });
 
-  // --- PAID / RECEIVED TEXT ---
-  currentY += 28;
+  // --- PAID / RECEIVED ---
+  currentY -= 28;
   const actionText = tx.type === "CREDIT" ? "Received" : "Paid";
+  page.drawText(actionText, {
+    x: centerX - helveticaBold.widthOfTextAtSize(actionText, 20) / 2,
+    y: currentY,
+    size: 20,
+    font: helveticaBold,
+    color: textDark,
+  });
+
+  // Amount
+  currentY -= 26;
   const amountText = `${formatAmount(tx.amount)} ${tx.currency || ""}`.trim();
+  page.drawText(amountText, {
+    x: centerX - helveticaBold.widthOfTextAtSize(amountText, 22) / 2,
+    y: currentY,
+    size: 22,
+    font: helveticaBold,
+    color: textDark,
+  });
 
-  ctx.fillStyle = textDark;
-  ctx.font = "bold 20px Helvetica";
-  const actionWidth = ctx.measureText(actionText).width;
-  ctx.fillText(actionText, centerX - actionWidth / 2, currentY);
-
-  currentY += 26;
-  ctx.font = "bold 22px Helvetica";
-  const amtWidth = ctx.measureText(amountText).width;
-  ctx.fillText(amountText, centerX - amtWidth / 2, currentY);
-
-  // --- COMMISSION (platformFee) ---
-  currentY += 30;
+  // --- COMMISSION ---
+  currentY -= 30;
   if (tx.platformFee && Number(tx.platformFee) > 0) {
-    const commText =
-      `*Commission deducted ${formatAmount(tx.platformFee)} ${tx.currency || ""}`.trim();
-    ctx.fillStyle = mutedText;
-    ctx.font = "12px Helvetica";
-    const commWidth = ctx.measureText(commText).width;
-    ctx.fillText(commText, centerX - commWidth / 2, currentY);
-    currentY += 24;
+    const commText = `*Commission deducted ${formatAmount(
+      tx.platformFee
+    )} ${tx.currency || ""}`.trim();
+
+    page.drawText(commText, {
+      x: centerX - helvetica.widthOfTextAtSize(commText, 12) / 2,
+      y: currentY,
+      size: 12,
+      font: helvetica,
+      color: mutedText,
+    });
+
+    currentY -= 24;
   }
 
-  // --- DATE / TIME ---
+  // DATE
   const dateTime = formatDateTime(tx.createdAt || tx.updatedAt || new Date());
-  ctx.fillStyle = mutedText;
-  ctx.font = "12px Helvetica";
-  const dtWidth = ctx.measureText(dateTime).width;
-  ctx.fillText(dateTime, centerX - dtWidth / 2, currentY);
+  page.drawText(dateTime, {
+    x: centerX - helvetica.widthOfTextAtSize(dateTime, 12) / 2,
+    y: currentY,
+    size: 12,
+    font: helvetica,
+    color: mutedText,
+  });
 
   // --- DETAILS CARD ---
-  const detailsTop = currentY + 56;
+  const detailsTopY = currentY - 56;
   const detailsX = cardX + 18;
   const detailsW = cardW - 36;
   const detailsH = 250;
-  const detailsRadius = 6;
 
-  ctx.fillStyle = "#FAFAFA";
-  roundedRect(ctx, detailsX, detailsTop, detailsW, detailsH, detailsRadius);
-  ctx.fill();
+  page.drawRectangle({
+    x: detailsX,
+    y: detailsTopY - detailsH,
+    width: detailsW,
+    height: detailsH,
+    color: rgb(0.98, 0.98, 0.98),
+  });
 
-  // Inner padding
   const innerPadX = 18;
-  let y = detailsTop + 18;
+  let y = detailsTopY - 28;
   const lineGap = 22;
 
   const metaFrom = (tx.meta && tx.meta.from) || {};
   const metaTo = (tx.meta && tx.meta.to) || {};
 
-  // Helper for label/value pair
   const drawRow = (label, value) => {
-    ctx.fillStyle = "#333333";
-    ctx.font = "bold 12px Helvetica";
-    ctx.fillText(label, detailsX + innerPadX, y);
+    // Label
+    page.drawText(label, {
+      x: detailsX + innerPadX,
+      y,
+      size: 12,
+      font: helveticaBold,
+      color: rgb(0.2, 0.2, 0.2),
+    });
 
-    y += 18;
-    ctx.fillStyle = "#4A4A4A";
-    ctx.font = "12px Helvetica";
-    ctx.fillText(value || "-", detailsX + innerPadX, y);
+    y -= 18;
 
-    y += lineGap;
+    // Value
+    page.drawText(value || "-", {
+      x: detailsX + innerPadX,
+      y,
+      size: 12,
+      font: helvetica,
+      color: rgb(0.29, 0.29, 0.29),
+    });
 
-    // Divider
-    ctx.strokeStyle = divider;
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(detailsX, y - 6);
-    ctx.lineTo(detailsX + detailsW, y - 6);
-    ctx.stroke();
+    y -= lineGap;
+
+    // Divider line
+    page.drawLine({
+      start: { x: detailsX, y: y + 6 },
+      end: { x: detailsX + detailsW, y: y + 6 },
+      thickness: 1,
+      color: divider,
+    });
   };
 
-  // TO
   drawRow(`To ${metaTo.name || ""}`.trim(), `ID: ${metaTo.id || "-"}`);
-
-  // FROM
   drawRow(`From ${metaFrom.name || ""}`.trim(), `ID: ${metaFrom.id || "-"}`);
-
-  // TRANSACTION ID
   drawRow("Transaction ID", tx.transactionId || String(tx._id || "-"));
+  drawRow("Transaction Type", tx.transactionType || "Transaction");
 
-  // TRANSACTION TYPE
-  const typeText = tx.transactionType || "Transaction";
-  drawRow("Transaction Type", typeText);
-
-  // NOTE: you can add more fields here if needed
-
-  // --- Final PNG as Base64 ---
-  const buffer = canvas.toBuffer("image/png");
-  return buffer.toString("base64");
+  // EXPORT PDF → Base64
+  const pdfBytes = await pdfDoc.save();
+  return Buffer.from(pdfBytes).toString("base64");
 };
 
 // Utility to draw rounded rectangles
