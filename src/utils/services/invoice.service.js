@@ -7,7 +7,6 @@ const statusCode = require("../constants/statusCode");
 const HotelBookingModel = require("../../models/hotel-module/hotel-bookings/hotel-bookings.model");
 const QRCode = require("qrcode");
 const Transaction = require("../../models/transaction-module/transaction.model");
-const { createCanvas } = require("canvas");
 
 const formatAmount = (amount) =>
   Number(amount || 0).toLocaleString("en-US", {
@@ -32,7 +31,7 @@ const formatDateTime = (date) => {
 const generateTransactionReceiptBase64 = async (tx) => {
   // --- PDF SETUP ---
   const pdfDoc = await PDFDocument.create();
-  const page = pdfDoc.addPage([358, 752]); // same as canvas size
+  const page = pdfDoc.addPage([358, 752]);
 
   const width = 358;
   const height = 752;
