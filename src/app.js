@@ -10,7 +10,6 @@ const logger = require("./utils/logger/logger");
 const path = require("path");
 const { cacheMiddleware } = require("./middlewares/redisMiddleware");
 
-
 // User Routes Path
 const userAuthRoutes = require("./routes/user-module/user-auth/user-auth.routes");
 const userRoutes = require("./routes/user-module/users/users.routes");
@@ -107,9 +106,11 @@ const adminWalletRoute = require("./routes/admin-module/wallet/admin-wallet.rout
 const chatRouter = require("./routes/new-driver-module/chat-details/chat-details.routes");
 const fcmRouter = require("./routes/firebase/fcm-token.routes");
 const notificationRouter = require("./routes/notification-module/notification.routes");
-const {userCountryRoutes }= require("./routes/user-module/userCountry/userCountryroutes");
+const {
+  userCountryRoutes,
+} = require("./routes/user-module/userCountry/userCountryroutes");
 const userMemberRoutes = require("./routes/user-module/userMemberRoutes/userMember.routes");
-
+const staticRouter = require("./routes/static/static.route");
 
 if (node_env !== "production") {
   require("dotenv").config();
@@ -176,7 +177,6 @@ app.use("/test", (req, res) => {
     statusCode: 200,
   });
 });
-
 
 //List Of All countrys
 app.use("/api/v1/user/country", userCountryRoutes);
@@ -292,6 +292,9 @@ app.use("/api/v1/amenities", amenititesRoutes);
 
 // Fcm
 app.use("/api/v1/fcm", fcmRouter);
+
+// static
+app.use("/api/v1", staticRouter);
 
 //Notification
 app.use("/api/v1/notification", notificationRouter);
