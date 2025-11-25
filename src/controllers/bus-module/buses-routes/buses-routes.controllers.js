@@ -406,7 +406,6 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
     query.runningDays = day;
   }
 
-  console.log("Constructed Query:", query);
 
 
   const [routes, totalBus] = await Promise.all([
