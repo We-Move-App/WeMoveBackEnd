@@ -272,22 +272,45 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
     const senderTx = {
       userId: sender._id,
       transactionId: await Transaction.generateTransactionId(),
+      transactionType: "User to User Payment",
       type: TransactionTypeEnum.DEBIT,
       amount: totalDebit, // user paid amount + fee
+      platformFee: platformFee,
       description:
         platformFee > 0
-          ? `Sent ${amt} to ${receiver.fullName} (includes fee ${platformFee})`
+          ? `Sent ${amt} to ${receiver.fullName} (includes commission ${platformFee})`
           : `Sent ${amt} to ${receiver.fullName}`,
       ...baseMeta,
+      meta: {
+        from: {
+          name: sender.fullName,
+          id: sender.userId,
+        },
+        to: {
+          name: receiver.fullName,
+          id: receiver.userId,
+        },
+      },
     };
 
     const receiverTx = {
       userId: receiver._id,
       transactionId: await Transaction.generateTransactionId(),
+      transactionType: "User to User Payment",
       type: TransactionTypeEnum.CREDIT,
       amount: amt,
       description: `Received from ${sender.fullName}, email:${sender.email}`,
       ...baseMeta,
+      meta: {
+        from: {
+          name: sender.fullName,
+          id: sender.userId,
+        },
+        to: {
+          name: receiver.fullName,
+          id: receiver.userId,
+        },
+      },
     };
 
     const adminTx =
@@ -295,6 +318,7 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
         ? {
             adminId, // keep a dedicated field if your schema supports it
             transactionId: await Transaction.generateTransactionId(),
+            transactionType: "User to User Payment",
             type: TransactionTypeEnum.CREDIT,
             amount: platformFee,
             description: `Commission from user transfer: sender=${sender.userId} → receiver=${receiver.userId}`,

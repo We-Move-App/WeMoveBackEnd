@@ -6,6 +6,249 @@ const ApiResponse = require("../response/ApiResponse");
 const statusCode = require("../constants/statusCode");
 const HotelBookingModel = require("../../models/hotel-module/hotel-bookings/hotel-bookings.model");
 const QRCode = require("qrcode");
+const Transaction = require("../../models/transaction-module/transaction.model");
+
+const formatAmount = (amount) =>
+  Number(amount || 0).toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+const formatDateTime = (date) => {
+  const d = new Date(date);
+  const datePart = d.toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }); // e.g. 20 Feb 2025
+  const timePart = d.toLocaleTimeString("en-GB", {
+    hour: "numeric",
+    minute: "2-digit",
+  }); // e.g. 7:09 pm
+  return `${datePart}, ${timePart}`;
+};
+
+const generateTransactionReceiptBase64 = async (tx) => {
+  // --- PDF SETUP ---
+  const pdfDoc = await PDFDocument.create();
+  const page = pdfDoc.addPage([358, 752]);
+
+  const width = 358;
+  const height = 752;
+
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+  // COLORS
+  const bgGrey = rgb(0.23, 0.23, 0.23);
+  const white = rgb(1, 1, 1);
+  const successGreen = rgb(0.117, 0.427, 0.298);
+  const failRed = rgb(0.84, 0.27, 0.27);
+
+  const textDark = rgb(0.07, 0.07, 0.07);
+  const mutedText = rgb(0.47, 0.47, 0.47);
+  const divider = rgb(0.89, 0.89, 0.89);
+
+  // --- BACKGROUND ---
+  page.drawRectangle({
+    x: 0,
+    y: 0,
+    width,
+    height,
+    color: bgGrey,
+  });
+
+  // --- WHITE CARD ---
+  const cardPadding = 14;
+  const cardX = cardPadding;
+  const cardY = cardPadding;
+  const cardW = width - cardPadding * 2;
+  const cardH = height - cardPadding * 2;
+
+  page.drawRectangle({
+    x: cardX,
+    y: cardY,
+    width: cardW,
+    height: cardH,
+    color: white,
+  });
+
+  // Status
+  const isSuccess = tx.status === "SUCCESS" || tx.status === "COMPLETED";
+  const mainColor = isSuccess ? successGreen : failRed;
+  const statusText = isSuccess
+    ? "Transaction Successful"
+    : "Transaction Failed";
+
+  // --- TOP ICON CIRCLE ---
+  const centerX = width / 2;
+  let currentY = height - (cardY + 60); // in PDF y=bottom, so reverse
+
+  page.drawCircle({
+    x: centerX,
+    y: currentY,
+    size: 34,
+    color: mainColor,
+  });
+
+  // Draw check or cross (simple lines)
+  const drawLine = (x1, y1, x2, y2) => {
+    page.drawLine({
+      start: { x: x1, y: y1 },
+      end: { x: x2, y: y2 },
+      thickness: 4,
+      color: white,
+    });
+  };
+
+  if (isSuccess) {
+    // ✓
+    drawLine(centerX - 12, currentY, centerX - 2, currentY - 12);
+    drawLine(centerX - 2, currentY - 12, centerX + 16, currentY + 10);
+  } else {
+    // ✕
+    drawLine(centerX - 15, currentY + 15, centerX + 15, currentY - 15);
+    drawLine(centerX + 15, currentY + 15, centerX - 15, currentY - 15);
+  }
+
+  // --- TITLE ---
+  currentY -= 60;
+  page.drawText(statusText, {
+    x: centerX - helveticaBold.widthOfTextAtSize(statusText, 14) / 2,
+    y: currentY,
+    size: 14,
+    font: helveticaBold,
+    color: mainColor,
+  });
+
+  // --- PAID / RECEIVED ---
+  currentY -= 28;
+  const actionText = tx.type === "CREDIT" ? "Received" : "Paid";
+  page.drawText(actionText, {
+    x: centerX - helveticaBold.widthOfTextAtSize(actionText, 20) / 2,
+    y: currentY,
+    size: 20,
+    font: helveticaBold,
+    color: textDark,
+  });
+
+  // Amount
+  currentY -= 26;
+  const amountText = `${formatAmount(tx.amount)} ${tx.currency || ""}`.trim();
+  page.drawText(amountText, {
+    x: centerX - helveticaBold.widthOfTextAtSize(amountText, 22) / 2,
+    y: currentY,
+    size: 22,
+    font: helveticaBold,
+    color: textDark,
+  });
+
+  // --- COMMISSION ---
+  currentY -= 30;
+  if (tx.platformFee && Number(tx.platformFee) > 0) {
+    const commText = `*Commission deducted ${formatAmount(
+      tx.platformFee
+    )} ${tx.currency || ""}`.trim();
+
+    page.drawText(commText, {
+      x: centerX - helvetica.widthOfTextAtSize(commText, 12) / 2,
+      y: currentY,
+      size: 12,
+      font: helvetica,
+      color: mutedText,
+    });
+
+    currentY -= 24;
+  }
+
+  // DATE
+  const dateTime = formatDateTime(tx.createdAt || tx.updatedAt || new Date());
+  page.drawText(dateTime, {
+    x: centerX - helvetica.widthOfTextAtSize(dateTime, 12) / 2,
+    y: currentY,
+    size: 12,
+    font: helvetica,
+    color: mutedText,
+  });
+
+  // --- DETAILS CARD ---
+  const detailsTopY = currentY - 56;
+  const detailsX = cardX + 18;
+  const detailsW = cardW - 36;
+  const detailsH = 250;
+
+  page.drawRectangle({
+    x: detailsX,
+    y: detailsTopY - detailsH,
+    width: detailsW,
+    height: detailsH,
+    color: rgb(0.98, 0.98, 0.98),
+  });
+
+  const innerPadX = 18;
+  let y = detailsTopY - 28;
+  const lineGap = 22;
+
+  const metaFrom = (tx.meta && tx.meta.from) || {};
+  const metaTo = (tx.meta && tx.meta.to) || {};
+
+  const drawRow = (label, value) => {
+    // Label
+    page.drawText(label, {
+      x: detailsX + innerPadX,
+      y,
+      size: 12,
+      font: helveticaBold,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+
+    y -= 18;
+
+    // Value
+    page.drawText(value || "-", {
+      x: detailsX + innerPadX,
+      y,
+      size: 12,
+      font: helvetica,
+      color: rgb(0.29, 0.29, 0.29),
+    });
+
+    y -= lineGap;
+
+    // Divider line
+    page.drawLine({
+      start: { x: detailsX, y: y + 6 },
+      end: { x: detailsX + detailsW, y: y + 6 },
+      thickness: 1,
+      color: divider,
+    });
+  };
+
+  drawRow(`To ${metaTo.name || ""}`.trim(), `ID: ${metaTo.id || "-"}`);
+  drawRow(`From ${metaFrom.name || ""}`.trim(), `ID: ${metaFrom.id || "-"}`);
+  drawRow("Transaction ID", tx.transactionId || String(tx._id || "-"));
+  drawRow("Transaction Type", tx.transactionType || "Transaction");
+
+  // EXPORT PDF → Base64
+  const pdfBytes = await pdfDoc.save();
+  return Buffer.from(pdfBytes).toString("base64");
+};
+
+// Utility to draw rounded rectangles
+function roundedRect(ctx, x, y, w, h, r) {
+  const radius = typeof r === "number" ? { tl: r, tr: r, br: r, bl: r } : r;
+  ctx.beginPath();
+  ctx.moveTo(x + radius.tl, y);
+  ctx.lineTo(x + w - radius.tr, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + radius.tr);
+  ctx.lineTo(x + w, y + h - radius.br);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - radius.br, y + h);
+  ctx.lineTo(x + radius.bl, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - radius.bl);
+  ctx.lineTo(x, y + radius.tl);
+  ctx.quadraticCurveTo(x, y, x + radius.tl, y);
+  ctx.closePath();
+}
 
 const getBusInvoice = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
@@ -26,6 +269,25 @@ const getBusInvoice = catchAsyncError(async (req, res, next) => {
         statusCode.OK,
         base64Pdf,
         "Invoice generated successfully"
+      )
+    );
+});
+
+const getTransactionInvoice = catchAsyncError(async (req, res, next) => {
+  const { transactionId } = req.params;
+
+  const tx = await Transaction.findOne({ transactionId });
+  if (!tx) throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
+
+  const base64Png = await generateTransactionReceiptBase64(tx);
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        base64Png,
+        "Receipt generated successfully"
       )
     );
 });
@@ -676,4 +938,5 @@ module.exports = {
   getBusInvoice,
   getHotelInvoice,
   generateTransactionPDFBase64,
+  getTransactionInvoice,
 };

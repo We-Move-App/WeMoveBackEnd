@@ -8,7 +8,8 @@ const TransactionCounterModel = require("./counter.model");
 
 const transactionSchema = new mongoose.Schema(
   {
-    transactionId: { type: String, required: true,}, // UUID
+    transactionId: { type: String, required: true },
+    transactionType: { type: String },
     momoRefId: { type: String, default: null },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -37,9 +38,11 @@ const transactionSchema = new mongoose.Schema(
       // index: true,
       default: null,
     },
-    bookingId: { type: String,
+    bookingId: {
+      type: String,
       //  index: true,
-        required: false },
+      required: false,
+    },
     type: { type: String, enum: TransactionTypeEnum, required: true }, // CREDIT or DEBIT
     status: {
       type: String,
@@ -60,6 +63,10 @@ const transactionSchema = new mongoose.Schema(
 
     refund: { type: Boolean, default: false },
     withdraw: { type: Boolean, default: false },
+    meta: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
   },
   { timestamps: true }
 );

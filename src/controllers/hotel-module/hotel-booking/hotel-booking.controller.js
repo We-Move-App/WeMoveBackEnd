@@ -40,7 +40,7 @@ const {
 } = require("../../../models/admin-module/admin/admin.model");
 const generateCustomId = require("../../../utils/customId/generateCustomId");
 const HotelManagerModel = require("../../../models/hotel-module/hotel-manager/hotel-manager.model");
-const Transaction = require('../../../models/transaction-module/transaction.model');
+const Transaction = require("../../../models/transaction-module/transaction.model");
 
 //-------------------- create booking --------------------
 const createBooking = catchAsyncError(async (req, res) => {
@@ -369,6 +369,7 @@ const createBooking = catchAsyncError(async (req, res) => {
       [
         {
           transactionId: await Transaction.generateTransactionId(),
+          transactionType: "Hotel Booking",
           userId: bookedBy,
           bookingId: newBooking._id,
           type: "DEBIT",
@@ -376,9 +377,21 @@ const createBooking = catchAsyncError(async (req, res) => {
           amount: finalAmount,
           currency: process.env.MOMO_CURRENCY,
           description: `Hotel booking ${hotelExists.hotelName}`,
+          platformFee: platformFee,
+          meta: {
+            from: {
+              name: userExists.fullName,
+              id: userExists.userId,
+            },
+            to: {
+              name: hotelExists.hotelName,
+              id: hotelId,
+            },
+          },
         },
         {
           transactionId: await Transaction.generateTransactionId(),
+          transactionType: "Hotel Booking",
           hotelManagerId,
           bookingId: newBooking._id,
           type: "CREDIT",
@@ -387,9 +400,20 @@ const createBooking = catchAsyncError(async (req, res) => {
           currency: process.env.MOMO_CURRENCY,
           description: "Earnings from hotel booking",
           operatorShare,
+          meta: {
+            from: {
+              name: userExists.fullName,
+              id: userExists.userId,
+            },
+            to: {
+              name: hotelExists.hotelName,
+              id: hotelId,
+            },
+          },
         },
         {
           transactionId: await Transaction.generateTransactionId(),
+          transactionType: "Hotel Booking",
           adminId: adminId,
           bookingId: newBooking._id,
           type: "CREDIT",
@@ -398,6 +422,16 @@ const createBooking = catchAsyncError(async (req, res) => {
           currency: process.env.MOMO_CURRENCY,
           description: `Commission from hotel booking ${hotelId}`,
           platformFee,
+          meta: {
+            from: {
+              name: userExists.fullName,
+              id: userExists.userId,
+            },
+            to: {
+              name: hotelExists.hotelName,
+              id: hotelId,
+            },
+          },
         },
       ],
       { session }
@@ -1323,11 +1357,11 @@ const getHotelById = catchAsyncError(async (req, res) => {
         roomTypes: roomTypesWithAvailability,
         ...(checkIn && checkOut
           ? {
-            dateFilter: {
-              checkInDate: checkIn.toISOString(),
-              checkOutDate: checkOut.toISOString(),
-            },
-          }
+              dateFilter: {
+                checkInDate: checkIn.toISOString(),
+                checkOutDate: checkOut.toISOString(),
+              },
+            }
           : {}),
       },
       "Hotel details fetched successfully."

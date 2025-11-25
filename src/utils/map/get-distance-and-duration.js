@@ -17,7 +17,6 @@ const getDistanceAndDuration = async (
     throw new Error("Invalid pickup or drop location coordinates.");
   }
 
-
   console.log("Requested mode:", "Amit");
   //Testing for India restriction Api
   const allowedCountry = ["IN", "CM"]; // India and Cameroon
@@ -32,8 +31,8 @@ const getDistanceAndDuration = async (
       const results = resp.data.results || [];
 
       for (const r of results) {
-        const countryComp = (r.address_components || []).find((c) =>
-          c.types && c.types.includes("country")
+        const countryComp = (r.address_components || []).find(
+          (c) => c.types && c.types.includes("country")
         );
         if (countryComp && allowedCountry.includes(countryComp.short_name)) {
           return true;
@@ -51,10 +50,10 @@ const getDistanceAndDuration = async (
   if (!pickupInCameroon || !dropInCameroon) {
     return {
       success: false,
-      message: "Service not available in this region (outside Cameroon and India).",
+      message:
+        "Service not available in this region (outside Cameroon and India).",
     };
   }
-
 
   const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${pickupLat},${pickupLng}&destinations=${dropLat},${dropLng}&mode=${mode}&key=${apiKey}`;
 
@@ -135,8 +134,8 @@ async function isLatLngInCameroon(lat, lng) {
     const resp = await axios.get(url);
     const results = resp.data.results || [];
     for (const r of results) {
-      const countryComp = (r.address_components || []).find((c) =>
-        c.types && c.types.includes("country")
+      const countryComp = (r.address_components || []).find(
+        (c) => c.types && c.types.includes("country")
       );
       if (countryComp && countryComp.short_name === "CM") return true;
     }
@@ -147,7 +146,7 @@ async function isLatLngInCameroon(lat, lng) {
     return false;
   }
 }
-// for Camerron  restriction Api 
+// for Camerron  restriction Api
 // const getAutocomplete = async (input, lat = null, lng = null) => {
 
 //   const baseUrl = `https://maps.googleapis.com/maps/api/place/autocomplete/json`;
@@ -251,7 +250,10 @@ const getAutocomplete = async (input, lat = null, lng = null) => {
   if (latNum !== null && lngNum !== null) {
     const insideAllowed = await isLatLngInAllowedCountry(latNum, lngNum);
     if (!insideAllowed) {
-      return { message: "No services available (outside allowed countries)", places: [] };
+      return {
+        message: "No services available (outside allowed countries)",
+        places: [],
+      };
     }
   }
 
@@ -296,9 +298,8 @@ const getAutocomplete = async (input, lat = null, lng = null) => {
   }
 };
 
-
 // const getAddressFromCoordinates = async (lat, lng) => {
-  
+
 //   // const apiKey = process.env.GOOGLE_MAPS_API_KEY;
 //   const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`;
 
@@ -319,8 +320,6 @@ const getAutocomplete = async (input, lat = null, lng = null) => {
 //   }
 // };
 
-
-
 //Api restriction for Cameroon and India
 const getAddressFromCoordinates = async (lat, lng) => {
   if (!lat || !lng) {
@@ -330,9 +329,8 @@ const getAddressFromCoordinates = async (lat, lng) => {
   const allowedCountries = ["IN", "CM"]; // India and Cameroon only
   const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`;
 
+  const response = await axios.get(url);
   try {
-    const response = await axios.get(url);
-
     if (response.data.status !== "OK") {
       throw new Error(`Google API Error: ${response.data.status}`);
     }
@@ -348,8 +346,8 @@ const getAddressFromCoordinates = async (lat, lng) => {
     // Extract the country from the results
     let countryCode = null;
     for (const r of results) {
-      const countryComp = (r.address_components || []).find((c) =>
-        c.types && c.types.includes("country")
+      const countryComp = (r.address_components || []).find(
+        (c) => c.types && c.types.includes("country")
       );
       if (countryComp) {
         countryCode = countryComp.short_name;
@@ -361,7 +359,8 @@ const getAddressFromCoordinates = async (lat, lng) => {
     if (!allowedCountries.includes(countryCode)) {
       return {
         success: false,
-        message: "Service not available in this region (outside Cameroon and India).",
+        message:
+          "Service not available in this region (outside Cameroon and India).",
       };
     }
 
@@ -416,12 +415,7 @@ const getAddressFromCoordinates = async (lat, lng) => {
 //   }
 // };
 
-
-
-
 //Api restriction for Cameroon and India
-
-
 
 const getDirections = async (origin, destination) => {
   if (!origin || !destination) {
@@ -441,8 +435,8 @@ const getDirections = async (origin, destination) => {
       const results = resp.data.results || [];
 
       for (const r of results) {
-        const countryComp = (r.address_components || []).find((c) =>
-          c.types && c.types.includes("country")
+        const countryComp = (r.address_components || []).find(
+          (c) => c.types && c.types.includes("country")
         );
         if (countryComp) {
           return countryComp.short_name; // e.g., "IN" or "CM"
@@ -517,7 +511,9 @@ const getPlaceDetails = async (placeId) => {
     const response = await axios.get(url);
 
     if (response.data.status !== "OK") {
-      throw new Error(`Google Place Details API Error: ${response.data.status}`);
+      throw new Error(
+        `Google Place Details API Error: ${response.data.status}`
+      );
     }
 
     const result = response.data.result;
@@ -544,13 +540,10 @@ const getPlaceDetails = async (placeId) => {
   }
 };
 
-
-
-
 module.exports = {
   getDistanceAndDuration,
   getAutocomplete,
   getAddressFromCoordinates,
   getDirections,
-  getPlaceDetails
+  getPlaceDetails,
 };
