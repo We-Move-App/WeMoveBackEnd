@@ -83,7 +83,7 @@ const bookingSchema = new Schema(
       discountValue: { type: Number }, // percentage or amount applied
       discountApplied: { type: Number, default: 0 }, // actual ₹ discount
     },
-    finalAmount: { type: Number, required: true, min: 0 },
+    finalAmount: { type: Number, required: false, min: 0 },
 
     status: {
       type: String,

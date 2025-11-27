@@ -9,6 +9,7 @@ const ApiResponse = require("../../../utils/response/ApiResponse");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const mongoose = require("mongoose");
 const { getFinalPrice } = require("../../../utils/services/prices.services");
+const moment = require("moment");
 
 // =============|| CREATE BUS ROUTE ||=============================
 
@@ -379,22 +380,33 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const startIndex = (page - 1) * limit;
-  let { status, search, filter } = req.query;
+
+
+  let { status, search, filter, date, from, to } = req.query;
+
+  console.log("Query Params:", req.query);
 
   status = status || "active";
 
-  const query = { createdBy: _id, status };
+  const query = {
+    createdBy: _id,
+    status
+  };
 
-  if (search) {
-    query.$or = [
-      { startLocation: { $regex: search, $options: "i" } },
-      { endLocation: { $regex: search, $options: "i" } },
-    ];
-
-    if (mongoose.Types.ObjectId.isValid(search)) {
-      query.$or.push({ busId: new mongoose.Types.ObjectId(search) });
-    }
+  if (from) {
+    query.startLocation = { $regex: from, $options: "i" };
   }
+
+  if (to) {
+    query.endLocation = { $regex: to, $options: "i" };
+  }
+
+  if (date) {
+    const day = moment(date, 'DD-MM-YYYY').format("dddd");
+    query.runningDays = day;
+  }
+
+
 
   const [routes, totalBus] = await Promise.all([
     BusRouteModel.find(query)
