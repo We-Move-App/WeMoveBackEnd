@@ -356,6 +356,8 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
 });
 
 const getTransactions = catchAsyncError(async (req, res) => {
+  console.log("This api");
+
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
     throw new ApiError(
@@ -368,8 +370,7 @@ const getTransactions = catchAsyncError(async (req, res) => {
   console.log("JWT Token:", jwtToken);
 
   const decoded = decodeAccessToken(jwtToken);
-
-  console.log("Decoded Token null:", decoded); // Debugging line
+  console.log("Decoded Token null:", decoded);
 
   const {
     entity,
@@ -378,9 +379,8 @@ const getTransactions = catchAsyncError(async (req, res) => {
     transactionId,
   } = req.query;
 
-  let userId = decoded?._id;
-
-  let driverIdFromToken = decoded?.driverId;
+  const userId = decoded?._id;
+  const driverIdFromToken = decoded?.driverId;
 
   console.log("User ID from Token:", userId);
   console.log("Driver ID from Token:", driverIdFromToken);
@@ -393,30 +393,35 @@ const getTransactions = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
 
-  // ---------------- Single Transaction ----------------
+  // ---------------------------------------------------
+  //  SINGLE TRANSACTION
+  // ---------------------------------------------------
   if (transactionId) {
-    const transaction = await Transaction.findOne({
-      transactionId: transactionId,
-    });
+    const transaction = await Transaction.findOne({ transactionId });
 
     if (!transaction) {
       throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
     }
 
-    return res
-      .status(statusCode.OK)
-      .json(
-        new ApiResponse(
-          statusCode.OK,
-          transaction,
-          "Transaction details fetched successfully"
-        )
-      );
+    const amountPaid = transaction.amount - transaction.platformFee;
+
+    return res.status(statusCode.OK).json(
+      new ApiResponse(
+        statusCode.OK,
+        {
+          ...transaction.toObject(),
+          amountPaid,
+        },
+        "Transaction details fetched successfully"
+      )
+    );
   }
 
-  // ---------------- Paginated Transactions ----------------
-  const page = Math.max(parseInt(pageQuery) || 1, 1); // min 1
-  const limit = Math.min(Math.max(parseInt(limitQuery) || 10, 1), 100); // default 10, max 100
+  // ---------------------------------------------------
+  //  PAGINATED TRANSACTIONS
+  // ---------------------------------------------------
+  const page = Math.max(parseInt(pageQuery) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(limitQuery) || 10, 1), 100);
 
   let Model;
   let txFilter = {};
@@ -455,12 +460,21 @@ const getTransactions = catchAsyncError(async (req, res) => {
       txFilter.userId = userId;
   }
 
-  const transactions = await Transaction.find(txFilter)
+  let transactions = await Transaction.find(txFilter)
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(limit);
 
   const totalCount = await Transaction.countDocuments(txFilter);
+
+  // Add amountPaid to EVERY transaction
+  transactions = transactions.map((tx) => {
+    const amountPaid = tx.amount - tx.platformFee;
+    return {
+      ...tx.toObject(),
+      amountPaid,
+    };
+  });
 
   return res.status(statusCode.OK).json(
     new ApiResponse(
