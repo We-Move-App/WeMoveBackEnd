@@ -553,11 +553,11 @@ const getAnalytics = catchAsyncError(async (req, res) => {
   }
 
   if (entity === "busoperator") {
-    txFilter.busOperatorId = String(entityExists._id);
+    txFilter.busOperatorId = new mongoose.Types.ObjectId(entityExists._id);
   } else if (entity === "hotelManager") {
-    txFilter.hotelManagerId = String(entityExists._id);
+    txFilter.hotelManagerId = new mongoose.Types.ObjectId(entityExists._id);
   } else {
-    txFilter.userId = String(userId);
+    txFilter.userId = new mongoose.Types.ObjectId(userId);
   }
 
   const now = new Date();
