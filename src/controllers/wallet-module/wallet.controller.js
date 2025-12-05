@@ -369,7 +369,7 @@ const getTransactions = catchAsyncError(async (req, res) => {
 
   const decoded = decodeAccessToken(jwtToken);
 
-  console.log("Decoded Token null:", decoded); // Debugging line
+  console.log("Decoded Token null:", decoded); 
 
   const {
     entity,
@@ -454,7 +454,21 @@ const getTransactions = catchAsyncError(async (req, res) => {
         throw new ApiError(statusCode.NOT_FOUND, "User not found");
       txFilter.userId = userId;
   }
+  const { search } = req.query;
 
+  if (search && search.trim() !== "") {
+    const regex = new RegExp(search.trim(), "i"); 
+
+    txFilter.$or = [
+      { transactionId: regex },
+      { bookingId: regex },
+      { paymentId: regex },
+      { transactionStatus: regex },
+      { amount: !isNaN(search) ? Number(search) : undefined }
+    ].filter(Boolean); // remove undefined
+  }
+
+  console.log("Final Filter: ", txFilter);
   const transactions = await Transaction.find(txFilter)
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
