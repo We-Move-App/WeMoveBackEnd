@@ -365,25 +365,18 @@ const getTransactions = catchAsyncError(async (req, res) => {
   }
 
   const jwtToken = authHeader.split(" ")[1];
-  console.log("JWT Token:", jwtToken);
-
   const decoded = decodeAccessToken(jwtToken);
-
-  console.log("Decoded Token null:", decoded); 
 
   const {
     entity,
     page: pageQuery,
     limit: limitQuery,
     transactionId,
+    search
   } = req.query;
 
-  let userId = decoded?._id;
-
-  let driverIdFromToken = decoded?.driverId;
-
-  console.log("User ID from Token:", userId);
-  console.log("Driver ID from Token:", driverIdFromToken);
+  const userId = decoded?._id;
+  const driverIdFromToken = decoded?.driverId;
 
   if (entity === "driver" && !driverIdFromToken) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid driver token");
@@ -393,30 +386,29 @@ const getTransactions = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
 
-  // ---------------- Single Transaction ----------------
+  // ----------------------------------------------------------------
+  //  SINGLE TRANSACTION
+  // ----------------------------------------------------------------
   if (transactionId) {
-    const transaction = await Transaction.findOne({
-      transactionId: transactionId,
-    });
-
+    const transaction = await Transaction.findOne({ transactionId });
     if (!transaction) {
       throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
     }
 
-    return res
-      .status(statusCode.OK)
-      .json(
-        new ApiResponse(
-          statusCode.OK,
-          transaction,
-          "Transaction details fetched successfully"
-        )
-      );
+    return res.status(statusCode.OK).json(
+      new ApiResponse(
+        statusCode.OK,
+        transaction,
+        "Transaction details fetched successfully"
+      )
+    );
   }
 
-  // ---------------- Paginated Transactions ----------------
-  const page = Math.max(parseInt(pageQuery) || 1, 1); // min 1
-  const limit = Math.min(Math.max(parseInt(limitQuery) || 10, 1), 100); // default 10, max 100
+  // ----------------------------------------------------------------
+  //  PAGINATED TRANSACTIONS
+  // ----------------------------------------------------------------
+  const page = Math.max(parseInt(pageQuery) || 1, 1);
+  const limit = Math.min(Math.max(parseInt(limitQuery) || 10, 1), 100);
 
   let Model;
   let txFilter = {};
@@ -454,22 +446,31 @@ const getTransactions = catchAsyncError(async (req, res) => {
         throw new ApiError(statusCode.NOT_FOUND, "User not found");
       txFilter.userId = userId;
   }
-  const { search } = req.query;
 
+  // ----------------------------------------------------------------
+  //  📌 SEARCH FILTER LOGIC
+  // ----------------------------------------------------------------
   if (search && search.trim() !== "") {
-    const regex = new RegExp(search.trim(), "i"); 
+    const term = search.trim();
+    const regex = new RegExp(term, "i");
 
-    txFilter.$or = [
+    const searchFilters = [
       { transactionId: regex },
       { bookingId: regex },
       { paymentId: regex },
-      { transactionStatus: regex },
-      { amount: !isNaN(search) ? Number(search) : undefined }
-    ].filter(Boolean); // remove undefined
+      { transactionStatus: regex }
+    ];
+
+    if (!isNaN(term)) {
+      searchFilters.push({ amount: Number(term) });
+    }
+
+    txFilter.$or = searchFilters;
   }
 
-  console.log("Final Filter: ", txFilter);
-  const transactions = await Transaction.find(txFilter)
+  console.log("Final Filter:", txFilter);
+
+  let transactions = await Transaction.find(txFilter)
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(limit);
@@ -492,6 +493,7 @@ const getTransactions = catchAsyncError(async (req, res) => {
     )
   );
 });
+
 
 const getTransactionInvoice = catchAsyncError(async (req, res) => {
   const { transactionId } = req.params;
@@ -553,11 +555,11 @@ const getAnalytics = catchAsyncError(async (req, res) => {
   }
 
   if (entity === "busoperator") {
-    txFilter.busOperatorId = String(entityExists._id);
+    txFilter.busOperatorId = new mongoose.Types.ObjectId(entityExists._id);
   } else if (entity === "hotelManager") {
-    txFilter.hotelManagerId = String(entityExists._id);
+    txFilter.hotelManagerId = new mongoose.Types.ObjectId(entityExists._id);
   } else {
-    txFilter.userId = String(userId);
+    txFilter.userId = new mongoose.Types.ObjectId(userId);
   }
 
   const now = new Date();
