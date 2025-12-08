@@ -20,13 +20,19 @@ const verifyTokenResult = async (req, model, next) => {
 
   // Safely read token from Cookie or Authorization: Bearer <token>
   let token = null;
-  if (req?.cookies?.accessToken) {
+  // if (req?.cookies?.accessToken) {
+  //   token = req.cookies.accessToken;
+  // } else if (req?.headers?.authorization) {
+  //   const parts = req.headers.authorization.split(" ");
+  //   if (parts.length === 2 && /^Bearer$/i.test(parts[0])) {
+  //     token = parts[1];
+  //   }
+  // }
+  const header = req?.headers?.authorization;
+  if (header && header.startsWith("Bearer ")) {
+    token = header.split(" ")[1];
+  } else if (req?.cookies?.accessToken) {
     token = req.cookies.accessToken;
-  } else if (req?.headers?.authorization) {
-    const parts = req.headers.authorization.split(" ");
-    if (parts.length === 2 && /^Bearer$/i.test(parts[0])) {
-      token = parts[1];
-    }
   }
 
   if (!token) {
@@ -83,7 +89,7 @@ const verifyTokenResult = async (req, model, next) => {
   throw new ApiError(
     statusCode.FORBIDDEN,
     message[user?.verificationStatus] ||
-      "Your account is awaiting admin approval."
+    "Your account is awaiting admin approval."
   );
 };
 
@@ -155,7 +161,7 @@ const verifyTokenResultUser = async (req, model, next) => {
   throw new ApiError(
     statusCode.FORBIDDEN,
     message[user?.verificationStatus] ||
-      "Your account is awaiting admin approval."
+    "Your account is awaiting admin approval."
   );
 };
 

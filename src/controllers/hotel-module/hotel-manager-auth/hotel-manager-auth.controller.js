@@ -240,7 +240,7 @@ const loginHotelManager = catchAsyncError(async (req, res, next) => {
     existingUser,
     TypeOfUser.HOTELMANAGER
   );
-  setTokenCookies(res, accessToken, refreshToken);
+  // setTokenCookies(res, accessToken, refreshToken);
 
   const data = {
     accessToken,
