@@ -67,6 +67,7 @@ const verifyOtpBusDriverLogin = catchAsyncError(async (req, res) => {
 
   const { accessToken, refreshToken } = generateTokens({
     driverId: driver._id,
+    busDriverId: driver.busDriverId,
     role: EntityCodeEnum.BUSDRIVER,
   });
 
@@ -87,6 +88,7 @@ const verifyOtpBusDriverLogin = catchAsyncError(async (req, res) => {
         refreshToken,
         busdriver: {
           id: driver._id,
+          busDriverId: driver.busDriverId,
           fullName: driver.fullName,
           phoneNo: driver.phoneNumber,
           busOperator: driver.busOperator,
@@ -117,7 +119,7 @@ const getBusDriverProfile = catchAsyncError(async (req, res) => {
   }
   const driver = await BusDriverModel.findById(driverId)
     .select(
-      "fullName phoneNumber assignedBus status isActive licenseExpiry driverLicenseFront avatar createdAt updatedAt"
+      "fullName  busDriverId phoneNumber assignedBus status isActive licenseExpiry driverLicenseFront avatar createdAt updatedAt"
     )
 
     .populate("assignedBus");
@@ -131,6 +133,7 @@ const getBusDriverProfile = catchAsyncError(async (req, res) => {
       statusCode.OK,
       {
         id: driver._id,
+        busDriverId: driver.busDriverId,
         fullName: driver.fullName,
         phoneNumber: driver.phoneNumber,
         busOperator: driver.busOperator,

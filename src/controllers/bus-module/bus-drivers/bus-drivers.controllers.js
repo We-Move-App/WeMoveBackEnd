@@ -19,6 +19,9 @@ const {
   deleteImageFromAws,
 } = require("../../../utils/uploadFiles/uploadFilestoAws");
 const mongoose = require("mongoose");
+const generateCustomId = require("../../../utils/customId/generateCustomId");
+const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
+
 
 const registerBusDriver = catchAsyncError(async (req, res, next) => {
   const userId = checkBusOperatorAuthority(
@@ -32,6 +35,8 @@ const registerBusDriver = catchAsyncError(async (req, res, next) => {
 
   // ✅ Validate required fields
   validateRequestBody(requiredFields, req.body);
+
+
 
   // ✅ Validate required documents
   if (!docsToUpload?.driver_license_front || !docsToUpload?.avatar) {
@@ -63,8 +68,11 @@ const registerBusDriver = catchAsyncError(async (req, res, next) => {
   const uploadImageFront = await uploadSingleImageToAws(docsToUpload.driver_license_front);
   const avatar = await uploadSingleImageToAws(docsToUpload.avatar);
 
+  const busDriverId = await generateCustomId(EntityCodeEnum.BUSDRIVER, "BD");
+
 
   const newDriver = new BusDriverModel({
+    busDriverId,
     fullName,
     phoneNumber,
     busOperator: busOperator._id,
@@ -298,11 +306,15 @@ const getBusDrivers = catchAsyncError(async (req, res, next) => {
   if (status) query.status = status;
 
 
-  console.log("Querying bus drivers with:", query);
+  
 
   // Search by driverId
-  if (search && mongoose.Types.ObjectId.isValid(search)) {
-    query._id = new mongoose.Types.ObjectId(search);
+  if (search) {
+    query.$or = [
+      { busDriverId: { $regex: search, $options: "i" } },
+      { fullName: { $regex: search, $options: "i" } },
+      { phoneNumber: { $regex: search, $options: "i" } }
+    ];
   }
 
   // Fetch drivers
@@ -312,7 +324,7 @@ const getBusDrivers = catchAsyncError(async (req, res, next) => {
     .skip(startIndex)
     .populate("busOperator", "fullName")
     .populate("assignedBus", "busRegNumber")
-    .select("avatar driverLicenseFront status isActive fullName phoneNumber");
+    .select("avatar driverLicenseFront status isActive busDriverId fullName busDriverId phoneNumber");
 
   if (!busDrivers || busDrivers.length === 0) {
     throw new ApiError(statusCode.NOT_FOUND, "No bus drivers found");
@@ -384,7 +396,7 @@ const getDriverById = catchAsyncError(async (req, res, next) => {
 
   const driver = await BusDriverModel.findById(id)
     .populate("assignedBus", "busRegNumber") // Optional: populate assigned bus
-    .select("fullName phoneNumber assignedBus status isActive driverLicenseFront avatar createdAt updatedAt");
+    .select("fullName busDriverId phoneNumber assignedBus status isActive driverLicenseFront avatar createdAt updatedAt");
 
   if (!driver) {
     throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
@@ -492,7 +504,7 @@ const unassignDriver = catchAsyncError(async (req, res, next) => {
   if (bus.assignedDriver.length === 0) {
     bus.status = "inactive";
   }
-  
+
 
   await bus.save();
 
