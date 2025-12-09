@@ -384,6 +384,8 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
 
   let { status, search, filter, date, from, to } = req.query;
 
+ 
+
   console.log("Query Params:", req.query);
 
   status = status || "active";
@@ -392,6 +394,16 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
     createdBy: _id,
     status
   };
+
+  if (search) {
+    query.$or = [
+      { startLocation: { $regex: search, $options: "i" } },
+      { endLocation: { $regex: search, $options: "i" } },
+      { "pickups.name": { $regex: search, $options: "i" } },
+      { "drops.name": { $regex: search, $options: "i" } },
+    ];
+  }
+
 
   if (from) {
     query.startLocation = { $regex: from, $options: "i" };
