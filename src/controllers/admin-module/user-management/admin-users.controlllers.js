@@ -180,6 +180,7 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
     search = "",
     paymentStatus = "",
   } = req.query;
+  console.log("Query Params:", req.query);
 
   const pageNum = Math.max(parseInt(page, 10), 1);
   const limitNum = Math.max(parseInt(limit, 10), 1);
@@ -197,8 +198,8 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
       filter.$or = [
         { bookingId: regex },
         { email: regex }, // in case models store it at root (hotel/bus)
-        { phoneNumber: regex }, // same
-        { userId: regex },
+        { phoneNumber: regex }, // in case models store it at root (hotel/bus)  
+       {userId: regex},
 
         // ride.userId (string) or any model exposing userId at root
       ];

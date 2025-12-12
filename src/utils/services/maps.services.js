@@ -2,7 +2,9 @@ const axios = require("axios");
 const { google_maps_api_key } = require("../../config/config");
 const ApiError = require("../response/ApiError");
 const statusCode = require("../constants/statusCode");
-
+const BusRouteModel = require("../../models/bus-module/bus-routes/bus-routes.model");
+const {AddressModel} = require("../../models/global-module/address/address.model");
+const {hotelAddressModel} = require("../../models/hotel-module/hotel-registration/hotel-location.model");
 
 const getAddressCoordinate = async (address) => {
   const apiKey = google_maps_api_key;
@@ -129,10 +131,86 @@ const getAutoCompleteSuggestions = async (input) => {
   }
 };
 
-module.exports = { getAutoCompleteSuggestions };
+
+const getDbAutoComplete = async (input) => {
+  if (!input) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Query is required");
+  }
+
+  try {
+    const regex = new RegExp(`^${input}`, "i");
+
+    // 1) Search Bus Route locations
+    let busLocations = await BusRouteModel.find({
+      $or: [
+        { startLocation: regex },
+        { endLocation: regex },
+        { "pickups.name": regex },
+        { "drops.name": regex }
+      ]
+    }).select("startLocation endLocation pickups drops");
+
+    // Extract unique names
+    let busNames = [];
+
+    busLocations.forEach(r => {
+      if (regex.test(r.startLocation)) busNames.push(r.startLocation);
+      if (regex.test(r.endLocation)) busNames.push(r.endLocation);
+
+      r.pickups?.forEach(p => {
+        if (regex.test(p.name)) busNames.push(p.name);
+      });
+      r.drops?.forEach(d => {
+        if (regex.test(d.name)) busNames.push(d.name);
+      });
+    });
+
+    // 2) Search Address table
+    let addressData = await AddressModel.find({
+      $or: [
+        { townCity: regex },
+        { area: regex },
+        { locality: regex },
+        { address: regex }
+      ]
+    }).select("townCity area locality address");
+
+    let addressNames = [];
+    addressData.forEach(a => {
+      if (regex.test(a.townCity)) addressNames.push(a.townCity);
+      if (regex.test(a.area)) addressNames.push(a.area);
+      if (regex.test(a.locality)) addressNames.push(a.locality);
+      if (regex.test(a.address)) addressNames.push(a.address);
+    });
+
+    // 3) Combine all locations
+    let combined = [...busNames, ...addressNames];
+
+    // 4) Remove duplicates
+    combined = [...new Set(combined.map(i => i?.trim()))];
+
+    // 5) If empty throw not found
+    if (!combined.length) {
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        "No services available in this area"
+      );
+    }
+
+    return combined;
+
+  } catch (error) {
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      error.message || "No services available in this area"
+    );
+  }
+};
 
 
-module.exports = { getAutoCompleteSuggestions };
+module.exports = { getAutoCompleteSuggestions , getDbAutoComplete};
+
+
 
 
 
@@ -269,6 +347,7 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
 
 module.exports = {
   getAddressCoordinate,
+  getDbAutoComplete,
   getAutoCompleteSuggestions,
   getDistanceTime,
   calculateDistance,
