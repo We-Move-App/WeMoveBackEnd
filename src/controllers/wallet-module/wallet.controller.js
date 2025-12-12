@@ -356,6 +356,8 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
 });
 
 const getTransactions = catchAsyncError(async (req, res) => {
+  console.log("This api");
+
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
     throw new ApiError(
@@ -365,18 +367,23 @@ const getTransactions = catchAsyncError(async (req, res) => {
   }
 
   const jwtToken = authHeader.split(" ")[1];
+  console.log("JWT Token:", jwtToken);
+
   const decoded = decodeAccessToken(jwtToken);
+  console.log("Decoded Token null:", decoded);
 
   const {
     entity,
     page: pageQuery,
     limit: limitQuery,
     transactionId,
-    search
   } = req.query;
 
   const userId = decoded?._id;
   const driverIdFromToken = decoded?.driverId;
+
+  console.log("User ID from Token:", userId);
+  console.log("Driver ID from Token:", driverIdFromToken);
 
   if (entity === "driver" && !driverIdFromToken) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid driver token");
@@ -386,27 +393,33 @@ const getTransactions = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
 
-  // ----------------------------------------------------------------
+  // ---------------------------------------------------
   //  SINGLE TRANSACTION
-  // ----------------------------------------------------------------
+  // ---------------------------------------------------
   if (transactionId) {
     const transaction = await Transaction.findOne({ transactionId });
+
     if (!transaction) {
       throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
     }
 
+    const amountPaid = transaction.amount - transaction.platformFee;
+
     return res.status(statusCode.OK).json(
       new ApiResponse(
         statusCode.OK,
-        transaction,
+        {
+          ...transaction.toObject(),
+          amountPaid,
+        },
         "Transaction details fetched successfully"
       )
     );
   }
 
-  // ----------------------------------------------------------------
+  // ---------------------------------------------------
   //  PAGINATED TRANSACTIONS
-  // ----------------------------------------------------------------
+  // ---------------------------------------------------
   const page = Math.max(parseInt(pageQuery) || 1, 1);
   const limit = Math.min(Math.max(parseInt(limitQuery) || 10, 1), 100);
 
@@ -447,35 +460,21 @@ const getTransactions = catchAsyncError(async (req, res) => {
       txFilter.userId = userId;
   }
 
-  // ----------------------------------------------------------------
-  //  📌 SEARCH FILTER LOGIC
-  // ----------------------------------------------------------------
-  if (search && search.trim() !== "") {
-    const term = search.trim();
-    const regex = new RegExp(term, "i");
-
-    const searchFilters = [
-      { transactionId: regex },
-      { bookingId: regex },
-      { paymentId: regex },
-      { transactionStatus: regex }
-    ];
-
-    if (!isNaN(term)) {
-      searchFilters.push({ amount: Number(term) });
-    }
-
-    txFilter.$or = searchFilters;
-  }
-
-  console.log("Final Filter:", txFilter);
-
   let transactions = await Transaction.find(txFilter)
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(limit);
 
   const totalCount = await Transaction.countDocuments(txFilter);
+
+  // Add amountPaid to EVERY transaction
+  transactions = transactions.map((tx) => {
+    const amountPaid = tx.amount - tx.platformFee;
+    return {
+      ...tx.toObject(),
+      amountPaid,
+    };
+  });
 
   return res.status(statusCode.OK).json(
     new ApiResponse(
@@ -493,7 +492,6 @@ const getTransactions = catchAsyncError(async (req, res) => {
     )
   );
 });
-
 
 const getTransactionInvoice = catchAsyncError(async (req, res) => {
   const { transactionId } = req.params;
