@@ -51,15 +51,14 @@ const generateTransactionReceiptBase64 = async (txn) => {
 
   const page = await browser.newPage();
 
-  // mobile viewport to match your design
   await page.setViewport({
     width: 375,
     height: 812,
     isMobile: true,
     hasTouch: true,
+    deviceScaleFactor: 1,
   });
 
-  // ✅ inline logo as base64
   const logoPath = path.join(__dirname, "wemove-logo.png");
   const logoBase64 = fs.readFileSync(logoPath).toString("base64");
   const logoDataUrl = `data:image/png;base64,${logoBase64}`;
@@ -67,11 +66,15 @@ const generateTransactionReceiptBase64 = async (txn) => {
   const html = getTransactionReceiptHTML(txn, logoDataUrl);
 
   await page.setContent(html, { waitUntil: "networkidle0" });
+  await page.emulateMediaType("screen");
 
+  // ✅ Receipt-like PDF instead of A4 (major size reduction)
   const pdfBytes = await page.pdf({
-    format: "A4",
     printBackground: true,
-    margin: { top: "10mm", bottom: "10mm", left: "10mm", right: "10mm" },
+    width: "400px",
+    height: "950px", // if your receipt can be longer, set to 1200px
+    margin: { top: "8px", bottom: "8px", left: "8px", right: "8px" },
+    preferCSSPageSize: true,
   });
 
   await browser.close();
