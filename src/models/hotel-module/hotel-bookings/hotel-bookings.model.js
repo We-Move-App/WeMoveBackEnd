@@ -67,7 +67,7 @@ const HotelBookingSchema = new mongoose.Schema(
       default: "PENDING",
     },
     transactionId: {
-      type: Schema.Types.ObjectId,
+      type: String,
       ref: "Transactions",
     },
     bookingBy: {

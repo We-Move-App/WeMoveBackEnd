@@ -68,7 +68,7 @@ const bookingSchema = new Schema(
     createdAt: { type: Date, default: Date.now },
     termAndConditions: { type: Boolean, required: true, default: false },
     transactionId: {
-      type: Schema.Types.ObjectId,
+      type: String,
       ref: "Transactions",
     },
     bookingBy: {
