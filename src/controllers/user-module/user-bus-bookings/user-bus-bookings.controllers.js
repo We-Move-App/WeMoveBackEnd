@@ -147,24 +147,21 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
   session.startTransaction();
 
   try {
-    // ✅ Step 3: Seat availability & auto assignment
+    // Step 3: Seat availability & auto assignment
     const busObjectId = new mongoose.Types.ObjectId(busId);
     const routeObjectId = new mongoose.Types.ObjectId(routeId);
 
-    // Normalize date range (avoid timezone mismatch)
     const startOfDay = new Date(journeyDate);
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(journeyDate);
     endOfDay.setHours(23, 59, 59, 999);
 
-    // Find layout for same bus, route, and date
     let seatAvailability = await BusSeatsLayoutModel.findOne({
       busId: busObjectId,
       routeId: routeObjectId,
       journeyDate: { $gte: startOfDay, $lte: endOfDay },
     }).session(session);
 
-    // If layout doesn’t exist → create it
     if (!seatAvailability) {
       const busSeats = Array.from({ length: findBus.noOfSeats }, (_, i) => ({
         seatNumber: `S${i + 1}`,
@@ -235,7 +232,6 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       } else if (basePrice < coupon.minOrderAmount) {
         couponMessage = `Coupon valid only on orders above ₹${coupon.minOrderAmount}.`;
       } else {
-        // ✅ Apply discount
         if (coupon.discountType === "Percentage") {
           finalAmount =
             basePrice - (basePrice * coupon.discountPercentage) / 100;
@@ -251,29 +247,56 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     } else {
       couponMessage = "Booking confirmed. No coupon applied.";
     }
-    //Check user wallet balance
+
+    // Check user wallet balance
     const userWallet = await WalletModel.findOne({ userId }).session(session);
     if (!userWallet || userWallet.balance < finalAmount) {
       await TransactionModel.create(
         [
           {
-            transactionId: await Transaction.generateTransactionId(),
-            userId,
+            transactionId: await TransactionModel.generateTransactionId(),
+            transactionType: "Bus Booking",
+            momoRefId: null,
             bookingId: null,
-            type: "DEBIT",
             status: PaymentStatusEnum.FAILED,
-            amount: finalAmount,
             currency: process.env.MOMO_CURRENCY,
+            totalAmount: Number(finalAmount) || 0,
             description: "Bus booking failed - insufficient balance",
+            entries: [
+              {
+                entityType: "USER",
+                entityId: userId,
+                name: userExists?.fullName || null,
+                type: "DEBIT",
+                amount: Number(finalAmount) || 0,
+              },
+              {
+                entityType: "ADMIN",
+                entityId: "SYSTEM",
+                name: "SYSTEM",
+                type: "CREDIT",
+                amount: Number(finalAmount) || 0,
+              },
+            ],
+            meta: {
+              reason: "INSUFFICIENT_BALANCE",
+              attemptedFor: {
+                busId,
+                routeId,
+                from,
+                to,
+                journeyDate: journeyDateNormalized,
+              },
+            },
           },
         ],
         { session }
       );
+
       throw new ApiError(statusCode.BAD_REQUEST, "Insufficient wallet balance");
     }
 
     // Step 3: Create booking
-
     const bookingId = await generateCustomId(EntityCodeEnum.BUS_BOOKING, "BB");
 
     const [newBooking] = await BusBookingModel.create(
@@ -363,70 +386,69 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       { session, new: true, upsert: true, setDefaultsOnInsert: true }
     );
 
-    // 10️⃣ Transactions
-    await TransactionModel.insertMany(
+    // 10️⃣ Transactions (updated for new ledger model)
+    const round2 = (n) => Number(Number(n).toFixed(2));
+
+    const totalPaid = round2(finalAmount);
+    platformFee = round2(platformFee);
+    operatorShare = round2(operatorShare);
+
+    const diff = round2(totalPaid - round2(platformFee + operatorShare));
+    if (diff !== 0) operatorShare = round2(operatorShare + diff);
+
+    await TransactionModel.create(
       [
         {
-          transactionId: await Transaction.generateTransactionId(),
+          transactionId: await TransactionModel.generateTransactionId(),
           transactionType: "Bus Booking",
-          userId,
+          momoRefId: null,
           bookingId: newBooking.bookingId,
-          type: "DEBIT",
           status: PaymentStatusEnum.SUCCESS,
-          amount: finalAmount,
           currency: process.env.MOMO_CURRENCY,
+          totalAmount: totalPaid,
           description: `Bus booking ${from} → ${to}`,
-          platformFee,
+          platformFee: platformFee,
+          operatorShare: operatorShare,
+          entries: [
+            {
+              entityType: "USER",
+              entityId: userId,
+              name: userExists?.fullName || null,
+              type: "DEBIT",
+              amount: totalPaid,
+            },
+            {
+              entityType: "BUS_OPERATOR",
+              entityId: ownerId,
+              name: findBus?.busName || null,
+              type: "CREDIT",
+              amount: operatorShare,
+            },
+            {
+              entityType: "ADMIN",
+              entityId: adminId,
+              name: superAdmin?.fullName || "SuperAdmin",
+              type: "CREDIT",
+              amount: platformFee,
+            },
+          ],
           meta: {
             from: {
-              name: userExists.fullName,
-              id: userExists.userId,
+              name: userExists?.fullName,
+              id: userExists?.userId,
             },
             to: {
-              name: findBus.busName,
-              id: findBus._id,
+              name: findBus?.busName,
+              id: findBus?._id,
             },
-          },
-        },
-        {
-          transactionId: await Transaction.generateTransactionId(),
-          transactionType: "Bus Booking",
-          busOperatorId: ownerId,
-          bookingId: newBooking.bookingId,
-          type: "CREDIT",
-          status: PaymentStatusEnum.SUCCESS,
-          amount: operatorShare,
-          currency: process.env.MOMO_CURRENCY,
-          description: "Earnings from booking",
-          meta: {
-            from: {
-              name: userExists.fullName,
-              id: userExists.userId,
-            },
-            to: {
-              name: findBus.busName,
-              id: findBus._id,
-            },
-          },
-        },
-        {
-          transactionId: await Transaction.generateTransactionId(),
-          transactionType: "Bus Booking",
-          adminId,
-          bookingId: newBooking.bookingId,
-          type: "CREDIT",
-          status: PaymentStatusEnum.SUCCESS,
-          amount: platformFee,
-          currency: process.env.MOMO_CURRENCY,
-          description: `Commission from bus booking ${busId}`,
-          meta: {
-            from: {
-              name: userExists.fullName,
-              id: userExists.userId,
-            },
-            to: {
-              name: findBus.busName,
-              id: findBus._id,
+            bus: {
+              busId,
+              routeId,
+              from,
+              to,
+              journeyDate: journeyDateNormalized,
+              seats: assignedSeats,
+              noOfPassengers,
             },
           },
         },

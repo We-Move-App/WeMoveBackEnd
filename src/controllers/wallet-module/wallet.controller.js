@@ -13,6 +13,7 @@ const UserModel = require("../../models/user-module/users/user.model");
 const {
   TransactionTypeEnum,
   PaymentStatusEnum,
+  EntryTypeEnum,
 } = require("../../utils/constants/ENUM");
 const ApiResponse = require("../../utils/response/ApiResponse");
 const SecurePinModel = require("../../models/global-module/secure-pins/secure-pins.model");
@@ -159,7 +160,7 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
   const jwtToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(jwtToken);
 
-  const senderId = decoded?.userId; // <- keep this consistent
+  const senderId = decoded?.userId;
   if (!senderId) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
@@ -181,8 +182,6 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
   if (!sender) throw new ApiError(statusCode.NOT_FOUND, "Sender not found");
   if (!receiver) throw new ApiError(statusCode.NOT_FOUND, "Receiver not found");
 
-  // ---- Commission: find active rule for "user" transfers ----
-  // NOTE: start a session BEFORE using .session(session)
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -192,8 +191,10 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
       status: "active",
     }).session(session);
 
+    const round2 = (n) => Number(Number(n).toFixed(2));
+
     // Compute commission amount
-    const amt = Number(amount);
+    const amt = round2(Number(amount));
     let platformFee = 0;
 
     if (commission) {
@@ -201,20 +202,20 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
         commission.commissionType === "percentage" &&
         commission.commissionPercentage != null
       ) {
-        platformFee = Number(
-          ((amt * Number(commission.commissionPercentage)) / 100).toFixed(2)
+        platformFee = round2(
+          (amt * Number(commission.commissionPercentage)) / 100
         );
       } else if (
         commission.commissionType === "fixed" &&
         commission.commissionRate != null
       ) {
-        platformFee = Number(Number(commission.commissionRate).toFixed(2));
+        platformFee = round2(Number(commission.commissionRate));
       }
     }
 
-    const totalDebit = Number((amt + platformFee).toFixed(2)); // what the sender must have & pay
+    const totalDebit = round2(amt + platformFee); // what sender pays
 
-    // ---- Load wallets (lock by reading inside txn) ----
+    // ---- Load wallets ----
     const [senderWallet, receiverWallet] = await Promise.all([
       Wallet.findOne({ userId: sender._id }).session(session),
       Wallet.findOne({ userId: receiver._id }).session(session),
@@ -225,11 +226,51 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
     if (!receiverWallet)
       throw new ApiError(statusCode.NOT_FOUND, "Receiver wallet not found");
 
-    // Optional: enforce same currency; otherwise handle conversion here
     const currency = senderWallet.currency || process.env.MOMO_CURRENCY;
 
-    // ---- Sufficient balance? ----
     if (Number(senderWallet.balance) < totalDebit) {
+      // Only transaction part: record FAILED ledger (balanced)
+      await TransactionModel.create(
+        [
+          {
+            transactionId: await TransactionModel.generateTransactionId(),
+            transactionType: "User to User Payment",
+            momoRefId: null,
+            bookingId: null,
+            status: PaymentStatusEnum.FAILED,
+            currency,
+            totalAmount: totalDebit,
+            description: "Transfer failed - insufficient balance",
+            platformFee,
+            operatorShare: amt,
+            entries: [
+              {
+                entityType: "USER",
+                entityId: sender._id,
+                name: sender.fullName || null,
+                type: "DEBIT",
+                amount: totalDebit,
+              },
+              {
+                entityType: "ADMIN",
+                entityId: "SYSTEM",
+                name: "SYSTEM",
+                type: "CREDIT",
+                amount: totalDebit,
+              },
+            ],
+            meta: {
+              reason: "INSUFFICIENT_BALANCE",
+              from: { name: sender.fullName, id: sender.userId },
+              to: { name: receiver.fullName, id: receiver.userId },
+              amount: amt,
+              platformFee,
+            },
+          },
+        ],
+        { session }
+      );
+
       throw new ApiError(statusCode.BAD_REQUEST, "Insufficient balance");
     }
 
@@ -240,21 +281,18 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
     const adminId = superAdmin?._id || "ADM001";
 
     // ---- Apply atomic wallet updates ----
-    // Deduct totalDebit from sender
     await Wallet.findOneAndUpdate(
       { _id: senderWallet._id },
       { $inc: { balance: -totalDebit } },
       { session, new: true }
     );
 
-    // Credit receiver with transfer amount
     await Wallet.findOneAndUpdate(
       { _id: receiverWallet._id },
       { $inc: { balance: amt } },
       { session, new: true }
     );
 
-    // Credit admin with platform fee (if any)
     if (platformFee > 0) {
       await Wallet.findOneAndUpdate(
         { userId: adminId },
@@ -263,76 +301,73 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
       );
     }
 
-    // ---- Create transactions (3 rows) ----
-    const baseMeta = {
-      status: PaymentStatusEnum.SUCCESS,
-      currency,
-    };
-
-    const senderTx = {
-      userId: sender._id,
-      transactionId: await Transaction.generateTransactionId(),
-      transactionType: "User to User Payment",
-      type: TransactionTypeEnum.DEBIT,
-      amount: totalDebit, // user paid amount + fee
-      platformFee: platformFee,
-      description:
-        platformFee > 0
-          ? `Sent ${amt} to ${receiver.fullName} (includes commission ${platformFee})`
-          : `Sent ${amt} to ${receiver.fullName}`,
-      ...baseMeta,
-      meta: {
-        from: {
-          name: sender.fullName,
-          id: sender.userId,
-        },
-        to: {
-          name: receiver.fullName,
-          id: receiver.userId,
-        },
+    // ---- Create transaction (single ledger doc, balanced) ----
+    // Credits must equal debits exactly: totalDebit = amt + platformFee
+    const entries = [
+      {
+        entityType: "USER",
+        entityId: sender._id,
+        name: sender.fullName || null,
+        type: "DEBIT",
+        amount: totalDebit,
       },
-    };
-
-    const receiverTx = {
-      userId: receiver._id,
-      transactionId: await Transaction.generateTransactionId(),
-      transactionType: "User to User Payment",
-      type: TransactionTypeEnum.CREDIT,
-      amount: amt,
-      description: `Received from ${sender.fullName}, email:${sender.email}`,
-      ...baseMeta,
-      meta: {
-        from: {
-          name: sender.fullName,
-          id: sender.userId,
-        },
-        to: {
-          name: receiver.fullName,
-          id: receiver.userId,
-        },
+      {
+        entityType: "USER",
+        entityId: receiver._id,
+        name: receiver.fullName || null,
+        type: "CREDIT",
+        amount: amt,
       },
-    };
+    ];
 
-    const adminTx =
-      platformFee > 0
-        ? {
-            adminId, // keep a dedicated field if your schema supports it
-            transactionId: await Transaction.generateTransactionId(),
-            transactionType: "User to User Payment",
-            type: TransactionTypeEnum.CREDIT,
-            amount: platformFee,
-            description: `Commission from user transfer: sender=${sender.userId} → receiver=${receiver.userId}`,
-            ...baseMeta,
-          }
-        : null;
+    if (platformFee > 0) {
+      entries.push({
+        entityType: "ADMIN",
+        entityId: adminId,
+        name: superAdmin?.fullName || "SuperAdmin",
+        type: "CREDIT",
+        amount: platformFee,
+      });
+    } else {
+      // ensure validator passes if no fee: credit must still equal debit
+      // already balanced because totalDebit == amt when platformFee==0
+    }
 
-    // insertMany ignores nulls if you filter them out
-    const txDocs = adminTx
-      ? [senderTx, receiverTx, adminTx]
-      : [senderTx, receiverTx];
-    const transactionsList = await Transaction.insertMany(txDocs, { session });
+    const [ledgerTx] = await TransactionModel.create(
+      [
+        {
+          transactionId: await TransactionModel.generateTransactionId(),
+          transactionType: "User to User Payment",
+          momoRefId: null,
+          bookingId: null,
+          status: PaymentStatusEnum.SUCCESS,
+          currency,
+          totalAmount: totalDebit,
+          description:
+            platformFee > 0
+              ? `Sent ${amt} to ${receiver.fullName} (includes commission ${platformFee})`
+              : `Sent ${amt} to ${receiver.fullName}`,
+          platformFee,
+          operatorShare: amt,
+          entries,
+          meta: {
+            from: {
+              name: sender.fullName,
+              id: sender.userId,
+            },
+            to: {
+              name: receiver.fullName,
+              id: receiver.userId,
+            },
+            amountSent: amt,
+            platformFee,
+            totalDebitedFromSender: totalDebit,
+          },
+        },
+      ],
+      { session }
+    );
 
-    // ---- Commit ----
     await session.commitTransaction();
     session.endSession();
 
@@ -343,7 +378,7 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
           amountSent: amt,
           platformFee,
           totalDebitedFromSender: totalDebit,
-          transactionsList,
+          transactionsList: [ledgerTx],
         },
         "Transfer successful"
       )
@@ -433,7 +468,18 @@ const getTransactions = catchAsyncError(async (req, res) => {
       entityExists = await Model.findById(userId);
       if (!entityExists)
         throw new ApiError(statusCode.NOT_FOUND, "Bus Operator not found");
-      txFilter.busOperatorId = entityExists._id;
+
+      console.log("entityExists._id", entityExists._id);
+
+      entryType = EntryTypeEnum.BUS_OPERATOR;
+      console.log("entryType", entryType);
+
+      txFilter.entries = {
+        $elemMatch: {
+          entityType: entryType,
+          entityId: entityExists._id.toString(),
+        },
+      };
       break;
 
     case "hotelManager":

@@ -42,7 +42,6 @@ const { DriverBasicStatus } = require("../../../utils/constants/ENUM");
 const { generateTokens } = require("../../../utils/jwtToken/generateTokens");
 const UserModel = require("../../../models/user-module/users/user.model");
 const WalletModel = require("../../../models/wallet-module/wallets.model");
-const TransactionModel = require("../../../models/transaction-module/transaction.model");
 const {
   BranchModel,
 } = require("../../../models/admin-module/branch/branches.model");
@@ -53,7 +52,8 @@ const getAllDrivers = async (req, res) => {
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
 
-    const { vehicleType, search, filter, verificationStatus, batchVerified } = req.query;
+    const { vehicleType, search, filter, verificationStatus, batchVerified } =
+      req.query;
 
     console.log("Query Params:", req.query);
 
@@ -90,7 +90,6 @@ const getAllDrivers = async (req, res) => {
       branchFilter = { branch: req.user.branch };
     }
 
-
     // ✅ Search filter
     let searchFilter = {};
     if (search) {
@@ -120,8 +119,6 @@ const getAllDrivers = async (req, res) => {
     if (batchVerified === "true" || batchVerified === "false") {
       batchVerifiedFilter = { batchVerified: batchVerified === "true" };
     }
-
-
 
     // ✅ Fetch drivers with pagination (+ wallets)
     const drivers = await DriverBasicDetails.aggregate([
@@ -265,11 +262,11 @@ const getdriverDetailsById = catchAsyncError(async (req, res) => {
     const doc = allDocs.find((d) => d.documentType === type);
     return doc
       ? {
-        documentType: doc.documentType,
-        fileName: doc.fileName,
-        fileUrl: doc.fileUrl,
-        status: doc.status,
-      }
+          documentType: doc.documentType,
+          fileName: doc.fileName,
+          fileUrl: doc.fileUrl,
+          status: doc.status,
+        }
       : null;
   };
   //  const findDocs = (type) => {
@@ -302,8 +299,10 @@ const getdriverDetailsById = catchAsyncError(async (req, res) => {
         batchVerified: basicDetails.batchVerified,
         batchVerifiedBy: basicDetails.batchVerifiedBy || null,
         // Only include remarks if status is blocked or rejected
-        ...(["blocked", "rejected"].includes(basicDetails.status.toLowerCase()) && {
-          remarks: basicDetails.remarks || null
+        ...(["blocked", "rejected"].includes(
+          basicDetails.status.toLowerCase()
+        ) && {
+          remarks: basicDetails.remarks || null,
         }), // ✅ add branch here
       },
       documents: {
@@ -317,18 +316,18 @@ const getdriverDetailsById = catchAsyncError(async (req, res) => {
       },
       bikeDetails: vehicleDetails
         ? {
-          seats: vehicleDetails.seats || 2, // default if not stored
-          model: vehicleDetails.model,
-          registrationNo: vehicleDetails.registrationNo,
-          vehicleType: vehicleDetails.vehicleType,
-        }
+            seats: vehicleDetails.seats || 2, // default if not stored
+            model: vehicleDetails.model,
+            registrationNo: vehicleDetails.registrationNo,
+            vehicleType: vehicleDetails.vehicleType,
+          }
         : null,
       bankDetails: bankDetails
         ? {
-          accountNumber: bankDetails.accountNumber,
-          holderName: bankDetails.holderName,
-          document: findDoc(DriverDocEnum.PASSBOOK),
-        }
+            accountNumber: bankDetails.accountNumber,
+            holderName: bankDetails.holderName,
+            document: findDoc(DriverDocEnum.PASSBOOK),
+          }
         : null,
       isOnline,
     },
@@ -364,8 +363,8 @@ const verifyUserProfile = catchAsyncError(async (req, res) => {
     { driverId },
     {
       $set: {
-        status
-      }
+        status,
+      },
     },
     { new: true }
   );
@@ -395,7 +394,6 @@ const verifyUserProfile = catchAsyncError(async (req, res) => {
     );
   }
 
-
   // 2️⃣ Update all documents in DriverDocDetails
   await DriverDocDetails.updateMany(
     { driverId },
@@ -408,10 +406,6 @@ const verifyUserProfile = catchAsyncError(async (req, res) => {
       select: "fullName email phoneNo role", // or other fields from Admin model
     })
     .lean();
-
-
-
-
 
   if (!basicDetails) {
     throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
@@ -428,10 +422,10 @@ const verifyUserProfile = catchAsyncError(async (req, res) => {
     const doc = allDocs.find((d) => d.documentType === type);
     return doc
       ? {
-        fileName: doc.fileName,
-        fileUrl: doc.fileUrl,
-        status: doc.status,
-      }
+          fileName: doc.fileName,
+          fileUrl: doc.fileUrl,
+          status: doc.status,
+        }
       : null;
   };
 
@@ -449,10 +443,11 @@ const verifyUserProfile = catchAsyncError(async (req, res) => {
         experience: basicDetails.experience || 0,
         batchVerified: basicDetails.batchVerified,
         batchVerifiedBy: basicDetails.batchVerifiedBy,
-        ...(["blocked", "rejected"].includes(basicDetails.status.toLowerCase()) && {
-          remarks: basicDetails.remarks || null
+        ...(["blocked", "rejected"].includes(
+          basicDetails.status.toLowerCase()
+        ) && {
+          remarks: basicDetails.remarks || null,
         }),
-
       },
       documents: {
         idCard: findDoc(DriverDocEnum.IDCARD),
@@ -461,20 +456,20 @@ const verifyUserProfile = catchAsyncError(async (req, res) => {
       },
       vehicleDetails: vehicleDetails
         ? {
-          vehicleType: vehicleDetails.vehicleType,
-          registrationNumber: vehicleDetails.registrationNo,
-          insurance: findDoc(DriverDocEnum.INSURANCE),
-          registrationCertificate: findDoc(DriverDocEnum.REGISTRATION),
-          vehiclePhotos: findDoc(DriverDocEnum.VEHICLEPHOTO),
-          avatarPhotos: findDoc(DriverDocEnum.AVATAR),
-        }
+            vehicleType: vehicleDetails.vehicleType,
+            registrationNumber: vehicleDetails.registrationNo,
+            insurance: findDoc(DriverDocEnum.INSURANCE),
+            registrationCertificate: findDoc(DriverDocEnum.REGISTRATION),
+            vehiclePhotos: findDoc(DriverDocEnum.VEHICLEPHOTO),
+            avatarPhotos: findDoc(DriverDocEnum.AVATAR),
+          }
         : null,
       bankDetails: bankDetails
         ? {
-          accountNumber: bankDetails.accountNumber,
-          holderName: bankDetails.holderName,
-          passbook: findDoc(DriverDocEnum.PASSBOOK),
-        }
+            accountNumber: bankDetails.accountNumber,
+            holderName: bankDetails.holderName,
+            passbook: findDoc(DriverDocEnum.PASSBOOK),
+          }
         : null,
       isOnline,
     },
@@ -572,8 +567,8 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
 
   const vehiclePhotoDocs = Array.isArray(vehicleDetails.vehiclePhotos)
     ? vehicleDetails.vehiclePhotos.map((photo) =>
-      normalizeDoc(photo, DriverDocEnum.VEHICLEPHOTO)
-    )
+        normalizeDoc(photo, DriverDocEnum.VEHICLEPHOTO)
+      )
     : vehicleDetails.vehiclePhotos
       ? [normalizeDoc(vehicleDetails.vehiclePhotos, DriverDocEnum.VEHICLEPHOTO)]
       : [];
@@ -1254,11 +1249,11 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
     const doc = allDocs.find((d) => d.documentType === type);
     return doc
       ? {
-        documentType: doc.documentType,
-        fileName: doc.fileName,
-        fileUrl: doc.fileUrl,
-        status: doc.status,
-      }
+          documentType: doc.documentType,
+          fileName: doc.fileName,
+          fileUrl: doc.fileUrl,
+          status: doc.status,
+        }
       : null;
   };
 
@@ -1292,8 +1287,10 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
         batchVerified: basicDetails.batchVerified,
         batchVerifiedBy: basicDetails.batchVerifiedBy || null,
         // Only include remarks if status is blocked or rejected
-        ...(["blocked", "rejected"].includes(basicDetails.status.toLowerCase()) && {
-          remarks: basicDetails.remarks || null
+        ...(["blocked", "rejected"].includes(
+          basicDetails.status.toLowerCase()
+        ) && {
+          remarks: basicDetails.remarks || null,
         }),
       },
       documents: {
@@ -1307,18 +1304,18 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
       },
       taxiDetails: vehicleDetails
         ? {
-          seats: vehicleDetails.seats || 4,
-          model: vehicleDetails.model,
-          registrationNo: vehicleDetails.registrationNo,
-          vehicleType: vehicleDetails.vehicleType,
-        }
+            seats: vehicleDetails.seats || 4,
+            model: vehicleDetails.model,
+            registrationNo: vehicleDetails.registrationNo,
+            vehicleType: vehicleDetails.vehicleType,
+          }
         : null,
       bankDetails: bankDetails
         ? {
-          accountNumber: bankDetails.accountNumber,
-          holderName: bankDetails.holderName,
-          document: findDoc(DriverDocEnum.PASSBOOK),
-        }
+            accountNumber: bankDetails.accountNumber,
+            holderName: bankDetails.holderName,
+            document: findDoc(DriverDocEnum.PASSBOOK),
+          }
         : null,
       isOnline,
     },

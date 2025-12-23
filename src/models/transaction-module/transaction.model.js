@@ -6,63 +6,142 @@ const {
 } = require("../../utils/constants/ENUM");
 const TransactionCounterModel = require("./counter.model");
 
+/**
+ * Ledger Entry Schema
+ */
+const transactionEntrySchema = new mongoose.Schema(
+  {
+    entityType: {
+      type: String,
+      enum: ["USER", "HOTEL", "BUS_OPERATOR", "DRIVER", "ADMIN"],
+      required: true,
+      index: true,
+    },
+
+    entityId: {
+      type: mongoose.Schema.Types.Mixed, // ObjectId or String
+      required: true,
+      index: true,
+    },
+
+    name: {
+      type: String,
+      default: null,
+    },
+
+    type: {
+      type: String,
+      enum: TransactionTypeEnum, // CREDIT / DEBIT
+      required: true,
+    },
+
+    amount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+  },
+  { _id: false }
+);
+
+/**
+ * Main Transaction Schema
+ */
 const transactionSchema = new mongoose.Schema(
   {
-    transactionId: { type: String, required: true },
-    transactionType: { type: String },
-    momoRefId: { type: String, default: null },
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      // index: true,
-      default: null,
+    transactionId: {
+      type: String,
+      required: true,
+      unique: true,
+      index: true,
     },
-    busOperatorId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "BusOperator",
-      // index: true,
-      default: null,
+
+    transactionType: {
+      type: String,
+      required: true,
     },
-    hotelManagerId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Hotel-Manager",
-      // index: true,
-      default: null,
-    },
-    adminId: {
+
+    momoRefId: {
       type: String,
       default: null,
     },
-    driverId: {
-      type: String,
-      // index: true,
-      default: null,
-    },
+
     bookingId: {
       type: String,
-      //  index: true,
-      required: false,
+      index: true,
     },
-    type: { type: String, enum: TransactionTypeEnum, required: true }, // CREDIT or DEBIT
+
     status: {
       type: String,
       enum: PaymentStatusEnum,
       default: PaymentStatusEnum.PENDING,
+      index: true,
     },
-    amount: { type: Number, required: true },
+
     currency: {
       type: String,
       enum: WalletCurrencyEnum,
       default: process.env.MOMO_CURRENCY,
     },
+
+    /**
+     * Total amount paid by user
+     */
+    totalAmount: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+
     description: String,
 
-    // Commission / Splits
-    platformFee: { type: Number, default: 0 },
-    operatorShare: { type: Number, default: 0 },
+    /**
+     * Ledger entries
+     */
+    entries: {
+      type: [transactionEntrySchema],
+      required: true,
+      validate: {
+        validator(entries) {
+          if (!entries.length) return false;
 
-    refund: { type: Boolean, default: false },
-    withdraw: { type: Boolean, default: false },
+          const debit = entries
+            .filter((e) => e.type === "DEBIT")
+            .reduce((s, e) => s + e.amount, 0);
+
+          const credit = entries
+            .filter((e) => e.type === "CREDIT")
+            .reduce((s, e) => s + e.amount, 0);
+
+          return debit === credit;
+        },
+        message: "Debit and credit totals must be equal",
+      },
+    },
+
+    /**
+     * Commission / Splits
+     */
+    platformFee: {
+      type: Number,
+      default: 0,
+    },
+
+    operatorShare: {
+      type: Number,
+      default: 0,
+    },
+
+    refund: {
+      type: Boolean,
+      default: false,
+    },
+
+    withdraw: {
+      type: Boolean,
+      default: false,
+    },
+
     meta: {
       type: mongoose.Schema.Types.Mixed,
       default: {},
@@ -71,17 +150,18 @@ const transactionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-transactionSchema.index({ adminId: 1, createdAt: -1 });
-transactionSchema.index({ transactionId: 1 });
+/**
+ * Indexes for fast queries
+ */
 transactionSchema.index({ bookingId: 1 });
-transactionSchema.index({ userId: 1 });
-transactionSchema.index({ type: 1 });
 transactionSchema.index({ status: 1 });
-transactionSchema.index({ driverId: 1 });
-transactionSchema.index({ busOperatorId: 1 });
-transactionSchema.index({ hotelManagerId: 1 });
-transactionSchema.index({ usernameLower: 1 });
+transactionSchema.index({ createdAt: -1 });
+transactionSchema.index({ "entries.entityType": 1 });
+transactionSchema.index({ "entries.entityId": 1 });
 
+/**
+ * Transaction ID Generator
+ */
 transactionSchema.statics.generateTransactionId = async function () {
   const counter = await TransactionCounterModel.findByIdAndUpdate(
     { _id: "transactionId" },
@@ -93,4 +173,5 @@ transactionSchema.statics.generateTransactionId = async function () {
   return `T${padded}`;
 };
 
-module.exports = mongoose.model("Transaction", transactionSchema);
+const TransactionModel = mongoose.model("Transaction", transactionSchema);
+module.exports = TransactionModel;
