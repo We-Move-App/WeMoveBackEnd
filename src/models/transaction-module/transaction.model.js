@@ -19,7 +19,7 @@ const transactionEntrySchema = new mongoose.Schema(
     },
 
     entityId: {
-      type: mongoose.Schema.Types.Mixed, // ObjectId or String
+      type: String, // ObjectId or String
       required: true,
       index: true,
     },

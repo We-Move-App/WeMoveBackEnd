@@ -25,6 +25,7 @@ const {
   generateTransactionPDFBase64,
 } = require("../../utils/services/invoice.service");
 const Commission = require("../../models/admin-module/commission-management/commission.model");
+const TransactionModel = require("../../models/transaction-module/transaction.model");
 
 const deductfromUserWallet = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -428,28 +429,118 @@ const getTransactions = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
 
+  const round2 = (n) => Number(Number(n || 0).toFixed(2));
+
+  // Convert new-ledger transaction doc to old response shape for a given entity
+  const toLegacyTx = (tx, entityType, entityId) => {
+    const eIdStr = entityId != null ? String(entityId) : null;
+
+    const entry = (tx.entries || []).find(
+      (e) => e.entityType === entityType && String(e.entityId) === eIdStr
+    );
+
+    // If not found (shouldn't happen because we filter), fallback to first entry
+    const picked = entry || (tx.entries && tx.entries[0]) || null;
+
+    const type = picked?.type || null;
+    const amount = picked?.amount != null ? round2(picked.amount) : null;
+    const platformFee = round2(tx.platformFee);
+    const operatorShare = round2(tx.operatorShare);
+
+    // Old API used: amountPaid = amount - platformFee (mostly for DEBIT views)
+    // For CREDIT entries, show full amount as amountPaid.
+    const amountPaid =
+      amount == null
+        ? null
+        : type === "DEBIT"
+          ? round2(amount - platformFee)
+          : amount;
+
+    return {
+      _id: tx._id,
+      transactionId: tx.transactionId,
+      transactionType: tx.transactionType,
+      momoRefId: tx.momoRefId ?? null,
+
+      userId: entityType === "USER" ? (entityId ?? null) : null,
+      busOperatorId: entityType === "BUS_OPERATOR" ? (entityId ?? null) : null,
+      hotelManagerId: entityType === "HOTEL" ? (entityId ?? null) : null,
+      adminId: entityType === "ADMIN" ? (entityId ?? null) : null,
+      driverId: entityType === "DRIVER" ? (entityId ?? null) : null,
+
+      bookingId: tx.bookingId ?? null,
+      type,
+      status: tx.status,
+      amount,
+      currency: tx.currency,
+      description: tx.description,
+
+      platformFee,
+      operatorShare,
+
+      refund: !!tx.refund,
+      withdraw: !!tx.withdraw,
+      meta: tx.meta || {},
+
+      __v: tx.__v,
+      createdAt: tx.createdAt,
+      updatedAt: tx.updatedAt,
+
+      amountPaid,
+    };
+  };
+
   // ---------------------------------------------------
   //  SINGLE TRANSACTION
   // ---------------------------------------------------
   if (transactionId) {
-    const transaction = await Transaction.findOne({ transactionId });
-
-    if (!transaction) {
+    const tx = await TransactionModel.findOne({ transactionId });
+    if (!tx) {
       throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
     }
 
-    const amountPaid = transaction.amount - transaction.platformFee;
+    // decide which entity is asking (same rules as list)
+    let entityType;
+    let entityId;
 
-    return res.status(statusCode.OK).json(
-      new ApiResponse(
-        statusCode.OK,
-        {
-          ...transaction.toObject(),
-          amountPaid,
-        },
-        "Transaction details fetched successfully"
-      )
-    );
+    if (entity === "driver") {
+      const driverExists = await DriverDetails.findOne({
+        driverId: driverIdFromToken,
+      });
+      if (!driverExists)
+        throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+      entityType = "DRIVER";
+      entityId = driverIdFromToken;
+    } else if (entity === "busoperator") {
+      const bo = await BusOperatorModel.findById(userId);
+      if (!bo)
+        throw new ApiError(statusCode.NOT_FOUND, "Bus Operator not found");
+      entityType = "BUS_OPERATOR";
+      entityId = bo._id.toString();
+    } else if (entity === "hotelManager") {
+      const hm = await HotelManagerModel.findById(userId);
+      if (!hm)
+        throw new ApiError(statusCode.NOT_FOUND, "Hotel Manager not found");
+      entityType = "HOTEL";
+      entityId = hm._id.toString();
+    } else {
+      const u = await UserModel.findById(userId);
+      if (!u) throw new ApiError(statusCode.NOT_FOUND, "User not found");
+      entityType = "USER";
+      entityId = u._id.toString();
+    }
+
+    const legacy = toLegacyTx(tx, entityType, entityId);
+
+    return res
+      .status(statusCode.OK)
+      .json(
+        new ApiResponse(
+          statusCode.OK,
+          legacy,
+          "Transaction details fetched successfully"
+        )
+      );
   }
 
   // ---------------------------------------------------
@@ -458,75 +549,74 @@ const getTransactions = catchAsyncError(async (req, res) => {
   const page = Math.max(parseInt(pageQuery) || 1, 1);
   const limit = Math.min(Math.max(parseInt(limitQuery) || 10, 1), 100);
 
-  let Model;
-  let txFilter = {};
-  let entityExists;
+  let entityType;
+  let entityId; // for matching entries.entityId
 
   switch (entity) {
-    case "busoperator":
-      Model = BusOperatorModel;
-      entityExists = await Model.findById(userId);
+    case "busoperator": {
+      const entityExists = await BusOperatorModel.findById(userId);
       if (!entityExists)
         throw new ApiError(statusCode.NOT_FOUND, "Bus Operator not found");
-
-      console.log("entityExists._id", entityExists._id);
-
-      entryType = EntryTypeEnum.BUS_OPERATOR;
-      console.log("entryType", entryType);
-
-      txFilter.entries = {
-        $elemMatch: {
-          entityType: entryType,
-          entityId: entityExists._id.toString(),
-        },
-      };
+      entityType = "BUS_OPERATOR";
+      entityId = entityExists._id.toString();
       break;
+    }
 
-    case "hotelManager":
-      Model = HotelManagerModel;
-      entityExists = await Model.findById(userId);
+    case "hotelManager": {
+      const entityExists = await HotelManagerModel.findById(userId);
       if (!entityExists)
         throw new ApiError(statusCode.NOT_FOUND, "Hotel Manager not found");
-      txFilter.hotelManagerId = entityExists._id;
+      entityType = "HOTEL";
+      entityId = entityExists._id.toString();
       break;
+    }
 
-    case "driver":
-      Model = DriverDetails;
-      entityExists = await Model.findOne({ driverId: driverIdFromToken });
+    case "driver": {
+      const entityExists = await DriverDetails.findOne({
+        driverId: driverIdFromToken,
+      });
       if (!entityExists)
         throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
-      txFilter.driverId = driverIdFromToken;
+      entityType = "DRIVER";
+      entityId = driverIdFromToken; // string
       break;
+    }
 
-    default:
-      Model = UserModel;
-      entityExists = await Model.findById(userId);
+    default: {
+      const entityExists = await UserModel.findById(userId);
       if (!entityExists)
         throw new ApiError(statusCode.NOT_FOUND, "User not found");
-      txFilter.userId = userId;
+      entityType = "USER";
+      entityId = entityExists._id.toString();
+      break;
+    }
   }
 
-  let transactions = await Transaction.find(txFilter)
+  const txFilter = {
+    entries: {
+      $elemMatch: {
+        entityType,
+        entityId: entityId, // stored as Mixed; you saved strings in your ledger creation
+      },
+    },
+  };
+
+  let transactions = await TransactionModel.find(txFilter)
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(limit);
 
-  const totalCount = await Transaction.countDocuments(txFilter);
+  const totalCount = await TransactionModel.countDocuments(txFilter);
 
-  // Add amountPaid to EVERY transaction
-  transactions = transactions.map((tx) => {
-    const amountPaid = tx.amount - tx.platformFee;
-    return {
-      ...tx.toObject(),
-      amountPaid,
-    };
-  });
+  const legacyTransactions = transactions.map((tx) =>
+    toLegacyTx(tx, entityType, entityId)
+  );
 
   return res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
       {
-        transactions,
+        transactions: legacyTransactions,
         pagination: {
           total: totalCount,
           page,
