@@ -68,14 +68,40 @@ const deductfromUserWallet = catchAsyncError(async (req, res) => {
   userWallet.balance -= amount;
   await userWallet.save();
 
-  const transaction = await Transaction.create({
-    userId,
-    transactionId: await Transaction.generateTransactionId(),
-    type: TransactionTypeEnum.DEBIT,
-    amount,
-    currency: currency || userWallet.currency,
-    description: description || "Wallet deduction",
+  const superAdmin = await AdminModel.findOne({ role: "SuperAdmin" });
+  const adminId = superAdmin?._id || "SYSTEM";
+
+  const trx = await TransactionModel.create({
+    transactionId: await TransactionModel.generateTransactionId(),
+    transactionType: "Wallet Deduction",
+    momoRefId: null,
+    bookingId: null,
     status: PaymentStatusEnum.SUCCESS,
+    currency: currency || userWallet.currency || process.env.MOMO_CURRENCY,
+    totalAmount: Number(amount),
+    description: description || "Wallet deduction",
+    platformFee: 0,
+    operatorShare: 0,
+    entries: [
+      {
+        entityType: "USER",
+        entityId: userId,
+        name: userExists?.fullName || null,
+        type: "DEBIT",
+        amount: Number(amount),
+      },
+      {
+        entityType: "ADMIN",
+        entityId: adminId,
+        name: "SYSTEM",
+        type: "CREDIT",
+        amount: Number(amount),
+      },
+    ],
+    meta: {
+      walletDeduction: true,
+      by: "USER",
+    },
   });
 
   return res.status(statusCode.OK).json(
@@ -83,7 +109,7 @@ const deductfromUserWallet = catchAsyncError(async (req, res) => {
       statusCode.OK,
       {
         balance: userWallet.balance,
-        transactionId: transaction.transactionId,
+        transactionId: trx.transactionId,
       },
       "Amount deducted successfully"
     )
@@ -127,14 +153,38 @@ const refundToUserWallet = catchAsyncError(async (req, res) => {
   userWallet.balance += amount;
   await userWallet.save();
 
-  const transaction = await Transaction.create({
-    userId,
-    transactionId: await Transaction.generateTransactionId(),
-    type: TransactionTypeEnum.CREDIT,
-    amount,
-    currency: currency || userWallet.currency,
-    description: description || "Wallet refund",
+  const trx = await TransactionModel.create({
+    transactionId: await TransactionModel.generateTransactionId(),
+    transactionType: "Wallet Refund",
+    momoRefId: null,
+    bookingId: null,
     status: PaymentStatusEnum.SUCCESS,
+    currency: currency || userWallet.currency || process.env.MOMO_CURRENCY,
+    totalAmount: Number(amount),
+    description: description || "Wallet refund",
+    platformFee: 0,
+    operatorShare: 0,
+    refund: true,
+    entries: [
+      {
+        entityType: "USER",
+        entityId: userId,
+        name: userExists?.fullName || null,
+        type: "CREDIT",
+        amount: Number(amount),
+      },
+      {
+        entityType: "ADMIN",
+        entityId: "SYSTEM",
+        name: "SYSTEM",
+        type: "DEBIT",
+        amount: Number(amount),
+      },
+    ],
+    meta: {
+      walletRefund: true,
+      by: "SYSTEM",
+    },
   });
 
   return res.status(statusCode.OK).json(
@@ -142,7 +192,7 @@ const refundToUserWallet = catchAsyncError(async (req, res) => {
       statusCode.OK,
       {
         balance: userWallet.balance,
-        transactionId: transaction.transactionId,
+        transactionId: trx.transactionId,
       },
       "Amount refunded successfully"
     )
@@ -670,7 +720,6 @@ const getAnalytics = catchAsyncError(async (req, res) => {
 
   const { entity, filter = "monthly" } = req.query;
   let Model;
-  let txFilter = {};
 
   switch (entity) {
     case "busoperator":
@@ -688,41 +737,84 @@ const getAnalytics = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.NOT_FOUND, `${entity || "User"} not found`);
   }
 
+  // Map request entity -> ledger entityType and matching entityId format
+  let ledgerEntityType = "USER";
+  let ledgerEntityId =
+    entity === "driver" ? decoded?.driverId : String(entityExists._id);
+
   if (entity === "busoperator") {
-    txFilter.busOperatorId = new mongoose.Types.ObjectId(entityExists._id);
+    ledgerEntityType = "BUS_OPERATOR";
+    ledgerEntityId = String(entityExists._id);
   } else if (entity === "hotelManager") {
-    txFilter.hotelManagerId = new mongoose.Types.ObjectId(entityExists._id);
+    ledgerEntityType = "HOTEL";
+    ledgerEntityId = String(entityExists._id);
   } else {
-    txFilter.userId = new mongoose.Types.ObjectId(userId);
+    ledgerEntityType = "USER";
+    ledgerEntityId = String(userId);
   }
 
   const now = new Date();
   let analytics = [];
 
-  const groupStage = (idObj) => ({
-    _id: idObj,
-    incoming: {
-      $sum: { $cond: [{ $eq: ["$type", "CREDIT"] }, "$amount", 0] },
-    },
-    refunded: {
-      $sum: {
-        $cond: [
-          { $and: [{ $eq: ["$type", "DEBIT"] }, { $eq: ["$refund", true] }] },
-          "$amount",
-          0,
-        ],
+  // Common $match for this entity in ledger entries
+  const baseMatch = {
+    status: PaymentStatusEnum.SUCCESS,
+  };
+
+  // Build an aggregation that:
+  // - filters by date range + SUCCESS
+  // - unwinds entries
+  // - filters entries for current entity only
+  // - groups by requested period
+  // - sums incoming/refunded/withdraw based on entry.type + parent flags
+  const buildPipeline = (dateMatch, groupId) => [
+    { $match: { ...baseMatch, ...dateMatch } },
+    { $unwind: "$entries" },
+    {
+      $match: {
+        "entries.entityType": ledgerEntityType,
+        "entries.entityId": ledgerEntityId,
       },
     },
-    withdraw: {
-      $sum: {
-        $cond: [
-          { $and: [{ $eq: ["$type", "DEBIT"] }, { $eq: ["$withdraw", true] }] },
-          "$amount",
-          0,
-        ],
+    {
+      $group: {
+        _id: groupId,
+        incoming: {
+          $sum: {
+            $cond: [{ $eq: ["$entries.type", "CREDIT"] }, "$entries.amount", 0],
+          },
+        },
+        refunded: {
+          $sum: {
+            $cond: [
+              {
+                $and: [
+                  { $eq: ["$entries.type", "DEBIT"] },
+                  { $eq: ["$refund", true] },
+                ],
+              },
+              "$entries.amount",
+              0,
+            ],
+          },
+        },
+        withdraw: {
+          $sum: {
+            $cond: [
+              {
+                $and: [
+                  { $eq: ["$entries.type", "DEBIT"] },
+                  { $eq: ["$withdraw", true] },
+                ],
+              },
+              "$entries.amount",
+              0,
+            ],
+          },
+        },
       },
     },
-  });
+  ];
 
   if (filter === "daily") {
     const startOfDay = new Date(
@@ -746,17 +838,14 @@ const getAnalytics = catchAsyncError(async (req, res) => {
       )
     );
 
-    txFilter.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    const results = await TransactionModel.aggregate(
+      buildPipeline({ createdAt: { $gte: startOfDay, $lte: endOfDay } }, null)
+    );
 
-    const result = await Transaction.aggregate([
-      { $match: txFilter },
-      { $group: groupStage(null) },
-    ]);
-
-    const data = result[0] || { incoming: 0, refunded: 0, withdraw: 0 };
+    const data = results[0] || { incoming: 0, refunded: 0, withdraw: 0 };
     analytics = [
       {
-        date: now.toISOString().split("T")[0], // show UTC date correctly
+        date: now.toISOString().split("T")[0],
         incoming: data.incoming,
         refunded: data.refunded,
         withdraw: data.withdraw,
@@ -773,17 +862,14 @@ const getAnalytics = catchAsyncError(async (req, res) => {
       59,
       59
     );
-    txFilter.createdAt = { $gte: startOfMonth, $lte: endOfMonth };
 
-    const results = await Transaction.aggregate([
-      { $match: txFilter },
-      {
-        $group: {
-          ...groupStage({
-            week: { $ceil: { $divide: [{ $dayOfMonth: "$createdAt" }, 7] } },
-          }),
-        },
-      },
+    const results = await TransactionModel.aggregate([
+      ...buildPipeline(
+        { createdAt: { $gte: startOfMonth, $lte: endOfMonth } },
+        {
+          week: { $ceil: { $divide: [{ $dayOfMonth: "$createdAt" }, 7] } },
+        }
+      ),
       { $sort: { "_id.week": 1 } },
     ]);
 
@@ -802,18 +888,15 @@ const getAnalytics = catchAsyncError(async (req, res) => {
   } else if (filter === "monthly") {
     const yearStart = new Date(now.getFullYear(), 0, 1);
     const yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
-    txFilter.createdAt = { $gte: yearStart, $lte: yearEnd };
 
-    const results = await Transaction.aggregate([
-      { $match: txFilter },
-      {
-        $group: {
-          ...groupStage({
-            month: { $month: "$createdAt" },
-            year: { $year: "$createdAt" },
-          }),
-        },
-      },
+    const results = await TransactionModel.aggregate([
+      ...buildPipeline(
+        { createdAt: { $gte: yearStart, $lte: yearEnd } },
+        {
+          month: { $month: "$createdAt" },
+          year: { $year: "$createdAt" },
+        }
+      ),
       { $sort: { "_id.month": 1 } },
     ]);
 
@@ -847,11 +930,12 @@ const getAnalytics = catchAsyncError(async (req, res) => {
   } else if (filter === "yearly") {
     const startYear = now.getFullYear() - 9;
     const startDate = new Date(startYear, 0, 1);
-    txFilter.createdAt = { $gte: startDate, $lte: now };
 
-    const results = await Transaction.aggregate([
-      { $match: txFilter },
-      { $group: { ...groupStage({ year: { $year: "$createdAt" } }) } },
+    const results = await TransactionModel.aggregate([
+      ...buildPipeline(
+        { createdAt: { $gte: startDate, $lte: now } },
+        { year: { $year: "$createdAt" } }
+      ),
       { $sort: { "_id.year": 1 } },
     ]);
 

@@ -4,8 +4,12 @@ const ApiError = require("../../utils/response/ApiError");
 const ApiResponse = require("../../utils/response/ApiResponse");
 const catchAsyncError = require("../../utils/response/catchAsyncError");
 const Wallet = require("../../models/wallet-module/wallets.model");
-const { PaymentStatusEnum } = require("../../utils/constants/ENUM");
+const {
+  PaymentStatusEnum,
+  TransactionTypeEnum,
+} = require("../../utils/constants/ENUM");
 const { getIO } = require("../../socket/index");
+const TransactionModel = require("../../models/transaction-module/transaction.model");
 
 function roundToTwo(num) {
   return Math.round(num * 100) / 100;
@@ -18,33 +22,43 @@ const momoStatus = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.BAD_REQUEST, "Missing referenceId or status");
   }
 
-  const transaction = await Transaction.findOne({ momoRefId: referenceId });
+  const transaction = await TransactionModel.findOne({
+    momoRefId: referenceId,
+  });
   if (!transaction)
     throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
 
   transaction.status = status;
   await transaction.save();
 
+  // Get USER entry to identify who to credit
+  const userEntry = (transaction.entries || []).find(
+    (e) => e.entityType === "USER"
+  );
+
+  const userId = userEntry?.entityId;
+  const amount = userEntry?.amount != null ? Number(userEntry.amount) : 0;
+
   if (status === PaymentStatusEnum.SUCCESS) {
-    const wallet = await Wallet.findOne({ userId: transaction.userId });
+    const wallet = await Wallet.findOne({ userId });
     if (!wallet) throw new ApiError(statusCode.NOT_FOUND, "Wallet not found");
 
-    // const roundedAmount = roundToTwo(transaction.amount);
-    wallet.balance = wallet.balance + transaction.amount;
+    wallet.balance = Number(wallet.balance) + amount;
     await wallet.save();
   }
 
   const io = getIO();
 
-  io.to(transaction.userId.toString()).emit("payment:status", {
+  io.to(String(userId)).emit("payment:status", {
     ...transaction.toObject(),
+    userId,
+    amount,
     message:
       status === PaymentStatusEnum.SUCCESS
         ? "Payment successful"
         : "Payment failed",
   });
 
-  // ✅ API response
   return res
     .status(statusCode.OK)
     .json(new ApiResponse(statusCode.OK, [], "Status updated successfully"));
@@ -58,7 +72,9 @@ const momoWithdrawStatus = catchAsyncError(async (req, res) => {
   }
 
   // find the withdraw transaction by momoRefId
-  const transaction = await Transaction.findOne({ momoRefId: referenceId });
+  const transaction = await TransactionModel.findOne({
+    momoRefId: referenceId,
+  });
   if (!transaction) {
     throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
   }
@@ -67,30 +83,33 @@ const momoWithdrawStatus = catchAsyncError(async (req, res) => {
   await transaction.save();
 
   if (status === PaymentStatusEnum.SUCCESS) {
-    // figure out which entity the withdraw belongs to
-    const walletQuery = {};
-    if (transaction.busOperatorId) {
-      walletQuery.userId = transaction.busOperatorId;
-    } else if (transaction.hotelManagerId) {
-      walletQuery.userId = transaction.hotelManagerId;
-    } else {
+    // determine which entity wallet should be affected (BUS_OPERATOR / HOTEL / DRIVER)
+    const debitEntry = (transaction.entries || []).find(
+      (e) => e.type === TransactionTypeEnum.DEBIT
+    );
+
+    if (!debitEntry || !debitEntry.entityType || debitEntry.entityId == null) {
       throw new ApiError(statusCode.BAD_REQUEST, "Unknown withdraw entity");
     }
 
-    const wallet = await Wallet.findOne(walletQuery);
+    const entityId = debitEntry.entityId;
+    const amount = Number(debitEntry.amount) || 0;
+
+    // wallet is stored by userId (same as old), so we use entityId directly
+    const wallet = await Wallet.findOne({ userId: entityId });
     if (!wallet) {
       throw new ApiError(statusCode.NOT_FOUND, "Wallet not found");
     }
 
     // extra check to avoid balance going below minimum
-    if (wallet.balance - transaction.amount < 1000) {
+    if (wallet.balance - amount < 1000) {
       throw new ApiError(
         statusCode.BAD_REQUEST,
         "Minimum balance requirement not met"
       );
     }
 
-    wallet.balance -= transaction.amount;
+    wallet.balance -= amount;
     await wallet.save();
   }
 

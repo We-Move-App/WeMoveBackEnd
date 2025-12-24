@@ -22,6 +22,7 @@ const HotelManagerModel = require("../../models/hotel-module/hotel-manager/hotel
 const DriverBasicDetails = require("../../models/new-driver-module/basic-details/basic-details.model");
 const Wallet = require("../../models/wallet-module/wallets.model");
 const { getIO } = require("../../socket");
+const TransactionModel = require("../../models/transaction-module/transaction.model");
 
 const requestTopay = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -91,15 +92,40 @@ const requestTopay = catchAsyncError(async (req, res) => {
     }
   );
 
-  const transaction = await Transaction.create({
-    userId,
-    transactionId: await Transaction.generateTransactionId(),
+  // New transaction model (ledger)
+  const transaction = await TransactionModel.create({
+    transactionId: await TransactionModel.generateTransactionId(),
+    transactionType: "Wallet Top-up",
     momoRefId: referenceId,
-    type: TransactionTypeEnum.CREDIT,
-    amount,
-    currency,
-    description: "Wallet Top-up",
+    bookingId: null,
     status: PaymentStatusEnum.PENDING,
+    currency,
+    totalAmount: Number(amount),
+    description: description || "Wallet Top-up",
+    platformFee: 0,
+    operatorShare: 0,
+    entries: [
+      {
+        entityType: "USER",
+        entityId: userId,
+        name: userExists?.fullName || null,
+        type: "CREDIT",
+        amount: Number(amount),
+      },
+      {
+        // keep ledger balanced while money is pending (system hold)
+        entityType: "ADMIN",
+        entityId: "SYSTEM",
+        name: "SYSTEM",
+        type: "DEBIT",
+        amount: Number(amount),
+      },
+    ],
+    meta: {
+      topup: true,
+      externalId: `wallet_topup_${userId}`,
+      phoneNumber,
+    },
   });
 
   const io = getIO();
@@ -140,12 +166,12 @@ const requestTopay = catchAsyncError(async (req, res) => {
           console.error("Message:", err.message);
         }
       }
-    }, 2000); // 2 seconds simulated delay
+    }, 2000);
   }
 
-  // Fallback timeout (350s) in case webhook does not arrive
+  // Fallback timeout in case webhook does not arrive
   setTimeout(async () => {
-    const trx = await Transaction.findOne({ momoRefId: referenceId });
+    const trx = await TransactionModel.findOne({ momoRefId: referenceId });
     if (trx && trx.status === PaymentStatusEnum.PENDING) {
       trx.status = PaymentStatusEnum.FAILED;
       await trx.save();
@@ -156,7 +182,7 @@ const requestTopay = catchAsyncError(async (req, res) => {
         message: "Payment timed out after 350 seconds",
       });
     }
-  }, 15000); // 350 seconds 350000
+  }, 15000);
 
   return res.status(statusCode.OK).json(
     new ApiResponse(
@@ -232,29 +258,44 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
   // ----------------- Step 3.1: Check withdrawable balance -----------------
   const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-  let matchQuery = {
-    type: TransactionTypeEnum.CREDIT,
-    status: PaymentStatusEnum.SUCCESS,
-    createdAt: { $gte: cutoffTime },
-  };
+  // Map entity -> ledger entityType + entityId to match in entries
+  let ledgerEntityType = null;
+  let ledgerEntityId = null;
 
   if (entity === "driver") {
-    matchQuery.driverId = userId;
+    ledgerEntityType = "DRIVER";
+    ledgerEntityId = userId; // string
   } else if (entity === "busOperator") {
-    matchQuery.busOperatorId = new mongoose.Types.ObjectId(userId);
+    ledgerEntityType = "BUS_OPERATOR";
+    ledgerEntityId = String(userId); // store as string in entries
   } else if (entity === "hotelManager") {
-    matchQuery.hotelManagerId = new mongoose.Types.ObjectId(userId);
+    ledgerEntityType = "HOTEL";
+    ledgerEntityId = String(userId); // store as string in entries
   }
 
-  const recentCredits = await Transaction.aggregate([
-    { $match: matchQuery },
-    { $group: { _id: null, total: { $sum: "$amount" } } },
+  // Recent credits (last 24h) for this entity from ledger entries
+  const recentCredits = await TransactionModel.aggregate([
+    {
+      $match: {
+        status: PaymentStatusEnum.SUCCESS,
+        createdAt: { $gte: cutoffTime },
+      },
+    },
+    { $unwind: "$entries" },
+    {
+      $match: {
+        "entries.type": TransactionTypeEnum.CREDIT,
+        "entries.entityType": ledgerEntityType,
+        "entries.entityId": ledgerEntityId,
+      },
+    },
+    { $group: { _id: null, total: { $sum: "$entries.amount" } } },
   ]);
 
   const recentCreditAmount = recentCredits[0]?.total || 0;
   const withdrawableBalance = Math.max(wallet.balance - recentCreditAmount, 0);
 
-  if (amount > withdrawableBalance) {
+  if (Number(amount) > withdrawableBalance) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
       `You can only withdraw ${withdrawableBalance} at this moment. Funds added in the last 24h are locked.`
@@ -262,7 +303,7 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
   }
 
   // ----------------- Step 3.2: Minimum balance check -----------------
-  if (wallet.balance - amount < 1000) {
+  if (wallet.balance - Number(amount) < 1000) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
       "You must keep a minimum balance of 1000"
@@ -282,7 +323,7 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
     const momoResponse = await axios.post(
       `${process.env.MOMO_BASE_URL}/disbursement/v1_0/transfer`,
       {
-        amount: amount.toString(),
+        amount: Number(amount).toString(),
         currency,
         externalId: `wallet_withdraw_${userId}`,
         payee: { partyIdType: "MSISDN", partyId: phoneNumber },
@@ -302,30 +343,51 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
     );
 
     if (momoResponse.status === 202) {
-      // ----------------- Step 5: Record transaction -----------------
-      const transactionPayload = {
-        transactionId: await Transaction.generateTransactionId(),
+      // ----------------- Step 5: Record transaction (new ledger model) -----------------
+      const amt = Number(amount);
+
+      const transaction = await TransactionModel.create({
+        transactionId: await TransactionModel.generateTransactionId(),
+        transactionType: "Wallet Withdrawal",
         momoRefId: referenceId,
-        type: TransactionTypeEnum.DEBIT,
-        amount,
-        currency,
-        description: description || "Withdraw via MoMo",
+        bookingId: null,
         status: PaymentStatusEnum.SUCCESS,
+        currency,
+        totalAmount: amt,
+        description: description || "Withdraw via MoMo",
+        platformFee: 0,
+        operatorShare: 0,
         withdraw: true,
-      };
-
-      if (entity === "driver") {
-        transactionPayload.driverId = userId; // String
-      } else if (entity === "busOperator") {
-        transactionPayload.busOperatorId = new mongoose.Types.ObjectId(userId);
-      } else if (entity === "hotelManager") {
-        transactionPayload.hotelManagerId = new mongoose.Types.ObjectId(userId);
-      }
-
-      const transaction = await Transaction.create(transactionPayload);
+        entries: [
+          {
+            entityType: ledgerEntityType,
+            entityId: ledgerEntityId,
+            name:
+              entity === "driver"
+                ? entityExists?.fullName || null
+                : entityExists?.fullName || entityExists?.userName || null,
+            type: TransactionTypeEnum.DEBIT,
+            amount: amt,
+          },
+          {
+            entityType: "ADMIN",
+            entityId: "SYSTEM",
+            name: "SYSTEM",
+            type: TransactionTypeEnum.CREDIT,
+            amount: amt,
+          },
+        ],
+        meta: {
+          withdrawal: true,
+          entity,
+          entityId: ledgerEntityId,
+          phoneNumber,
+          externalId: `wallet_withdraw_${userId}`,
+        },
+      });
 
       // Update wallet
-      wallet.balance -= amount;
+      wallet.balance -= amt;
       await wallet.save();
 
       return res.status(statusCode.OK).json(
@@ -334,9 +396,9 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
           {
             referenceId,
             transactionId: transaction.transactionId,
-            amount,
+            amount: amt,
             newBalance: wallet.balance,
-            withdrawableBalance: withdrawableBalance - amount,
+            withdrawableBalance: withdrawableBalance - amt,
           },
           "Withdrawal processed successfully"
         )

@@ -238,42 +238,77 @@ const getTransactionReceiptHTML = (txn, logoDataUrl) => {
   const metaFrom = txn?.meta?.from || {};
   const metaTo = txn?.meta?.to || {};
 
-  // ✅ FROM (priority: meta.from -> populated userId -> fallback)
-  const fromName = metaFrom?.name || txn.userId?.name || "N/A";
-  const fromId = metaFrom?.id || txn.userId?.userId || txn.userId?._id || "N/A";
+  const entries = Array.isArray(txn.entries) ? txn.entries : [];
 
-  // ✅ TO (priority: meta.to -> populated hotel/bus overrides)
-  let toName = metaTo?.name || "N/A";
-  let toId = metaTo?.id || "N/A";
+  // Helper: pick first entry by type/entityType
+  const firstBy = (pred) => entries.find(pred);
 
+  // Determine payer (From): prefer meta.from, else any DEBIT entry
+  const debitEntry = firstBy((e) => e.type === "DEBIT");
+  const fromName =
+    metaFrom?.name ||
+    debitEntry?.name ||
+    (debitEntry?.entityType ? `${debitEntry.entityType}` : "N/A");
+  const fromId = metaFrom?.id || debitEntry?.entityId || "N/A";
+
+  // Determine receiver (To): prefer meta.to, else first CREDIT that isn't ADMIN(SYSTEM) if possible
+  const creditNonSystem =
+    firstBy(
+      (e) =>
+        e.type === "CREDIT" &&
+        !(e.entityType === "ADMIN" && String(e.entityId) === "SYSTEM")
+    ) || firstBy((e) => e.type === "CREDIT");
+
+  let toName =
+    metaTo?.name ||
+    creditNonSystem?.name ||
+    (creditNonSystem?.entityType ? `${creditNonSystem.entityType}` : "N/A");
+  let toId = metaTo?.id || creditNonSystem?.entityId || "N/A";
+
+  // Preserve your older "override" behavior based on transactionType text
   const txnTypeLower = String(txn.transactionType || "").toLowerCase();
   if (txnTypeLower.includes("hotel")) {
-    // if populated hotelManagerId exists, override meta.to
-    if (txn.hotelManagerId) {
-      toName = txn.hotelManagerId?.name || toName;
-      toId = txn.hotelManagerId?.userId || txn.hotelManagerId?._id || toId;
+    const hotelCredit =
+      firstBy((e) => e.type === "CREDIT" && e.entityType === "HOTEL") || null;
+    if (hotelCredit) {
+      toName = hotelCredit.name || toName;
+      toId = hotelCredit.entityId || toId;
     }
   } else if (txnTypeLower.includes("bus")) {
-    // if populated busOperatorId exists, override meta.to
-    if (txn.busOperatorId) {
-      toName = txn.busOperatorId?.name || toName;
-      toId = txn.busOperatorId?.operatorId || txn.busOperatorId?._id || toId;
+    const busCredit =
+      firstBy((e) => e.type === "CREDIT" && e.entityType === "BUS_OPERATOR") ||
+      null;
+    if (busCredit) {
+      toName = busCredit.name || toName;
+      toId = busCredit.entityId || toId;
+    }
+  } else if (txnTypeLower.includes("ride")) {
+    const driverCredit =
+      firstBy((e) => e.type === "CREDIT" && e.entityType === "DRIVER") || null;
+    if (driverCredit) {
+      toName = driverCredit.name || toName;
+      toId = driverCredit.entityId || toId;
     }
   }
 
   const txnTypeText = txn.transactionType || "Transaction";
-  const actionText = txn.type === "CREDIT" ? "Received" : "Paid";
+
+  // Action text: if there is a USER debit, treat as Paid; if there is a USER credit topup/refund, treat as Received
+  const userDebit = firstBy(
+    (e) => e.type === "DEBIT" && e.entityType === "USER"
+  );
+  const actionText = userDebit ? "Paid" : "Received";
 
   const currency = txn.currency || process.env.MOMO_CURRENCY || "";
-  const amount =
-    typeof txn.amount === "number" ? txn.amount.toFixed(2) : "0.00";
+
+  const totalAmount =
+    typeof txn.totalAmount === "number" ? txn.totalAmount.toFixed(2) : "0.00";
 
   const platformFee =
     typeof txn.platformFee === "number" ? txn.platformFee.toFixed(2) : "0.00";
 
   const bookingId = txn.bookingId || "N/A";
 
-  // optional hotel fields (if you store in meta)
   const hotelName = txn.meta?.hotel?.name || txn.meta?.hotelName || "N/A";
   const hotelAddress =
     txn.meta?.hotel?.address || txn.meta?.hotelAddress || "N/A";
@@ -297,7 +332,6 @@ const getTransactionReceiptHTML = (txn, logoDataUrl) => {
       background: #ffffff;
       border-radius: 12px;
       padding: 20px;
-      /* ✅ reduce PDF complexity */
       box-shadow: none;
       border: 1px solid #e5e7eb;
     }
@@ -420,7 +454,7 @@ const getTransactionReceiptHTML = (txn, logoDataUrl) => {
       <tr><td>Time</td><td>${timeStr}</td></tr>
       <tr><td>Booking ID</td><td>${bookingId}</td></tr>
       <tr><td>Commission deducted</td><td>${platformFee} ${currency}</td></tr>
-      <tr><td class="total">Total Amount</td><td class="total">${amount} ${currency}</td></tr>
+      <tr><td class="total">Total Amount</td><td class="total">${totalAmount} ${currency}</td></tr>
     </table>
   </div>
 </body>

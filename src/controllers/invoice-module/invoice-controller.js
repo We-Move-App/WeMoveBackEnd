@@ -37,10 +37,9 @@ const getHotelInvoice = catchAsyncError(async (req, res, next) => {
 const getTransactionReceipt = catchAsyncError(async (req, res) => {
   const { transactionId } = req.params;
 
-  const txn = await TransactionModel.findOne({ transactionId })
-    .populate("userId", "name userId phoneNumber email") // From
-    .populate("hotelManagerId", "name userId phoneNumber email") // To (hotel)
-    .populate("busOperatorId", "name operatorId phoneNumber email"); // To (bus)
+  // New model: no userId / hotelManagerId / busOperatorId fields to populate.
+  // We just fetch the ledger transaction and use meta + entries to render receipt.
+  const txn = await TransactionModel.findOne({ transactionId }).lean();
 
   if (!txn) {
     throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
