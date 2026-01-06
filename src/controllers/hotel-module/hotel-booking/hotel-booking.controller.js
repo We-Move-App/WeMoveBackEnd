@@ -58,6 +58,8 @@ const createBooking = catchAsyncError(async (req, res) => {
     noOfRoom,
     user,
   } = req.body;
+
+  console.log(req.body)
   // Convert numbers safely
   noOfRoom = Number(noOfRoom);
   noOfAdults = Number(noOfAdults);
@@ -103,21 +105,39 @@ const createBooking = catchAsyncError(async (req, res) => {
   if (!hotelExists) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
   }
-  const now = new Date().setHours(0, 0, 0, 0);
+  // Normalize today's date (DATE ONLY)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  console.log("Today:", today);
 
-  const checkIn = new Date(checkInDate);
 
-  const checkOut = new Date(checkOutDate);
+ 
+  const checkInOnlyDate = new Date(checkInDate);
+  checkInOnlyDate.setHours(0, 0, 0, 0);
 
-  if (checkIn <= now)
-    throw new ApiError(statusCode.BAD_REQUEST, "Check-in cannot be in past");
-  if (checkOut <= checkIn)
+  console.log("Check-In Only Date:", checkInOnlyDate);
+
+  const checkOutOnlyDate = new Date(checkOutDate);
+  checkOutOnlyDate.setHours(0, 0, 0, 0);
+
+
+  if (checkInOnlyDate < today) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Check-out must be after check-in"
+      "Check-in date cannot be in the past."
     );
+  }
 
-  const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+
+  if (checkOutOnlyDate <= checkInOnlyDate) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Check-out must be after check-in date."
+    );
+  }
+
+
+  const nights = Math.ceil((checkOutOnlyDate - checkInOnlyDate) / (1000 * 60 * 60 * 24));
   if (nights <= 0)
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -1357,11 +1377,11 @@ const getHotelById = catchAsyncError(async (req, res) => {
         roomTypes: roomTypesWithAvailability,
         ...(checkIn && checkOut
           ? {
-              dateFilter: {
-                checkInDate: checkIn.toISOString(),
-                checkOutDate: checkOut.toISOString(),
-              },
-            }
+            dateFilter: {
+              checkInDate: checkIn.toISOString(),
+              checkOutDate: checkOut.toISOString(),
+            },
+          }
           : {}),
       },
       "Hotel details fetched successfully."
