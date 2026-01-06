@@ -45,6 +45,7 @@ const Transaction = require("../../../models/transaction-module/transaction.mode
 //-------------------- create booking --------------------
 const createBooking = catchAsyncError(async (req, res) => {
   const bookedBy = req.user._id;
+
   let {
     hotelId,
     roomTypeId,
@@ -71,9 +72,11 @@ const createBooking = catchAsyncError(async (req, res) => {
       "Invalid number of rooms/adults/kids."
     );
   }
+
   // Format dates and times
   const formattedCheckIn = new Date(checkInDate);
   const formattedCheckOut = new Date(checkOutDate);
+
   const hotelPolicy = await HotelPolicyModel.findOne({ hotelId });
   const checkInDateTime = new Date(
     `${checkInDate}T${hotelPolicy?.checkInTime || "12:00"}:00`
@@ -95,11 +98,13 @@ const createBooking = catchAsyncError(async (req, res) => {
       "Missing required booking details."
     );
   }
+
   // Check if user exists
   const userExists = await User.findById(bookedBy);
   if (!userExists) {
     throw new ApiError(statusCode.NOT_FOUND, "User not registered.");
   }
+
   // Check if hotel exists
   const hotelExists = await Hotel.findById(hotelId);
   if (!hotelExists) {
@@ -175,8 +180,6 @@ const createBooking = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.NOT_FOUND, "Invalid room type or price.");
   }
 
-  const hotelManagerId = hotelExists.ownerId.toString();
-
   // Find available rooms
   const allHotelRooms = await individualRoom.find({
     hotelId,
@@ -212,8 +215,10 @@ const createBooking = catchAsyncError(async (req, res) => {
       `Only ${trulyAvailableRooms.length} rooms are available during your selected time. Requested: ${noOfRoom}`
     );
   }
+
   const room = await Room.findById(roomTypeId);
   if (!room) throw new ApiError(statusCode.NOT_FOUND, "Invalid room type");
+
   // Calculate total amount
   const totalAmount = room.roomPrice * noOfRoom * nights;
 
@@ -225,8 +230,7 @@ const createBooking = catchAsyncError(async (req, res) => {
     let appliedCoupon = null;
     let couponMessage = null;
 
-    // ✅ Optional coupon logic
-    // ✅ Coupon logic
+    // Coupon logic
     if (couponCode) {
       const currentDate = new Date();
       const coupon = await CouponModel.findOne({
@@ -248,7 +252,6 @@ const createBooking = catchAsyncError(async (req, res) => {
       } else if (totalAmount < coupon.minOrderAmount) {
         couponMessage = `Coupon valid only on orders above ₹${coupon.minOrderAmount}.`;
       } else {
-        // ✅ Apply discount
         if (coupon.discountType === "Percentage") {
           finalAmount =
             totalAmount - (totalAmount * coupon.discountPercentage) / 100;
@@ -264,7 +267,7 @@ const createBooking = catchAsyncError(async (req, res) => {
       couponMessage = "Booking confirmed. No coupon applied.";
     }
 
-    // ✅ Price breakup
+    // Price breakup
     const priceBreakup = {
       noOfRooms: noOfRoom,
       nights,
@@ -273,23 +276,46 @@ const createBooking = catchAsyncError(async (req, res) => {
       discount: appliedCoupon ? totalAmount - finalAmount : 0,
       finalAmount,
     };
+
     // Step 1: Check wallet balance
     const userWallet = await WalletModel.findOne({ userId: bookedBy }).session(
       session
     );
-    console.log(userWallet);
+
     if (!userWallet || userWallet.balance < finalAmount) {
+      // ✅ NEW MODEL: store a balanced FAILED ledger entry (no wallet changes)
       await TransactionModel.create(
         [
           {
-            transactionId: await Transaction.generateTransactionId(),
-            userId: bookedBy,
+            transactionId: await TransactionModel.generateTransactionId(),
+            transactionType: "Hotel Booking",
+            momoRefId: null,
             bookingId: null,
-            type: "DEBIT",
             status: PaymentStatusEnum.FAILED,
-            amount: finalAmount,
             currency: process.env.MOMO_CURRENCY,
+            totalAmount: finalAmount,
             description: "Hotel booking failed - insufficient balance",
+            entries: [
+              {
+                entityType: "USER",
+                entityId: bookedBy,
+                name: userExists.fullName || null,
+                type: "DEBIT",
+                amount: finalAmount,
+              },
+              {
+                // System/Platform holding entry for failed attempts
+                entityType: "ADMIN",
+                entityId: "SYSTEM",
+                name: "SYSTEM",
+                type: "CREDIT",
+                amount: finalAmount,
+              },
+            ],
+            meta: {
+              reason: "INSUFFICIENT_BALANCE",
+              attemptedFor: { hotelId, roomTypeId },
+            },
           },
         ],
         { session }
@@ -297,16 +323,17 @@ const createBooking = catchAsyncError(async (req, res) => {
 
       throw new ApiError(statusCode.BAD_REQUEST, "Insufficient wallet balance");
     }
-    let paymentStatus = "PENDING";
 
+    let paymentStatus = "PENDING";
     if (userWallet.balance >= finalAmount) {
       paymentStatus = "PAID";
     }
-    //customBookingId
+
     const bookingId = await generateCustomId(
       EntityCodeEnum.HOTEL_BOOKING,
       "HB"
     );
+
     // Step 2: Create booking
     const booking = await HotelBooking.create(
       [
@@ -334,6 +361,7 @@ const createBooking = catchAsyncError(async (req, res) => {
     );
 
     const newBooking = booking[0];
+
     // Step 3: Deduct from user wallet
     userWallet.balance -= finalAmount;
     await userWallet.save({ session });
@@ -344,27 +372,34 @@ const createBooking = catchAsyncError(async (req, res) => {
       status: "active",
     }).session(session);
 
-    let platformFee = 0;
-    let operatorShare = finalAmount;
+    // Use consistent rounding to avoid ledger validation failure
+    const round2 = (n) => Number(Number(n).toFixed(2));
 
+    let platformFee = 0;
     if (commission) {
       if (
         commission.commissionType === "percentage" &&
         commission.commissionPercentage
       ) {
-        platformFee = parseFloat(
-          ((finalAmount * commission.commissionPercentage) / 100).toFixed(2)
+        platformFee = round2(
+          (finalAmount * commission.commissionPercentage) / 100
         );
       } else if (
         commission.commissionType === "fixed" &&
         commission.commissionRate
       ) {
-        platformFee = parseFloat(commission.commissionRate.toFixed(2));
+        platformFee = round2(commission.commissionRate);
       }
-
-      operatorShare = parseFloat((finalAmount - platformFee).toFixed(2));
     }
+    let operatorShare = round2(finalAmount - platformFee);
 
+    // Fix any tiny rounding diff so DEBIT == CREDIT exactly
+    const diff = round2(finalAmount - round2(operatorShare + platformFee));
+    if (diff !== 0) operatorShare = round2(operatorShare + diff);
+
+    const hotelManagerId = hotelExists.ownerId.toString();
+
+    // credit operator (hotel manager wallet)
     await WalletModel.findOneAndUpdate(
       { userId: hotelManagerId },
       { $inc: { balance: operatorShare } },
@@ -372,90 +407,69 @@ const createBooking = catchAsyncError(async (req, res) => {
     );
 
     const superAdmin = await AdminModel.findOne({ role: "SuperAdmin" });
-    if (!superAdmin) {
-      console.log("Super Admin not found adding to default wallet ADM001");
-    }
-
     const adminId = superAdmin?._id || "ADM001";
 
+    // credit platform/admin wallet
     await WalletModel.findOneAndUpdate(
       { userId: adminId },
       { $inc: { balance: platformFee } },
       { session, new: true, upsert: true, setDefaultsOnInsert: true }
     );
 
-    // Step 5: Record transactions
-    await TransactionModel.insertMany(
+    // Step 5: ✅ NEW MODEL: Record ONE balanced ledger transaction (instead of 3 docs)
+    await TransactionModel.create(
       [
         {
-          transactionId: await Transaction.generateTransactionId(),
+          transactionId: await TransactionModel.generateTransactionId(),
           transactionType: "Hotel Booking",
-          userId: bookedBy,
+          momoRefId: null,
           bookingId: newBooking.bookingId,
-          type: "DEBIT",
           status: PaymentStatusEnum.SUCCESS,
-          amount: finalAmount,
           currency: process.env.MOMO_CURRENCY,
+          totalAmount: finalAmount,
           description: `Hotel booking ${hotelExists.hotelName}`,
-          platformFee: platformFee,
-          meta: {
-            from: {
-              name: userExists.fullName,
-              id: userExists.userId,
-            },
-            to: {
-              name: hotelExists.hotelName,
-              id: hotelId,
-            },
-          },
-        },
-        {
-          transactionId: await Transaction.generateTransactionId(),
-          transactionType: "Hotel Booking",
-          hotelManagerId,
-          bookingId: newBooking.bookingId,
-          type: "CREDIT",
-          status: PaymentStatusEnum.SUCCESS,
-          amount: operatorShare,
-          currency: process.env.MOMO_CURRENCY,
-          description: "Earnings from hotel booking",
-          operatorShare,
-          meta: {
-            from: {
-              name: userExists.fullName,
-              id: userExists.userId,
-            },
-            to: {
-              name: hotelExists.hotelName,
-              id: hotelId,
-            },
-          },
-        },
-        {
-          transactionId: await Transaction.generateTransactionId(),
-          transactionType: "Hotel Booking",
-          adminId: adminId,
-          bookingId: newBooking.bookingId,
-          type: "CREDIT",
-          status: PaymentStatusEnum.SUCCESS,
-          amount: platformFee,
-          currency: process.env.MOMO_CURRENCY,
-          description: `Commission from hotel booking ${hotelId}`,
           platformFee,
+          operatorShare,
+          entries: [
+            {
+              entityType: "USER",
+              entityId: bookedBy,
+              name: userExists.fullName || null,
+              type: "DEBIT",
+              amount: finalAmount,
+            },
+            {
+              entityType: "HOTEL",
+              entityId: hotelManagerId, // wallet owner id
+              name: hotelExists.hotelName || null,
+              type: "CREDIT",
+              amount: operatorShare,
+            },
+            {
+              entityType: "ADMIN",
+              entityId: adminId,
+              name: superAdmin?.fullName || "SuperAdmin",
+              type: "CREDIT",
+              amount: platformFee,
+            },
+          ],
           meta: {
             from: {
               name: userExists.fullName,
-              id: userExists.userId,
+              id: userExists.userId || bookedBy,
             },
-            to: {
-              name: hotelExists.hotelName,
-              id: hotelId,
+            to: { name: hotelExists.hotelName, id: hotelId },
+            booking: {
+              bookingId: newBooking.bookingId,
+              checkInDate: formattedCheckIn,
+              checkOutDate: formattedCheckOut,
             },
           },
         },
       ],
       { session }
     );
+
     if (appliedCoupon) {
       appliedCoupon.usedCount += 1;
       appliedCoupon.usageHistory.push({ userId: bookedBy, status: "Used" });

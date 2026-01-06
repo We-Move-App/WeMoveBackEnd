@@ -10,7 +10,12 @@ const path = require("path");
 const generateHotelInvoiceBase64 = async (booking) => {
   const browser = await puppeteer.launch({
     headless: "new",
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    executablePath: process.env.CHROME_PATH || "/usr/bin/chromium-browser",
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+    ],
   });
 
   const page = await browser.newPage();
@@ -46,7 +51,12 @@ const generateHotelInvoiceBase64 = async (booking) => {
 const generateTransactionReceiptBase64 = async (txn) => {
   const browser = await puppeteer.launch({
     headless: "new",
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    executablePath: process.env.CHROME_PATH || "/usr/bin/chromium-browser",
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+    ],
   });
 
   const page = await browser.newPage();
@@ -68,11 +78,10 @@ const generateTransactionReceiptBase64 = async (txn) => {
   await page.setContent(html, { waitUntil: "networkidle0" });
   await page.emulateMediaType("screen");
 
-  // ✅ Receipt-like PDF instead of A4 (major size reduction)
   const pdfBytes = await page.pdf({
     printBackground: true,
     width: "400px",
-    height: "950px", // if your receipt can be longer, set to 1200px
+    height: "950px",
     margin: { top: "8px", bottom: "8px", left: "8px", right: "8px" },
     preferCSSPageSize: true,
   });

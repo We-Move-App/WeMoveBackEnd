@@ -529,11 +529,11 @@ const completeRide = catchAsyncError(async (req, res, next) => {
     const userWallet = await WalletModel.findOne({
       userId: booking.userId,
     }).session(session);
+
     if (!userWallet || userWallet.balance < booking.fare) {
       throw new ApiError(statusCode.BAD_REQUEST, "Insufficient wallet balance");
     }
 
-    // Deduct from user wallet
     userWallet.balance -= booking.fare;
     await userWallet.save({ session });
 
@@ -543,10 +543,9 @@ const completeRide = catchAsyncError(async (req, res, next) => {
 
     console.log("booking.fare", booking.fare);
 
-    // 🔍 Find commission for this vehicleType
     const commission = await Commission.findOne({
       serviceType: booking.vehicleType,
-      status: "active", // only active commissions
+      status: "active",
     });
 
     if (commission) {
@@ -584,70 +583,67 @@ const completeRide = catchAsyncError(async (req, res, next) => {
 
     console.log("adminId", adminId);
 
-    // --- Step 3: Create transactions ---
-    await TransactionModel.insertMany(
+    // --- Step 3: Create transactions (updated for new ledger model) ---
+    const round2 = (n) => Number(Number(n).toFixed(2));
+
+    const totalFare = round2(booking.fare);
+    platformFee = round2(platformFee);
+    driverShare = round2(driverShare);
+
+    // make sure debit == credit exactly (avoid validator failure)
+    const diff = round2(totalFare - round2(platformFee + driverShare));
+    if (diff !== 0) driverShare = round2(driverShare + diff);
+
+    await TransactionModel.create(
       [
         {
-          transactionId: await Transaction.generateTransactionId(),
+          transactionId: await TransactionModel.generateTransactionId(),
           transactionType: "Ride Booking",
-          userId: booking.userId,
+          momoRefId: null,
           bookingId: booking.bookingId,
-          type: "DEBIT",
           status: PaymentStatusEnum.SUCCESS,
-          amount: booking.fare,
           currency: process.env.MOMO_CURRENCY,
+          totalAmount: totalFare,
           description: `${booking.vehicleType} Ride from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
-          platformFee,
+          platformFee: platformFee,
+          operatorShare: driverShare,
+          entries: [
+            {
+              entityType: "USER",
+              entityId: booking.userId,
+              name: userExists?.fullName || null,
+              type: "DEBIT",
+              amount: totalFare,
+            },
+            {
+              entityType: "DRIVER",
+              entityId: booking.driverId,
+              name: driverExist?.fullName || null,
+              type: "CREDIT",
+              amount: driverShare,
+            },
+            {
+              entityType: "ADMIN",
+              entityId: adminId,
+              name: superAdmin?.fullName || "SuperAdmin",
+              type: "CREDIT",
+              amount: platformFee,
+            },
+          ],
           meta: {
             from: {
-              name: userExists.fullName,
-              id: userExists.userId,
+              name: userExists?.fullName,
+              id: userExists?.userId,
             },
             to: {
-              name: driverExist.fullName,
-              id: driverExist.driverId,
+              name: driverExist?.fullName,
+              id: driverExist?.driverId,
             },
-          },
-        },
-        {
-          transactionId: await Transaction.generateTransactionId(),
-          transactionType: "Ride Booking",
-          driverId: booking.driverId,
-          bookingId: booking.bookingId,
-          type: "CREDIT",
-          status: PaymentStatusEnum.SUCCESS,
-          amount: driverShare,
-          currency: process.env.MOMO_CURRENCY,
-          description: `${booking.vehicleType} Ride from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
-          meta: {
-            from: {
-              name: userExists.fullName,
-              id: userExists.userId,
-            },
-            to: {
-              name: driverExist.fullName,
-              id: driverExist.driverId,
-            },
-          },
-        },
-        {
-          transactionId: await Transaction.generateTransactionId(),
-          transactionType: "Ride Booking",
-          adminId: adminId,
-          bookingId: booking.bookingId,
-          type: "CREDIT",
-          status: PaymentStatusEnum.SUCCESS,
-          amount: platformFee,
-          currency: process.env.MOMO_CURRENCY,
-          description: `Platform commission from ${booking.vehicleType} ride`,
-          meta: {
-            from: {
-              name: userExists.fullName,
-              id: userExists.userId,
-            },
-            to: {
-              name: driverExist.fullName,
-              id: driverExist.driverId,
+            ride: {
+              bookingId: booking.bookingId,
+              vehicleType: booking.vehicleType,
+              pickup: booking.pickupLocation?.address,
+              drop: booking.dropLocation?.address,
             },
           },
         },

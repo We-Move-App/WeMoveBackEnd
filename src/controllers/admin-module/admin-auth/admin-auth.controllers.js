@@ -66,6 +66,7 @@ const {
 const {
   decodeAccessToken,
 } = require("../../../utils/jwtToken/customTokenService");
+const TransactionModel = require("../../../models/transaction-module/transaction.model");
 
 // Register Admin
 // const addAdmins = catchAsyncError(async (req, res, next) => {
@@ -1715,62 +1716,94 @@ const getTransactionHistory = async (req, res) => {
 
     const { search = "", type = "ALL", status = "ALL" } = req.query;
 
-    // Build Mongo query
-    const query = {};
+    const round2 = (n) => Number(Number(n || 0).toFixed(2));
 
-    // Filter by type (CREDIT / DEBIT / ALL)
-    if (type && type !== "ALL") {
-      query.type = { $regex: new RegExp(`^${type}$`, "i") }; // case-insensitive
-    }
+    // Build Mongo query (new model)
+    const query = {};
 
     // Filter by status (SUCCESS / FAILED / ALL)
     if (status && status !== "ALL") {
-      query.status = { $regex: new RegExp(`^${status}$`, "i") }; // case-insensitive
+      query.status = { $regex: new RegExp(`^${status}$`, "i") };
     }
 
+    // Filter by type (CREDIT / DEBIT / ALL) using entries.type
+    if (type && type !== "ALL") {
+      query.entries = {
+        $elemMatch: {
+          type: { $regex: new RegExp(`^${type}$`, "i") },
+        },
+      };
+    }
+
+    // Search (transactionId / description / also allow matching entry name)
     if (search) {
-      const regex = new RegExp(search, "i"); // case-insensitive partial match
+      const regex = new RegExp(search, "i");
       query.$or = [
-        { transactionId: regex },  // 🔍 search by transactionId
-        { description: regex },    // 🔍 search by description
+        { transactionId: regex },
+        { description: regex },
+        { "entries.name": regex },
       ];
     }
 
     // Fetch transactions (LIFO)
-    const transactions = await Transaction.find(query).sort({ createdAt: -1 });
+    const transactions = await TransactionModel.find(query)
+      .sort({ createdAt: -1 })
+      .lean();
+
     const results = [];
 
     for (const txn of transactions) {
+      // Determine "primary" entry for display (keep old behavior: pick any meaningful one)
+      // Prefer USER, else BUS_OPERATOR, HOTEL, DRIVER, ADMIN, else first entry
+      const entries = Array.isArray(txn.entries) ? txn.entries : [];
+
+      const pickEntry =
+        entries.find((e) => e.entityType === "USER") ||
+        entries.find((e) => e.entityType === "BUS_OPERATOR") ||
+        entries.find((e) => e.entityType === "HOTEL") ||
+        entries.find((e) => e.entityType === "DRIVER") ||
+        entries.find((e) => e.entityType === "ADMIN") ||
+        entries[0] ||
+        null;
+
+      const entityType = pickEntry?.entityType || null;
+      const entityId = pickEntry?.entityId ?? null;
+
       let name = null;
       let role = null;
 
-      if (txn.userId) {
-        const user = await UserModel.findById(txn.userId, "fullName role");
+      // Keep the old name/role resolution style (DB lookup), but based on entry entityType
+      if (entityType === "USER" && entityId) {
+        const user = await UserModel.findById(entityId, "fullName role").lean();
         name = user?.fullName || "Unknown User";
         role = user?.role || "user";
-      } else if (txn.busOperatorId) {
+      } else if (entityType === "BUS_OPERATOR" && entityId) {
         const op = await BusOperatorModel.findById(
-          txn.busOperatorId,
+          entityId,
           "fullName role"
-        );
+        ).lean();
         name = op?.fullName || "Unknown Bus Operator";
         role = op?.role || "bus-operator";
-      } else if (txn.hotelManagerId) {
+      } else if (entityType === "HOTEL" && entityId) {
         const hm = await HotelManagerModel.findById(
-          txn.hotelManagerId,
+          entityId,
           "fullName role"
-        );
+        ).lean();
         name = hm?.fullName || "Unknown Hotel Manager";
         role = hm?.role || "hotel-manager";
-      } else if (txn.adminId) {
-        const admin = await AdminModel.findById(txn.adminId, "userName role");
+      } else if (entityType === "ADMIN" && entityId) {
+        const admin = await AdminModel.findById(
+          entityId,
+          "userName role"
+        ).lean();
         name = admin?.userName || "Unknown Admin";
         role = admin?.role || null;
-      } else if (txn.driverId) {
+      } else if (entityType === "DRIVER" && entityId) {
+        // driverId can be string or ObjectId in Mixed, your driver lookup uses driverId (string)
         const driver = await DriverBasicDetails.findOne(
-          { driverId: txn.driverId },
-          "fullName"
-        );
+          { driverId: entityId },
+          "fullName role"
+        ).lean();
         name = driver?.fullName || "Unknown Driver";
         role = driver?.role || "Driver";
       } else {
@@ -1782,16 +1815,23 @@ const getTransactionHistory = async (req, res) => {
         transactionId: txn.transactionId,
         name,
         role,
-        type: txn.type,
-        amount: txn.amount,
+        type: pickEntry?.type || null,
+        amount:
+          pickEntry?.amount != null
+            ? round2(pickEntry.amount)
+            : txn.totalAmount != null
+              ? round2(txn.totalAmount)
+              : 0,
         date: txn.createdAt,
         status: txn.status,
         description: txn.description,
       });
     }
+
+    // Keep the existing in-memory filtering behavior (transactionId/name/role)
     const filteredResults = results.filter((item) => {
       if (!search) return true;
-      const s = search.toLowerCase();
+      const s = String(search).toLowerCase();
 
       return (
         (item.transactionId || "").toLowerCase().includes(s) ||
@@ -1803,25 +1843,32 @@ const getTransactionHistory = async (req, res) => {
     // Pagination after search
     const paginatedResults = filteredResults.slice(skip, skip + limit);
 
-    // Total count for pagination
+    // Total count for pagination (match old response fields)
     const totalRecords = filteredResults.length;
     const totalPages = Math.ceil(totalRecords / limit);
-    // Total count for pagination
-    const total = await Transaction.countDocuments(query);
 
-    const creditAgg = await Transaction.aggregate([
-      { $match: { type: "CREDIT", status: "SUCCESS" } }, // 👈 uppercase
-      { $group: { _id: null, total: { $sum: "$amount" } } },
+    // Total count from DB query (kept similar to your original variable naming)
+    const total = await TransactionModel.countDocuments(query);
+
+    // creditTotal / debitTotal based on ledger entries (SUCCESS only)
+    const creditAgg = await TransactionModel.aggregate([
+      { $match: { status: "SUCCESS" } },
+      { $unwind: "$entries" },
+      { $match: { "entries.type": "CREDIT" } },
+      { $group: { _id: null, total: { $sum: "$entries.amount" } } },
     ]);
 
-    const debitAgg = await Transaction.aggregate([
-      { $match: { type: "DEBIT", status: "SUCCESS" } }, // 👈 uppercase
-      { $group: { _id: null, total: { $sum: "$amount" } } },
+    const debitAgg = await TransactionModel.aggregate([
+      { $match: { status: "SUCCESS" } },
+      { $unwind: "$entries" },
+      { $match: { "entries.type": "DEBIT" } },
+      { $group: { _id: null, total: { $sum: "$entries.amount" } } },
     ]);
 
-    const creditTotal = creditAgg.length > 0 ? creditAgg[0].total : 0;
-    const debitTotal = debitAgg.length > 0 ? debitAgg[0].total : 0;
+    const creditTotal = creditAgg.length > 0 ? round2(creditAgg[0].total) : 0;
+    const debitTotal = debitAgg.length > 0 ? round2(debitAgg[0].total) : 0;
 
+    // Keep same response structure as your old API
     res.json({
       page,
       limit,

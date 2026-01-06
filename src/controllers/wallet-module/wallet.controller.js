@@ -13,6 +13,7 @@ const UserModel = require("../../models/user-module/users/user.model");
 const {
   TransactionTypeEnum,
   PaymentStatusEnum,
+  EntryTypeEnum,
 } = require("../../utils/constants/ENUM");
 const ApiResponse = require("../../utils/response/ApiResponse");
 const SecurePinModel = require("../../models/global-module/secure-pins/secure-pins.model");
@@ -24,6 +25,7 @@ const {
   generateTransactionPDFBase64,
 } = require("../../utils/services/invoice.service");
 const Commission = require("../../models/admin-module/commission-management/commission.model");
+const TransactionModel = require("../../models/transaction-module/transaction.model");
 
 const deductfromUserWallet = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -66,14 +68,40 @@ const deductfromUserWallet = catchAsyncError(async (req, res) => {
   userWallet.balance -= amount;
   await userWallet.save();
 
-  const transaction = await Transaction.create({
-    userId,
-    transactionId: await Transaction.generateTransactionId(),
-    type: TransactionTypeEnum.DEBIT,
-    amount,
-    currency: currency || userWallet.currency,
-    description: description || "Wallet deduction",
+  const superAdmin = await AdminModel.findOne({ role: "SuperAdmin" });
+  const adminId = superAdmin?._id || "SYSTEM";
+
+  const trx = await TransactionModel.create({
+    transactionId: await TransactionModel.generateTransactionId(),
+    transactionType: "Wallet Deduction",
+    momoRefId: null,
+    bookingId: null,
     status: PaymentStatusEnum.SUCCESS,
+    currency: currency || userWallet.currency || process.env.MOMO_CURRENCY,
+    totalAmount: Number(amount),
+    description: description || "Wallet deduction",
+    platformFee: 0,
+    operatorShare: 0,
+    entries: [
+      {
+        entityType: "USER",
+        entityId: userId,
+        name: userExists?.fullName || null,
+        type: "DEBIT",
+        amount: Number(amount),
+      },
+      {
+        entityType: "ADMIN",
+        entityId: adminId,
+        name: "SYSTEM",
+        type: "CREDIT",
+        amount: Number(amount),
+      },
+    ],
+    meta: {
+      walletDeduction: true,
+      by: "USER",
+    },
   });
 
   return res.status(statusCode.OK).json(
@@ -81,7 +109,7 @@ const deductfromUserWallet = catchAsyncError(async (req, res) => {
       statusCode.OK,
       {
         balance: userWallet.balance,
-        transactionId: transaction.transactionId,
+        transactionId: trx.transactionId,
       },
       "Amount deducted successfully"
     )
@@ -125,14 +153,38 @@ const refundToUserWallet = catchAsyncError(async (req, res) => {
   userWallet.balance += amount;
   await userWallet.save();
 
-  const transaction = await Transaction.create({
-    userId,
-    transactionId: await Transaction.generateTransactionId(),
-    type: TransactionTypeEnum.CREDIT,
-    amount,
-    currency: currency || userWallet.currency,
-    description: description || "Wallet refund",
+  const trx = await TransactionModel.create({
+    transactionId: await TransactionModel.generateTransactionId(),
+    transactionType: "Wallet Refund",
+    momoRefId: null,
+    bookingId: null,
     status: PaymentStatusEnum.SUCCESS,
+    currency: currency || userWallet.currency || process.env.MOMO_CURRENCY,
+    totalAmount: Number(amount),
+    description: description || "Wallet refund",
+    platformFee: 0,
+    operatorShare: 0,
+    refund: true,
+    entries: [
+      {
+        entityType: "USER",
+        entityId: userId,
+        name: userExists?.fullName || null,
+        type: "CREDIT",
+        amount: Number(amount),
+      },
+      {
+        entityType: "ADMIN",
+        entityId: "SYSTEM",
+        name: "SYSTEM",
+        type: "DEBIT",
+        amount: Number(amount),
+      },
+    ],
+    meta: {
+      walletRefund: true,
+      by: "SYSTEM",
+    },
   });
 
   return res.status(statusCode.OK).json(
@@ -140,7 +192,7 @@ const refundToUserWallet = catchAsyncError(async (req, res) => {
       statusCode.OK,
       {
         balance: userWallet.balance,
-        transactionId: transaction.transactionId,
+        transactionId: trx.transactionId,
       },
       "Amount refunded successfully"
     )
@@ -159,7 +211,7 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
   const jwtToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(jwtToken);
 
-  const senderId = decoded?.userId; // <- keep this consistent
+  const senderId = decoded?.userId;
   if (!senderId) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
@@ -181,8 +233,6 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
   if (!sender) throw new ApiError(statusCode.NOT_FOUND, "Sender not found");
   if (!receiver) throw new ApiError(statusCode.NOT_FOUND, "Receiver not found");
 
-  // ---- Commission: find active rule for "user" transfers ----
-  // NOTE: start a session BEFORE using .session(session)
   const session = await mongoose.startSession();
   session.startTransaction();
 
@@ -192,8 +242,10 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
       status: "active",
     }).session(session);
 
+    const round2 = (n) => Number(Number(n).toFixed(2));
+
     // Compute commission amount
-    const amt = Number(amount);
+    const amt = round2(Number(amount));
     let platformFee = 0;
 
     if (commission) {
@@ -201,20 +253,20 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
         commission.commissionType === "percentage" &&
         commission.commissionPercentage != null
       ) {
-        platformFee = Number(
-          ((amt * Number(commission.commissionPercentage)) / 100).toFixed(2)
+        platformFee = round2(
+          (amt * Number(commission.commissionPercentage)) / 100
         );
       } else if (
         commission.commissionType === "fixed" &&
         commission.commissionRate != null
       ) {
-        platformFee = Number(Number(commission.commissionRate).toFixed(2));
+        platformFee = round2(Number(commission.commissionRate));
       }
     }
 
-    const totalDebit = Number((amt + platformFee).toFixed(2)); // what the sender must have & pay
+    const totalDebit = round2(amt + platformFee); // what sender pays
 
-    // ---- Load wallets (lock by reading inside txn) ----
+    // ---- Load wallets ----
     const [senderWallet, receiverWallet] = await Promise.all([
       Wallet.findOne({ userId: sender._id }).session(session),
       Wallet.findOne({ userId: receiver._id }).session(session),
@@ -225,11 +277,51 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
     if (!receiverWallet)
       throw new ApiError(statusCode.NOT_FOUND, "Receiver wallet not found");
 
-    // Optional: enforce same currency; otherwise handle conversion here
     const currency = senderWallet.currency || process.env.MOMO_CURRENCY;
 
-    // ---- Sufficient balance? ----
     if (Number(senderWallet.balance) < totalDebit) {
+      // Only transaction part: record FAILED ledger (balanced)
+      await TransactionModel.create(
+        [
+          {
+            transactionId: await TransactionModel.generateTransactionId(),
+            transactionType: "User to User Payment",
+            momoRefId: null,
+            bookingId: null,
+            status: PaymentStatusEnum.FAILED,
+            currency,
+            totalAmount: totalDebit,
+            description: "Transfer failed - insufficient balance",
+            platformFee,
+            operatorShare: amt,
+            entries: [
+              {
+                entityType: "USER",
+                entityId: sender._id,
+                name: sender.fullName || null,
+                type: "DEBIT",
+                amount: totalDebit,
+              },
+              {
+                entityType: "ADMIN",
+                entityId: "SYSTEM",
+                name: "SYSTEM",
+                type: "CREDIT",
+                amount: totalDebit,
+              },
+            ],
+            meta: {
+              reason: "INSUFFICIENT_BALANCE",
+              from: { name: sender.fullName, id: sender.userId },
+              to: { name: receiver.fullName, id: receiver.userId },
+              amount: amt,
+              platformFee,
+            },
+          },
+        ],
+        { session }
+      );
+
       throw new ApiError(statusCode.BAD_REQUEST, "Insufficient balance");
     }
 
@@ -240,21 +332,18 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
     const adminId = superAdmin?._id || "ADM001";
 
     // ---- Apply atomic wallet updates ----
-    // Deduct totalDebit from sender
     await Wallet.findOneAndUpdate(
       { _id: senderWallet._id },
       { $inc: { balance: -totalDebit } },
       { session, new: true }
     );
 
-    // Credit receiver with transfer amount
     await Wallet.findOneAndUpdate(
       { _id: receiverWallet._id },
       { $inc: { balance: amt } },
       { session, new: true }
     );
 
-    // Credit admin with platform fee (if any)
     if (platformFee > 0) {
       await Wallet.findOneAndUpdate(
         { userId: adminId },
@@ -263,76 +352,73 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
       );
     }
 
-    // ---- Create transactions (3 rows) ----
-    const baseMeta = {
-      status: PaymentStatusEnum.SUCCESS,
-      currency,
-    };
-
-    const senderTx = {
-      userId: sender._id,
-      transactionId: await Transaction.generateTransactionId(),
-      transactionType: "User to User Payment",
-      type: TransactionTypeEnum.DEBIT,
-      amount: totalDebit, // user paid amount + fee
-      platformFee: platformFee,
-      description:
-        platformFee > 0
-          ? `Sent ${amt} to ${receiver.fullName} (includes commission ${platformFee})`
-          : `Sent ${amt} to ${receiver.fullName}`,
-      ...baseMeta,
-      meta: {
-        from: {
-          name: sender.fullName,
-          id: sender.userId,
-        },
-        to: {
-          name: receiver.fullName,
-          id: receiver.userId,
-        },
+    // ---- Create transaction (single ledger doc, balanced) ----
+    // Credits must equal debits exactly: totalDebit = amt + platformFee
+    const entries = [
+      {
+        entityType: "USER",
+        entityId: sender._id,
+        name: sender.fullName || null,
+        type: "DEBIT",
+        amount: totalDebit,
       },
-    };
-
-    const receiverTx = {
-      userId: receiver._id,
-      transactionId: await Transaction.generateTransactionId(),
-      transactionType: "User to User Payment",
-      type: TransactionTypeEnum.CREDIT,
-      amount: amt,
-      description: `Received from ${sender.fullName}, email:${sender.email}`,
-      ...baseMeta,
-      meta: {
-        from: {
-          name: sender.fullName,
-          id: sender.userId,
-        },
-        to: {
-          name: receiver.fullName,
-          id: receiver.userId,
-        },
+      {
+        entityType: "USER",
+        entityId: receiver._id,
+        name: receiver.fullName || null,
+        type: "CREDIT",
+        amount: amt,
       },
-    };
+    ];
 
-    const adminTx =
-      platformFee > 0
-        ? {
-            adminId, // keep a dedicated field if your schema supports it
-            transactionId: await Transaction.generateTransactionId(),
-            transactionType: "User to User Payment",
-            type: TransactionTypeEnum.CREDIT,
-            amount: platformFee,
-            description: `Commission from user transfer: sender=${sender.userId} → receiver=${receiver.userId}`,
-            ...baseMeta,
-          }
-        : null;
+    if (platformFee > 0) {
+      entries.push({
+        entityType: "ADMIN",
+        entityId: adminId,
+        name: superAdmin?.fullName || "SuperAdmin",
+        type: "CREDIT",
+        amount: platformFee,
+      });
+    } else {
+      // ensure validator passes if no fee: credit must still equal debit
+      // already balanced because totalDebit == amt when platformFee==0
+    }
 
-    // insertMany ignores nulls if you filter them out
-    const txDocs = adminTx
-      ? [senderTx, receiverTx, adminTx]
-      : [senderTx, receiverTx];
-    const transactionsList = await Transaction.insertMany(txDocs, { session });
+    const [ledgerTx] = await TransactionModel.create(
+      [
+        {
+          transactionId: await TransactionModel.generateTransactionId(),
+          transactionType: "User to User Payment",
+          momoRefId: null,
+          bookingId: null,
+          status: PaymentStatusEnum.SUCCESS,
+          currency,
+          totalAmount: totalDebit,
+          description:
+            platformFee > 0
+              ? `Sent ${amt} to ${receiver.fullName} (includes commission ${platformFee})`
+              : `Sent ${amt} to ${receiver.fullName}`,
+          platformFee,
+          operatorShare: amt,
+          entries,
+          meta: {
+            from: {
+              name: sender.fullName,
+              id: sender.userId,
+            },
+            to: {
+              name: receiver.fullName,
+              id: receiver.userId,
+            },
+            amountSent: amt,
+            platformFee,
+            totalDebitedFromSender: totalDebit,
+          },
+        },
+      ],
+      { session }
+    );
 
-    // ---- Commit ----
     await session.commitTransaction();
     session.endSession();
 
@@ -343,7 +429,7 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
           amountSent: amt,
           platformFee,
           totalDebitedFromSender: totalDebit,
-          transactionsList,
+          transactionsList: [ledgerTx],
         },
         "Transfer successful"
       )
@@ -393,28 +479,118 @@ const getTransactions = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
 
+  const round2 = (n) => Number(Number(n || 0).toFixed(2));
+
+  // Convert new-ledger transaction doc to old response shape for a given entity
+  const toLegacyTx = (tx, entityType, entityId) => {
+    const eIdStr = entityId != null ? String(entityId) : null;
+
+    const entry = (tx.entries || []).find(
+      (e) => e.entityType === entityType && String(e.entityId) === eIdStr
+    );
+
+    // If not found (shouldn't happen because we filter), fallback to first entry
+    const picked = entry || (tx.entries && tx.entries[0]) || null;
+
+    const type = picked?.type || null;
+    const amount = picked?.amount != null ? round2(picked.amount) : null;
+    const platformFee = round2(tx.platformFee);
+    const operatorShare = round2(tx.operatorShare);
+
+    // Old API used: amountPaid = amount - platformFee (mostly for DEBIT views)
+    // For CREDIT entries, show full amount as amountPaid.
+    const amountPaid =
+      amount == null
+        ? null
+        : type === "DEBIT"
+          ? round2(amount - platformFee)
+          : amount;
+
+    return {
+      _id: tx._id,
+      transactionId: tx.transactionId,
+      transactionType: tx.transactionType,
+      momoRefId: tx.momoRefId ?? null,
+
+      userId: entityType === "USER" ? (entityId ?? null) : null,
+      busOperatorId: entityType === "BUS_OPERATOR" ? (entityId ?? null) : null,
+      hotelManagerId: entityType === "HOTEL" ? (entityId ?? null) : null,
+      adminId: entityType === "ADMIN" ? (entityId ?? null) : null,
+      driverId: entityType === "DRIVER" ? (entityId ?? null) : null,
+
+      bookingId: tx.bookingId ?? null,
+      type,
+      status: tx.status,
+      amount,
+      currency: tx.currency,
+      description: tx.description,
+
+      platformFee,
+      operatorShare,
+
+      refund: !!tx.refund,
+      withdraw: !!tx.withdraw,
+      meta: tx.meta || {},
+
+      __v: tx.__v,
+      createdAt: tx.createdAt,
+      updatedAt: tx.updatedAt,
+
+      amountPaid,
+    };
+  };
+
   // ---------------------------------------------------
   //  SINGLE TRANSACTION
   // ---------------------------------------------------
   if (transactionId) {
-    const transaction = await Transaction.findOne({ transactionId });
-
-    if (!transaction) {
+    const tx = await TransactionModel.findOne({ transactionId });
+    if (!tx) {
       throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
     }
 
-    const amountPaid = transaction.amount - transaction.platformFee;
+    // decide which entity is asking (same rules as list)
+    let entityType;
+    let entityId;
 
-    return res.status(statusCode.OK).json(
-      new ApiResponse(
-        statusCode.OK,
-        {
-          ...transaction.toObject(),
-          amountPaid,
-        },
-        "Transaction details fetched successfully"
-      )
-    );
+    if (entity === "driver") {
+      const driverExists = await DriverDetails.findOne({
+        driverId: driverIdFromToken,
+      });
+      if (!driverExists)
+        throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+      entityType = "DRIVER";
+      entityId = driverIdFromToken;
+    } else if (entity === "busoperator") {
+      const bo = await BusOperatorModel.findById(userId);
+      if (!bo)
+        throw new ApiError(statusCode.NOT_FOUND, "Bus Operator not found");
+      entityType = "BUS_OPERATOR";
+      entityId = bo._id.toString();
+    } else if (entity === "hotelManager") {
+      const hm = await HotelManagerModel.findById(userId);
+      if (!hm)
+        throw new ApiError(statusCode.NOT_FOUND, "Hotel Manager not found");
+      entityType = "HOTEL";
+      entityId = hm._id.toString();
+    } else {
+      const u = await UserModel.findById(userId);
+      if (!u) throw new ApiError(statusCode.NOT_FOUND, "User not found");
+      entityType = "USER";
+      entityId = u._id.toString();
+    }
+
+    const legacy = toLegacyTx(tx, entityType, entityId);
+
+    return res
+      .status(statusCode.OK)
+      .json(
+        new ApiResponse(
+          statusCode.OK,
+          legacy,
+          "Transaction details fetched successfully"
+        )
+      );
   }
 
   // ---------------------------------------------------
@@ -423,64 +599,74 @@ const getTransactions = catchAsyncError(async (req, res) => {
   const page = Math.max(parseInt(pageQuery) || 1, 1);
   const limit = Math.min(Math.max(parseInt(limitQuery) || 10, 1), 100);
 
-  let Model;
-  let txFilter = {};
-  let entityExists;
+  let entityType;
+  let entityId; // for matching entries.entityId
 
   switch (entity) {
-    case "busoperator":
-      Model = BusOperatorModel;
-      entityExists = await Model.findById(userId);
+    case "busoperator": {
+      const entityExists = await BusOperatorModel.findById(userId);
       if (!entityExists)
         throw new ApiError(statusCode.NOT_FOUND, "Bus Operator not found");
-      txFilter.busOperatorId = entityExists._id;
+      entityType = "BUS_OPERATOR";
+      entityId = entityExists._id.toString();
       break;
+    }
 
-    case "hotelManager":
-      Model = HotelManagerModel;
-      entityExists = await Model.findById(userId);
+    case "hotelManager": {
+      const entityExists = await HotelManagerModel.findById(userId);
       if (!entityExists)
         throw new ApiError(statusCode.NOT_FOUND, "Hotel Manager not found");
-      txFilter.hotelManagerId = entityExists._id;
+      entityType = "HOTEL";
+      entityId = entityExists._id.toString();
       break;
+    }
 
-    case "driver":
-      Model = DriverDetails;
-      entityExists = await Model.findOne({ driverId: driverIdFromToken });
+    case "driver": {
+      const entityExists = await DriverDetails.findOne({
+        driverId: driverIdFromToken,
+      });
       if (!entityExists)
         throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
-      txFilter.driverId = driverIdFromToken;
+      entityType = "DRIVER";
+      entityId = driverIdFromToken; // string
       break;
+    }
 
-    default:
-      Model = UserModel;
-      entityExists = await Model.findById(userId);
+    default: {
+      const entityExists = await UserModel.findById(userId);
       if (!entityExists)
         throw new ApiError(statusCode.NOT_FOUND, "User not found");
-      txFilter.userId = userId;
+      entityType = "USER";
+      entityId = entityExists._id.toString();
+      break;
+    }
   }
 
-  let transactions = await Transaction.find(txFilter)
+  const txFilter = {
+    entries: {
+      $elemMatch: {
+        entityType,
+        entityId: entityId, // stored as Mixed; you saved strings in your ledger creation
+      },
+    },
+  };
+
+  let transactions = await TransactionModel.find(txFilter)
     .sort({ createdAt: -1 })
     .skip((page - 1) * limit)
     .limit(limit);
 
-  const totalCount = await Transaction.countDocuments(txFilter);
+  const totalCount = await TransactionModel.countDocuments(txFilter);
 
-  // Add amountPaid to EVERY transaction
-  transactions = transactions.map((tx) => {
-    const amountPaid = tx.amount - tx.platformFee;
-    return {
-      ...tx.toObject(),
-      amountPaid,
-    };
-  });
+  const legacyTransactions = transactions.map((tx) =>
+    toLegacyTx(tx, entityType, entityId)
+  );
 
   return res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
       {
-        transactions,
+        transactions: legacyTransactions,
         pagination: {
           total: totalCount,
           page,
@@ -534,7 +720,6 @@ const getAnalytics = catchAsyncError(async (req, res) => {
 
   const { entity, filter = "monthly" } = req.query;
   let Model;
-  let txFilter = {};
 
   switch (entity) {
     case "busoperator":
@@ -552,41 +737,84 @@ const getAnalytics = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.NOT_FOUND, `${entity || "User"} not found`);
   }
 
+  // Map request entity -> ledger entityType and matching entityId format
+  let ledgerEntityType = "USER";
+  let ledgerEntityId =
+    entity === "driver" ? decoded?.driverId : String(entityExists._id);
+
   if (entity === "busoperator") {
-    txFilter.busOperatorId = new mongoose.Types.ObjectId(entityExists._id);
+    ledgerEntityType = "BUS_OPERATOR";
+    ledgerEntityId = String(entityExists._id);
   } else if (entity === "hotelManager") {
-    txFilter.hotelManagerId = new mongoose.Types.ObjectId(entityExists._id);
+    ledgerEntityType = "HOTEL";
+    ledgerEntityId = String(entityExists._id);
   } else {
-    txFilter.userId = new mongoose.Types.ObjectId(userId);
+    ledgerEntityType = "USER";
+    ledgerEntityId = String(userId);
   }
 
   const now = new Date();
   let analytics = [];
 
-  const groupStage = (idObj) => ({
-    _id: idObj,
-    incoming: {
-      $sum: { $cond: [{ $eq: ["$type", "CREDIT"] }, "$amount", 0] },
-    },
-    refunded: {
-      $sum: {
-        $cond: [
-          { $and: [{ $eq: ["$type", "DEBIT"] }, { $eq: ["$refund", true] }] },
-          "$amount",
-          0,
-        ],
+  // Common $match for this entity in ledger entries
+  const baseMatch = {
+    status: PaymentStatusEnum.SUCCESS,
+  };
+
+  // Build an aggregation that:
+  // - filters by date range + SUCCESS
+  // - unwinds entries
+  // - filters entries for current entity only
+  // - groups by requested period
+  // - sums incoming/refunded/withdraw based on entry.type + parent flags
+  const buildPipeline = (dateMatch, groupId) => [
+    { $match: { ...baseMatch, ...dateMatch } },
+    { $unwind: "$entries" },
+    {
+      $match: {
+        "entries.entityType": ledgerEntityType,
+        "entries.entityId": ledgerEntityId,
       },
     },
-    withdraw: {
-      $sum: {
-        $cond: [
-          { $and: [{ $eq: ["$type", "DEBIT"] }, { $eq: ["$withdraw", true] }] },
-          "$amount",
-          0,
-        ],
+    {
+      $group: {
+        _id: groupId,
+        incoming: {
+          $sum: {
+            $cond: [{ $eq: ["$entries.type", "CREDIT"] }, "$entries.amount", 0],
+          },
+        },
+        refunded: {
+          $sum: {
+            $cond: [
+              {
+                $and: [
+                  { $eq: ["$entries.type", "DEBIT"] },
+                  { $eq: ["$refund", true] },
+                ],
+              },
+              "$entries.amount",
+              0,
+            ],
+          },
+        },
+        withdraw: {
+          $sum: {
+            $cond: [
+              {
+                $and: [
+                  { $eq: ["$entries.type", "DEBIT"] },
+                  { $eq: ["$withdraw", true] },
+                ],
+              },
+              "$entries.amount",
+              0,
+            ],
+          },
+        },
       },
     },
-  });
+  ];
 
   if (filter === "daily") {
     const startOfDay = new Date(
@@ -610,17 +838,14 @@ const getAnalytics = catchAsyncError(async (req, res) => {
       )
     );
 
-    txFilter.createdAt = { $gte: startOfDay, $lte: endOfDay };
+    const results = await TransactionModel.aggregate(
+      buildPipeline({ createdAt: { $gte: startOfDay, $lte: endOfDay } }, null)
+    );
 
-    const result = await Transaction.aggregate([
-      { $match: txFilter },
-      { $group: groupStage(null) },
-    ]);
-
-    const data = result[0] || { incoming: 0, refunded: 0, withdraw: 0 };
+    const data = results[0] || { incoming: 0, refunded: 0, withdraw: 0 };
     analytics = [
       {
-        date: now.toISOString().split("T")[0], // show UTC date correctly
+        date: now.toISOString().split("T")[0],
         incoming: data.incoming,
         refunded: data.refunded,
         withdraw: data.withdraw,
@@ -637,17 +862,14 @@ const getAnalytics = catchAsyncError(async (req, res) => {
       59,
       59
     );
-    txFilter.createdAt = { $gte: startOfMonth, $lte: endOfMonth };
 
-    const results = await Transaction.aggregate([
-      { $match: txFilter },
-      {
-        $group: {
-          ...groupStage({
-            week: { $ceil: { $divide: [{ $dayOfMonth: "$createdAt" }, 7] } },
-          }),
-        },
-      },
+    const results = await TransactionModel.aggregate([
+      ...buildPipeline(
+        { createdAt: { $gte: startOfMonth, $lte: endOfMonth } },
+        {
+          week: { $ceil: { $divide: [{ $dayOfMonth: "$createdAt" }, 7] } },
+        }
+      ),
       { $sort: { "_id.week": 1 } },
     ]);
 
@@ -666,18 +888,15 @@ const getAnalytics = catchAsyncError(async (req, res) => {
   } else if (filter === "monthly") {
     const yearStart = new Date(now.getFullYear(), 0, 1);
     const yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
-    txFilter.createdAt = { $gte: yearStart, $lte: yearEnd };
 
-    const results = await Transaction.aggregate([
-      { $match: txFilter },
-      {
-        $group: {
-          ...groupStage({
-            month: { $month: "$createdAt" },
-            year: { $year: "$createdAt" },
-          }),
-        },
-      },
+    const results = await TransactionModel.aggregate([
+      ...buildPipeline(
+        { createdAt: { $gte: yearStart, $lte: yearEnd } },
+        {
+          month: { $month: "$createdAt" },
+          year: { $year: "$createdAt" },
+        }
+      ),
       { $sort: { "_id.month": 1 } },
     ]);
 
@@ -711,11 +930,12 @@ const getAnalytics = catchAsyncError(async (req, res) => {
   } else if (filter === "yearly") {
     const startYear = now.getFullYear() - 9;
     const startDate = new Date(startYear, 0, 1);
-    txFilter.createdAt = { $gte: startDate, $lte: now };
 
-    const results = await Transaction.aggregate([
-      { $match: txFilter },
-      { $group: { ...groupStage({ year: { $year: "$createdAt" } }) } },
+    const results = await TransactionModel.aggregate([
+      ...buildPipeline(
+        { createdAt: { $gte: startDate, $lte: now } },
+        { year: { $year: "$createdAt" } }
+      ),
       { $sort: { "_id.year": 1 } },
     ]);
 

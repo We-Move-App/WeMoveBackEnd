@@ -946,8 +946,7 @@ const getUserProfileFunc = async ({
     reqModel
       .findById(_id)
       .select("-password")
-      .populate("branch",  "-createdAt -updatedAt -__v")
-      
+      .populate("branch", "-createdAt -updatedAt -__v")
 
       .lean(),
 

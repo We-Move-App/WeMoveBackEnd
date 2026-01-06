@@ -312,6 +312,11 @@ const NationalityEnum = {
   OTHER: "Other (Specify)",
 };
 
+const EntryTypeEnum = {
+  BUS_OPERATOR: "BUS_OPERATOR",
+  HOTEL: "HOTEL",
+};
+
 module.exports = {
   NationalityEnum,
   NotificationTypeEnum,
@@ -331,4 +336,5 @@ module.exports = {
   CommissionServiceTypeEnum,
   CommissionTypeEnum,
   CommissionStatusEnum,
+  EntryTypeEnum,
 };
