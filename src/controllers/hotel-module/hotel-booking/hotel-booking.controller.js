@@ -720,34 +720,38 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
   }
 
   // ✅ Date parsing
-  const now = new Date();
-  const checkIn = new Date(checkInDate);
-  const checkOut = new Date(checkOutDate);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  console.log("Today:", today);
 
-  if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
+
+
+  const checkInOnlyDate = new Date(checkInDate);
+  checkInOnlyDate.setHours(0, 0, 0, 0);
+
+  console.log("Check-In Only Date:", checkInOnlyDate);
+
+  const checkOutOnlyDate = new Date(checkOutDate);
+  checkOutOnlyDate.setHours(0, 0, 0, 0);
+
+
+  if (checkInOnlyDate < today) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Invalid date format. Please use YYYY-MM-DD."
+      "Check-in date cannot be in the past."
     );
   }
 
-  // ✅ Check-in cannot be in the past
-  if (checkIn < now.setHours(0, 0, 0, 0)) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Check-in cannot be in the past."
-    );
-  }
 
-  // ✅ Checkout must be after check-in
-  if (checkOut <= checkIn) {
+  if (checkOutOnlyDate <= checkInOnlyDate) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
       "Check-out must be after check-in date."
     );
   }
 
-  const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
+
+  const nights = Math.ceil((checkOutOnlyDate - checkInOnlyDate) / (1000 * 60 * 60 * 24));
   if (nights <= 0)
     throw new ApiError(
       statusCode.BAD_REQUEST,
