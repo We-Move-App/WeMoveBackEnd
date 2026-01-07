@@ -61,6 +61,7 @@ const createBooking = catchAsyncError(async (req, res) => {
     user,
   } = req.body;
 
+  // Convert numbers safely
   noOfRoom = Number(noOfRoom);
   noOfAdults = Number(noOfAdults);
   noOfKids = Number(noOfKids);
@@ -506,7 +507,7 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
   if (checkIn < today) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Check-in cannot be in the past."
+      "Check-in date cannot be in the past."
     );
   }
 
