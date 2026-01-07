@@ -94,23 +94,25 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
     );
 });
 
-const createBusBooking = catchAsyncError(async (req, res, next) => {
+const createBusBooking = catchAsyncError(async (req, res) => {
   const { _id: userId } = req.user;
+
   const {
     from,
     to,
     busId,
     routeId,
-    noOfPassengers,
     passengers,
-    couponCode,
+    noOfPassengers,
     journeyDate,
+    price,
+    commission,
+    discountApplied = 0,
+    coupon,
     termAndConditions,
   } = req.body;
 
-  const userExists = await UserModel.findById(userId);
-
-  // 1️⃣ Validate request
+  /* ---------- VALIDATION ---------- */
   validateRequestBody(
     [
       "from",
@@ -120,352 +122,149 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       "passengers",
       "noOfPassengers",
       "journeyDate",
+      "price",
+      "commission",
     ],
     req.body
   );
 
-  if (noOfPassengers !== passengers.length) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Passenger count does not match the number of selected seats"
-    );
+  if (!Array.isArray(passengers) || passengers.length !== noOfPassengers) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Passenger count mismatch");
   }
 
   isValidFutureDate(journeyDate);
-
-  // 2️⃣ Get bus and route details
-  const [findBus, route] = await Promise.all([
-    BusModel.findById(busId).lean(),
-    BusRouteModel.findById(routeId).lean(),
-  ]);
-
-  if (!findBus) throw new ApiError(statusCode.NOT_FOUND, "Bus not found");
-  if (!route) throw new ApiError(statusCode.NOT_FOUND, "Route not found");
-
   const journeyDateNormalized = normalizeDate(journeyDate);
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    // Step 3: Seat availability & auto assignment
-    const busObjectId = new mongoose.Types.ObjectId(busId);
-    const routeObjectId = new mongoose.Types.ObjectId(routeId);
-
-    const startOfDay = new Date(journeyDate);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(journeyDate);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    let seatAvailability = await BusSeatsLayoutModel.findOne({
-      busId: busObjectId,
-      routeId: routeObjectId,
-      journeyDate: { $gte: startOfDay, $lte: endOfDay },
-    }).session(session);
-
-    if (!seatAvailability) {
-      const busSeats = Array.from({ length: findBus.noOfSeats }, (_, i) => ({
-        seatNumber: `S${i + 1}`,
-        isAvailable: true,
-        seatType: "regular",
-        status: "available",
-      }));
-
-      seatAvailability = await BusSeatsLayoutModel.create(
-        [
-          {
-            busId: busObjectId,
-            routeId: routeObjectId,
-            seats: busSeats,
-            noOfSeats: findBus.noOfSeats,
-            bookedSeats: 0,
-            availableSeats: findBus.noOfSeats,
-            journeyDate: startOfDay,
-          },
-        ],
-        { session }
-      );
-      seatAvailability = seatAvailability[0];
+    /* ---------- USER ---------- */
+    const user = await UserModel.findById(userId);
+    if (!user) {
+      throw new ApiError(statusCode.NOT_FOUND, "User not found");
     }
 
-    const availableSeats = seatAvailability.seats.filter(
-      (seat) => seat.isAvailable
-    );
-    if (availableSeats.length < noOfPassengers) {
-      throw new ApiError(statusCode.CONFLICT, "Not enough available seats");
-    }
+    /* ---------- BUS & ROUTE ---------- */
+    const [bus, route] = await Promise.all([
+      BusModel.findById(busId).lean(),
+      BusRouteModel.findById(routeId).lean(),
+    ]);
 
-    const assignedSeats = availableSeats
-      .slice(0, noOfPassengers)
-      .map((s) => s.seatNumber);
-    const assignSeatToPassenger = passengers.map((p, i) => ({
-      ...p,
-      seatNumber: assignedSeats[i],
-    }));
+    if (!bus) throw new ApiError(statusCode.NOT_FOUND, "Bus not found");
+    if (!route) throw new ApiError(statusCode.NOT_FOUND, "Route not found");
 
-    // 4️⃣ Calculate price
-    const basePricePerSeat = route.pricePerSeat || findBus.pricePerSeat || 0;
-    const basePrice = basePricePerSeat * noOfPassengers;
+    /* ---------- AMOUNT CALCULATION ---------- */
+    const finalAmount = Math.max(0, price - discountApplied); // USER PAYS
+    const operatorAmount = Math.max(0, finalAmount - commission); // OPERATOR GETS
 
-    let appliedCoupon = null;
-    let couponMessage = null;
-    let finalAmount = basePrice;
-
-    if (couponCode) {
-      const currentDate = new Date();
-
-      const coupon = await CouponModel.findOne({
-        couponCode,
-        status: "Active",
-        serviceType: { $in: ["Bus", "All Services"] },
-      });
-
-      if (!coupon) {
-        couponMessage = "Coupon code is invalid.";
-      } else if (coupon.expiryDate < currentDate) {
-        couponMessage = "Coupon code has expired.";
-      } else if (
-        coupon.usageHistory.some(
-          (u) => u.userId.toString() === userId.toString()
-        )
-      ) {
-        couponMessage = "You have already used this coupon.";
-      } else if (basePrice < coupon.minOrderAmount) {
-        couponMessage = `Coupon valid only on orders above ₹${coupon.minOrderAmount}.`;
-      } else {
-        if (coupon.discountType === "Percentage") {
-          finalAmount =
-            basePrice - (basePrice * coupon.discountPercentage) / 100;
-        } else if (coupon.discountType === "Fixed Amount") {
-          finalAmount = basePrice - coupon.discountAmount;
-        }
-
-        if (finalAmount < 0) finalAmount = 0;
-
-        appliedCoupon = coupon;
-        couponMessage = `Booking confirmed. Coupon ${coupon.couponCode} applied successfully.`;
-      }
-    } else {
-      couponMessage = "Booking confirmed. No coupon applied.";
-    }
-
-    // Check user wallet balance
-    const userWallet = await WalletModel.findOne({ userId }).session(session);
-    if (!userWallet || userWallet.balance < finalAmount) {
-      await TransactionModel.create(
-        [
-          {
-            transactionId: await TransactionModel.generateTransactionId(),
-            transactionType: "Bus Booking",
-            momoRefId: null,
-            bookingId: null,
-            status: PaymentStatusEnum.FAILED,
-            currency: process.env.MOMO_CURRENCY,
-            totalAmount: Number(finalAmount) || 0,
-            description: "Bus booking failed - insufficient balance",
-            entries: [
-              {
-                entityType: "USER",
-                entityId: userId,
-                name: userExists?.fullName || null,
-                type: "DEBIT",
-                amount: Number(finalAmount) || 0,
-              },
-              {
-                entityType: "ADMIN",
-                entityId: "SYSTEM",
-                name: "SYSTEM",
-                type: "CREDIT",
-                amount: Number(finalAmount) || 0,
-              },
-            ],
-            meta: {
-              reason: "INSUFFICIENT_BALANCE",
-              attemptedFor: {
-                busId,
-                routeId,
-                from,
-                to,
-                journeyDate: journeyDateNormalized,
-              },
-            },
-          },
-        ],
-        { session }
-      );
-
+    /* ---------- WALLET CHECK ---------- */
+    const wallet = await WalletModel.findOne({ userId }).session(session);
+    if (!wallet || wallet.balance < finalAmount) {
       throw new ApiError(statusCode.BAD_REQUEST, "Insufficient wallet balance");
     }
 
-    // Step 3: Create booking
+    /* ---------- CREATE BOOKING ---------- */
     const bookingId = await generateCustomId(EntityCodeEnum.BUS_BOOKING, "BB");
 
-    const [newBooking] = await BusBookingModel.create(
+    const [booking] = await BusBookingModel.create(
       [
         {
-          busId,
           bookingId,
-          bookedBy: userId,
+          busId,
           routeId,
-          passengers: assignSeatToPassenger,
+          bookedBy: userId,
+
+          passengers,
           noOfPassengers,
-          finalAmount,
-          price: basePrice,
+
+          price, // original price
+          discountApplied,
+          finalAmount, // paid amount
+
+          adminCommission: commission,
+          operatorAmount,
+
           journeyDate: journeyDateNormalized,
-          termAndConditions,
           paymentStatus: "PAID",
           from,
           to,
-          seatNumbers: assignedSeats,
-          coupon: appliedCoupon
-            ? {
-                couponId: appliedCoupon._id,
-                couponCode: appliedCoupon.couponCode,
-                discountType: appliedCoupon.discountType,
-                discountValue:
-                  appliedCoupon.discountType === "Percentage"
-                    ? appliedCoupon.discountPercentage
-                    : appliedCoupon.discountAmount,
-                discountApplied,
-              }
-            : null,
+          termAndConditions,
+          coupon,
         },
       ],
       { session }
     );
 
-    // 7️⃣ Update seats
-    seatAvailability.seats = seatAvailability.seats.map((seat) => {
-      if (assignedSeats.includes(seat.seatNumber)) {
-        seat.status = "booked";
-        seat.bookingReference = newBooking._id;
-        seat.isAvailable = false;
-      }
-      return seat;
-    });
-    seatAvailability.bookedSeats += noOfPassengers;
-    seatAvailability.availableSeats -= noOfPassengers;
-    await seatAvailability.save({ session });
+    /* ---------- USER WALLET (DEBIT) ---------- */
+    wallet.balance -= finalAmount;
+    await wallet.save({ session });
 
-    // 8️⃣ Deduct from user wallet
-    userWallet.balance -= finalAmount;
-    await userWallet.save({ session });
+    /* ---------- OPERATOR WALLET (CREDIT) ---------- */
+    await WalletModel.findOneAndUpdate(
+      { userId: bus.ownerId },
+      { $inc: { balance: operatorAmount } },
+      { session, upsert: true }
+    );
 
-    // 9️⃣ Commission & platform split
-    const commission = await Commission.findOne({ serviceType: "bus" }).lean();
-    let platformFee = 0;
-    let operatorShare = finalAmount;
-
-    if (commission && commission.status === "active") {
-      if (commission.commissionType === "fixed" && commission.commissionRate) {
-        platformFee = commission.commissionRate;
-        operatorShare = finalAmount - platformFee;
-      } else if (
-        commission.commissionType === "percentage" &&
-        commission.commissionPercentage
-      ) {
-        platformFee = parseFloat(
-          ((finalAmount * commission.commissionPercentage) / 100).toFixed(2)
-        );
-        operatorShare = finalAmount - platformFee;
-      }
+    /* ---------- ADMIN WALLET (CREDIT) ---------- */
+    const admin = await AdminModel.findOne({ role: "SuperAdmin" });
+    if (!admin) {
+      throw new ApiError(statusCode.NOT_FOUND, "Admin not found");
     }
-    if (operatorShare < 0) operatorShare = 0;
 
-    const ownerId = findBus.ownerId.toString();
     await WalletModel.findOneAndUpdate(
-      { userId: ownerId },
-      { $inc: { balance: operatorShare } },
-      { session, new: true, upsert: true, setDefaultsOnInsert: true }
+      { userId: admin._id },
+      { $inc: { balance: commission } },
+      { session, upsert: true }
     );
 
-    const superAdmin = await AdminModel.findOne({ role: "SuperAdmin" });
-    const adminId = superAdmin?._id || "ADM001";
-    await WalletModel.findOneAndUpdate(
-      { userId: adminId },
-      { $inc: { balance: platformFee } },
-      { session, new: true, upsert: true, setDefaultsOnInsert: true }
-    );
-
-    // 10️⃣ Transactions (updated for new ledger model)
-    const round2 = (n) => Number(Number(n).toFixed(2));
-
-    const totalPaid = round2(finalAmount);
-    platformFee = round2(platformFee);
-    operatorShare = round2(operatorShare);
-
-    const diff = round2(totalPaid - round2(platformFee + operatorShare));
-    if (diff !== 0) operatorShare = round2(operatorShare + diff);
-
+    /* ---------- TRANSACTION ---------- */
     await TransactionModel.create(
       [
         {
           transactionId: await TransactionModel.generateTransactionId(),
           transactionType: "Bus Booking",
-          momoRefId: null,
-          bookingId: newBooking.bookingId,
+          bookingId: booking.bookingId,
           status: PaymentStatusEnum.SUCCESS,
-          currency: process.env.MOMO_CURRENCY,
-          totalAmount: totalPaid,
-          description: `Bus booking ${from} → ${to}`,
-          platformFee: platformFee,
-          operatorShare: operatorShare,
+          totalAmount: finalAmount,
+          platformFee: commission,
+          operatorShare: finalAmount - commission,
           entries: [
             {
               entityType: "USER",
               entityId: userId,
-              name: userExists?.fullName || null,
               type: "DEBIT",
-              amount: totalPaid,
+              amount: finalAmount,
             },
             {
               entityType: "BUS_OPERATOR",
-              entityId: ownerId,
-              name: findBus?.busName || null,
+              entityId: bus.ownerId,
               type: "CREDIT",
-              amount: operatorShare,
+              amount: operatorAmount,
             },
             {
               entityType: "ADMIN",
-              entityId: adminId,
-              name: superAdmin?.fullName || "SuperAdmin",
+              entityId: admin._id,
               type: "CREDIT",
-              amount: platformFee,
+              amount: commission,
             },
           ],
-          meta: {
-            from: {
-              name: userExists?.fullName,
-              id: userExists?.userId,
-            },
-            to: {
-              name: findBus?.busName,
-              id: findBus?._id,
-            },
-            bus: {
-              busId,
-              routeId,
-              from,
-              to,
-              journeyDate: journeyDateNormalized,
-              seats: assignedSeats,
-              noOfPassengers,
-            },
-          },
         },
       ],
       { session }
     );
 
-    // 11️⃣ Update coupon usage
-    if (appliedCoupon) {
+    /* ---------- COUPON USAGE ---------- */
+    if (coupon?.couponId) {
       await CouponModel.findByIdAndUpdate(
-        appliedCoupon._id,
+        coupon.couponId,
         {
           $inc: { usedCount: 1 },
           $push: {
             usageHistory: {
               userId,
-              bookingId: newBooking._id,
+              bookingId: booking._id,
               usedAt: new Date(),
             },
           },
@@ -477,8 +276,11 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     await session.commitTransaction();
     session.endSession();
 
-    // 12️⃣ Populate response
-    const bookingWithBusDetails = await BusBookingModel.findById(newBooking._id)
+    /* ======================================================
+       RESPONSE SHAPING (MATCHES OLD API RESPONSE)
+       ====================================================== */
+
+    const bookingWithDetails = await BusBookingModel.findById(booking._id)
       .populate({
         path: "busId",
         select: "busName busRegNumber busModelNumber",
@@ -495,34 +297,43 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       })
       .lean();
 
+    /* ---------- BUS IMAGES ---------- */
     const busImages = await BusImagesModel.findOne(
-      { busId: bookingWithBusDetails.busId._id },
+      { busId: bookingWithDetails.busId._id },
       { images: 1, _id: 0 }
     ).lean();
-    bookingWithBusDetails.busId.busImages =
-      busImages?.images?.map((img) => img.url) || [];
-    bookingWithBusDetails.passengers = assignSeatToPassenger;
 
-    if (bookingWithBusDetails.journeyDate) {
-      bookingWithBusDetails.startDate = bookingWithBusDetails.journeyDate;
-      bookingWithBusDetails.endDate = bookingWithBusDetails.journeyDate;
-      delete bookingWithBusDetails.journeyDate;
+    bookingWithDetails.busId.busImages =
+      busImages?.images?.map((img) => img.url) || [];
+
+    /* ---------- DATE FORMAT (OLD STYLE) ---------- */
+    if (bookingWithDetails.journeyDate) {
+      bookingWithDetails.startDate = bookingWithDetails.journeyDate;
+      bookingWithDetails.endDate = bookingWithDetails.journeyDate;
+      delete bookingWithDetails.journeyDate;
     }
-    if (bookingWithBusDetails.routeId) {
-      bookingWithBusDetails.routeId.from =
-        bookingWithBusDetails.routeId.startLocation;
-      bookingWithBusDetails.routeId.to =
-        bookingWithBusDetails.routeId.endLocation;
-      delete bookingWithBusDetails.routeId.startLocation;
-      delete bookingWithBusDetails.routeId.endLocation;
+
+    /* ---------- ROUTE FORMAT (OLD STYLE) ---------- */
+    if (bookingWithDetails.routeId) {
+      bookingWithDetails.routeId.from =
+        bookingWithDetails.routeId.startLocation;
+      bookingWithDetails.routeId.to = bookingWithDetails.routeId.endLocation;
+
+      delete bookingWithDetails.routeId.startLocation;
+      delete bookingWithDetails.routeId.endLocation;
     }
+
+    /* ---------- PASSENGERS & SEATS ---------- */
+    bookingWithDetails.passengers = passengers;
+    bookingWithDetails.seatNumbers =
+      passengers.map((p) => p.seatNumber).filter(Boolean) || [];
 
     return res
       .status(statusCode.CREATED)
       .json(
         new ApiResponse(
           statusCode.CREATED,
-          bookingWithBusDetails,
+          bookingWithDetails,
           "Bus booked successfully"
         )
       );
@@ -533,180 +344,113 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
   }
 });
 
-const calculateBusBooking = catchAsyncError(async (req, res, next) => {
+const calculateBusBooking = catchAsyncError(async (req, res) => {
   const { _id: userId } = req.user;
   const {
     busId,
     routeId,
-    noOfPassengers,
     passengers,
+    noOfPassengers,
     journeyDate,
     couponCode,
   } = req.body;
 
-  // 1️⃣ Validate request
   validateRequestBody(
     ["busId", "routeId", "passengers", "noOfPassengers", "journeyDate"],
     req.body
   );
 
-  if (!Array.isArray(passengers) || passengers.length === 0)
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Passengers array cannot be empty"
-    );
-
-  if (noOfPassengers !== passengers.length) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Passenger count does not match the number of selected seats"
-    );
+  if (!Array.isArray(passengers) || passengers.length !== noOfPassengers) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Passenger count mismatch");
   }
 
   isValidFutureDate(journeyDate);
+  const journeyDateNormalized = normalizeDate(journeyDate);
 
-  // 2️⃣ Get bus and route details
-  const [findBus, route] = await Promise.all([
+  const [bus, route] = await Promise.all([
     BusModel.findById(busId).lean(),
     BusRouteModel.findById(routeId).lean(),
   ]);
 
-  if (!findBus) throw new ApiError(statusCode.NOT_FOUND, "Bus not found");
+  if (!bus) throw new ApiError(statusCode.NOT_FOUND, "Bus not found");
   if (!route) throw new ApiError(statusCode.NOT_FOUND, "Route not found");
 
-  // 3️⃣ Normalize journey date
-  const journeyDateNormalized = normalizeDate(journeyDate);
+  /* ---------- PRICE ---------- */
+  const pricePerSeat = route.pricePerSeat || bus.pricePerSeat || 0;
+  const basePrice = pricePerSeat * noOfPassengers;
 
-  const session = await mongoose.startSession();
-  session.startTransaction();
+  /* ---------- COUPON ---------- */
+  let discountApplied = 0;
+  let finalAmount = basePrice;
+  let appliedCoupon = null;
 
-  try {
-    // 4️⃣ Seat availability
-    let seatAvailability = await BusSeatsLayoutModel.findOne({
-      busId,
-      journeyDate: journeyDateNormalized,
-      routeId,
-    }).session(session);
-
-    if (!seatAvailability) {
-      let busSeats = [];
-      for (let i = 0; i < findBus.noOfSeats; i++) {
-        busSeats.push({
-          seatNumber: `S${i + 1}`,
-          isAvailable: true,
-          seatType: "regular",
-          status: "available",
-        });
-      }
-      seatAvailability = await BusSeatsLayoutModel.create(
-        [
-          {
-            busId,
-            seats: busSeats,
-            noOfSeats: findBus.noOfSeats,
-            journeyDate: journeyDateNormalized,
-            bookedSeats: 0,
-            availableSeats: findBus.noOfSeats,
-            routeId,
-          },
-        ],
-        { session }
-      );
-      seatAvailability = seatAvailability[0];
-    }
-
-    const availableSeats = seatAvailability.seats.filter(
-      (seat) => seat.isAvailable
-    );
-    if (availableSeats.length < noOfPassengers) {
-      throw new ApiError(statusCode.CONFLICT, "Not enough available seats");
-    }
-
-    const assignedSeats = availableSeats
-      .slice(0, noOfPassengers)
-      .map((s) => s.seatNumber);
-    const assignSeatToPassenger = passengers.map((p, i) => ({
-      ...p,
-      seatNumber: assignedSeats[i],
-    }));
-
-    // 5️⃣ Calculate pricing
-    // 5️⃣ Calculate pricing
-    const basePricePerSeat = route.pricePerSeat || findBus.pricePerSeat || 0;
-    const basePrice = basePricePerSeat * noOfPassengers;
-    let discountApplied = 0;
-    let finalAmount = basePrice;
-    let appliedCoupon = null;
-
-    let couponMessage = "Price calculated successfully.";
-
-    // ✅ Coupon logic same as hotel
-    if (couponCode) {
-      const currentDate = new Date();
-      const coupon = await CouponModel.findOne({
-        couponCode,
-        status: "Active",
-        serviceType: { $in: ["Bus", "All Services"] },
-      });
-
-      if (!coupon) {
-        couponMessage = "Coupon code is invalid.";
-      } else if (coupon.expiryDate < currentDate) {
-        couponMessage = "Coupon code has expired.";
-      } else if (
-        coupon.usageHistory.some(
-          (u) => u.userId.toString() === userId.toString()
-        )
-      ) {
-        couponMessage = "You have already used this coupon.";
-      } else if (basePrice < coupon.minOrderAmount) {
-        couponMessage = `Coupon valid only on orders above ₹${coupon.minOrderAmount}.`;
-      } else {
-        // ✅ Apply discount
-        if (coupon.discountType === "Percentage") {
-          discountApplied = (basePrice * coupon.discountPercentage) / 100;
-        } else if (coupon.discountType === "Fixed Amount") {
-          discountApplied = coupon.discountAmount;
-        }
-        finalAmount = Math.max(0, basePrice - discountApplied);
-
-        appliedCoupon = coupon;
-        couponMessage = `Coupon ${coupon.couponCode} applied successfully.`;
-      }
-    }
-
-    await session.commitTransaction();
-    session.endSession();
-
-    // 6️⃣ Return response
-    return res.status(statusCode.OK).json({
-      success: true,
-      message: couponMessage,
-      data: {
-        journeyDate: journeyDateNormalized,
-        noOfPassengers,
-        assignedSeats,
-        pricePerSeat: basePricePerSeat,
-        basePrice,
-        discountApplied,
-        finalAmount,
-        coupon: appliedCoupon
-          ? {
-              couponCode: appliedCoupon.couponCode,
-              discountType: appliedCoupon.discountType,
-              discountValue:
-                appliedCoupon.discountType === "Percentage"
-                  ? appliedCoupon.discountPercentage
-                  : appliedCoupon.discountAmount,
-            }
-          : null,
-      },
+  if (couponCode) {
+    const coupon = await CouponModel.findOne({
+      couponCode,
+      status: "Active",
+      serviceType: { $in: ["Bus", "All Services"] },
     });
-  } catch (error) {
-    await session.abortTransaction();
-    session.endSession();
-    throw error;
+
+    if (
+      coupon &&
+      coupon.expiryDate >= new Date() &&
+      basePrice >= coupon.minOrderAmount &&
+      !coupon.usageHistory.some(
+        (u) => u.userId.toString() === userId.toString()
+      )
+    ) {
+      discountApplied =
+        coupon.discountType === "Percentage"
+          ? (basePrice * coupon.discountPercentage) / 100
+          : coupon.discountAmount;
+
+      finalAmount = Math.max(0, basePrice - discountApplied);
+      appliedCoupon = coupon;
+    }
   }
+
+  /* ---------- ADMIN COMMISSION ONLY ---------- */
+  const commissionConfig = await Commission.findOne({
+    serviceType: "bus",
+    status: "active",
+  }).lean();
+
+  let commission = 0;
+
+  if (commissionConfig) {
+    if (commissionConfig.commissionType === "fixed") {
+      commission = commissionConfig.commissionRate;
+    } else if (commissionConfig.commissionType === "percentage") {
+      commission = (finalAmount * commissionConfig.commissionPercentage) / 100;
+    }
+  }
+
+  commission = Math.min(commission, finalAmount); // safety
+
+  return res.status(statusCode.OK).json({
+    success: true,
+    message: "Price calculated successfully",
+    data: {
+      journeyDate: journeyDateNormalized,
+      noOfPassengers,
+      pricePerSeat,
+      basePrice,
+      discountApplied,
+      finalAmount: finalAmount + commission,
+      commission,
+      coupon: appliedCoupon
+        ? {
+            couponId: appliedCoupon._id,
+            couponCode: appliedCoupon.couponCode,
+            discountType: appliedCoupon.discountType,
+            discountValue:
+              appliedCoupon.discountType === "Percentage"
+                ? appliedCoupon.discountPercentage
+                : appliedCoupon.discountAmount,
+          }
+        : null,
+    },
+  });
 });
 
 const getBusBookingDetails = catchAsyncError(async (req, res, next) => {

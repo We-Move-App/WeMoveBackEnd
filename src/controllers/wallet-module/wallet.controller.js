@@ -442,8 +442,6 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
 });
 
 const getTransactions = catchAsyncError(async (req, res) => {
-  console.log("This api");
-
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
     throw new ApiError(

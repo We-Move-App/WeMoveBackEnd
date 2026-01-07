@@ -49,264 +49,118 @@ const createBooking = catchAsyncError(async (req, res) => {
   let {
     hotelId,
     roomTypeId,
-    couponCode,
     checkInDate,
     checkOutDate,
-    checkInTime,
-    checkOutTime,
     noOfAdults,
     noOfKids,
     noOfRoom,
+    couponCode,
+    baseAmount,
+    commission,
+    totalAmount,
     user,
   } = req.body;
 
-  // Convert numbers safely
   noOfRoom = Number(noOfRoom);
   noOfAdults = Number(noOfAdults);
   noOfKids = Number(noOfKids);
-
-  if (noOfRoom <= 0 || noOfAdults <= 0 || noOfKids < 0) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Invalid number of rooms/adults/kids."
-    );
-  }
-
-  // Format dates and times
-  const formattedCheckIn = new Date(checkInDate);
-  const formattedCheckOut = new Date(checkOutDate);
-
-  const hotelPolicy = await HotelPolicyModel.findOne({ hotelId });
-  const checkInDateTime = new Date(
-    `${checkInDate}T${hotelPolicy?.checkInTime || "12:00"}:00`
-  );
-  const checkOutDateTime = new Date(
-    `${checkOutDate}T${hotelPolicy?.checkOutTime || "11:00"}:00`
-  );
+  baseAmount = Number(baseAmount);
+  commission = Number(commission);
+  totalAmount = Number(totalAmount);
 
   if (
-    !bookedBy ||
     !hotelId ||
+    !roomTypeId ||
     !checkInDate ||
     !checkOutDate ||
     !noOfRoom ||
-    !roomTypeId
+    baseAmount <= 0 ||
+    commission < 0 ||
+    totalAmount <= 0
   ) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Missing required booking details."
+      "Missing or invalid booking details."
     );
   }
 
-  // Check if user exists
-  const userExists = await User.findById(bookedBy);
-  if (!userExists) {
-    throw new ApiError(statusCode.NOT_FOUND, "User not registered.");
+  const formattedCheckIn = new Date(checkInDate);
+  const formattedCheckOut = new Date(checkOutDate);
+
+  const nights = Math.ceil(
+    (formattedCheckOut.getTime() - formattedCheckIn.getTime()) /
+      (1000 * 60 * 60 * 24)
+  );
+
+  if (nights <= 0) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Check-out must be after check-in"
+    );
   }
 
-  // Check if hotel exists
+  const userExists = await User.findById(bookedBy);
+  if (!userExists) {
+    throw new ApiError(statusCode.NOT_FOUND, "User not found.");
+  }
+
   const hotelExists = await Hotel.findById(hotelId);
   if (!hotelExists) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
   }
 
-  const now = new Date().setHours(0, 0, 0, 0);
-  const checkIn = new Date(checkInDate);
-  const checkOut = new Date(checkOutDate);
+  // ✅ FIX: Fetch hotel policy & build required times
+  const hotelPolicy = await HotelPolicyModel.findOne({ hotelId });
 
-  if (checkIn <= now)
-    throw new ApiError(statusCode.BAD_REQUEST, "Check-in cannot be in past");
-  if (checkOut <= checkIn)
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Check-out must be after check-in"
-    );
+  const checkInTimeStr = hotelPolicy?.checkInTime || "12:00";
+  const checkOutTimeStr = hotelPolicy?.checkOutTime || "11:00";
 
-  const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
-  if (nights <= 0)
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Stay must be at least 1 night."
-    );
-  if (nights > 30)
-    throw new ApiError(statusCode.BAD_REQUEST, "Stay cannot exceed 30 nights.");
+  const checkInTime = new Date(`${checkInDate}T${checkInTimeStr}:00`);
+  const checkOutTime = new Date(`${checkOutDate}T${checkOutTimeStr}:00`);
 
-  const maxAdults = noOfRoom * 2;
-  const maxKids = noOfRoom * 2;
-  const maxTotal = noOfRoom * 4;
-  const totalGuests = noOfAdults + noOfKids;
+  // ---------------- Coupon Logic (NO commission logic) ----------------
+  let finalAmount = totalAmount;
+  let appliedCoupon = null;
+  let couponMessage = "Booking confirmed.";
 
-  if (noOfAdults > maxAdults) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `Maximum ${maxAdults} adults allowed for ${noOfRoom} room(s).`
-    );
-  }
-  if (noOfKids > maxKids) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `Maximum ${maxKids} children allowed for ${noOfRoom} room(s).`
-    );
-  }
-  if (totalGuests > maxTotal) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `Maximum ${maxTotal} total guests allowed for ${noOfRoom} room(s).`
-    );
-  }
-
-  const roomType = await Room.findById(roomTypeId).select("roomPrice");
-  if (!roomType || !roomType.roomPrice || roomType.roomPrice <= 0) {
-    throw new ApiError(statusCode.NOT_FOUND, "Invalid room type or price.");
-  }
-
-  // Find available rooms
-  const allHotelRooms = await individualRoom.find({
-    hotelId,
-    status: "available",
-    isAvailable: true,
-    roomTypeId,
-  });
-
-  // Get overlapping bookings
-  const overlappingBookings = await HotelBooking.find({
-    hotelId,
-    checkInDate: { $lt: formattedCheckOut },
-    checkOutDate: { $gt: formattedCheckIn },
-    status: { $in: ["Booked"] },
-    assignedRooms: { $exists: true, $ne: [] },
-  });
-
-  // Collect booked rooms
-  const bookedRoomIds = new Set();
-  overlappingBookings.forEach((booking) => {
-    booking.assignedRooms.forEach((roomId) => {
-      bookedRoomIds.add(roomId.toString());
+  if (couponCode) {
+    const coupon = await CouponModel.findOne({
+      couponCode,
+      status: "Active",
+      serviceType: { $in: ["Hotel", "All Services"] },
     });
-  });
 
-  const trulyAvailableRooms = allHotelRooms.filter(
-    (room) => !bookedRoomIds.has(room._id.toString())
-  );
+    if (
+      coupon &&
+      coupon.expiryDate >= new Date() &&
+      totalAmount >= coupon.minOrderAmount &&
+      !coupon.usageHistory.some(
+        (u) => u.userId.toString() === bookedBy.toString()
+      )
+    ) {
+      if (coupon.discountType === "Percentage") {
+        finalAmount =
+          totalAmount - (totalAmount * coupon.discountPercentage) / 100;
+      } else if (coupon.discountType === "Fixed Amount") {
+        finalAmount = totalAmount - coupon.discountAmount;
+      }
 
-  if (trulyAvailableRooms.length < noOfRoom) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `Only ${trulyAvailableRooms.length} rooms are available during your selected time. Requested: ${noOfRoom}`
-    );
+      if (finalAmount < 0) finalAmount = 0;
+      appliedCoupon = coupon;
+      couponMessage = `Coupon ${coupon.couponCode} applied successfully.`;
+    }
   }
-
-  const room = await Room.findById(roomTypeId);
-  if (!room) throw new ApiError(statusCode.NOT_FOUND, "Invalid room type");
-
-  // Calculate total amount
-  const totalAmount = room.roomPrice * noOfRoom * nights;
 
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    let finalAmount = totalAmount;
-    let appliedCoupon = null;
-    let couponMessage = null;
-
-    // Coupon logic
-    if (couponCode) {
-      const currentDate = new Date();
-      const coupon = await CouponModel.findOne({
-        couponCode,
-        status: "Active",
-        serviceType: { $in: ["Hotel", "All Services"] },
-      });
-
-      if (!coupon) {
-        couponMessage = "Coupon code is invalid.";
-      } else if (coupon.expiryDate < currentDate) {
-        couponMessage = "Coupon code has expired.";
-      } else if (
-        coupon.usageHistory.some(
-          (u) => u.userId.toString() === bookedBy.toString()
-        )
-      ) {
-        couponMessage = "You have already used this coupon.";
-      } else if (totalAmount < coupon.minOrderAmount) {
-        couponMessage = `Coupon valid only on orders above ₹${coupon.minOrderAmount}.`;
-      } else {
-        if (coupon.discountType === "Percentage") {
-          finalAmount =
-            totalAmount - (totalAmount * coupon.discountPercentage) / 100;
-        } else if (coupon.discountType === "Fixed Amount") {
-          finalAmount = totalAmount - coupon.discountAmount;
-        }
-        if (finalAmount < 0) finalAmount = 0;
-
-        appliedCoupon = coupon;
-        couponMessage = `Booking confirmed. Coupon ${coupon.couponCode} applied successfully.`;
-      }
-    } else {
-      couponMessage = "Booking confirmed. No coupon applied.";
-    }
-
-    // Price breakup
-    const priceBreakup = {
-      noOfRooms: noOfRoom,
-      nights,
-      basePricePerRoom: roomType.roomPrice,
-      totalAmount,
-      discount: appliedCoupon ? totalAmount - finalAmount : 0,
-      finalAmount,
-    };
-
-    // Step 1: Check wallet balance
     const userWallet = await WalletModel.findOne({ userId: bookedBy }).session(
       session
     );
 
     if (!userWallet || userWallet.balance < finalAmount) {
-      // ✅ NEW MODEL: store a balanced FAILED ledger entry (no wallet changes)
-      await TransactionModel.create(
-        [
-          {
-            transactionId: await TransactionModel.generateTransactionId(),
-            transactionType: "Hotel Booking",
-            momoRefId: null,
-            bookingId: null,
-            status: PaymentStatusEnum.FAILED,
-            currency: process.env.MOMO_CURRENCY,
-            totalAmount: finalAmount,
-            description: "Hotel booking failed - insufficient balance",
-            entries: [
-              {
-                entityType: "USER",
-                entityId: bookedBy,
-                name: userExists.fullName || null,
-                type: "DEBIT",
-                amount: finalAmount,
-              },
-              {
-                // System/Platform holding entry for failed attempts
-                entityType: "ADMIN",
-                entityId: "SYSTEM",
-                name: "SYSTEM",
-                type: "CREDIT",
-                amount: finalAmount,
-              },
-            ],
-            meta: {
-              reason: "INSUFFICIENT_BALANCE",
-              attemptedFor: { hotelId, roomTypeId },
-            },
-          },
-        ],
-        { session }
-      );
-
       throw new ApiError(statusCode.BAD_REQUEST, "Insufficient wallet balance");
-    }
-
-    let paymentStatus = "PENDING";
-    if (userWallet.balance >= finalAmount) {
-      paymentStatus = "PAID";
     }
 
     const bookingId = await generateCustomId(
@@ -314,137 +168,90 @@ const createBooking = catchAsyncError(async (req, res) => {
       "HB"
     );
 
-    // Step 2: Create booking
+    // ✅ FIX: pass checkInTime & checkOutTime
     const booking = await HotelBooking.create(
       [
         {
           bookingId,
           bookedBy,
-          roomTypeId,
           hotelId,
+          roomTypeId,
+
           checkInDate: formattedCheckIn,
           checkOutDate: formattedCheckOut,
-          assignedRooms: [],
-          checkInTime: checkInDateTime,
-          checkOutTime: checkOutDateTime,
-          totalAmount,
-          finalAmount,
-          couponUsed: appliedCoupon ? appliedCoupon._id : null,
-          paymentStatus,
+          checkInTime,
+          checkOutTime,
+
           noOfAdults,
           noOfKids,
           noOfRoom,
+
+          baseAmount,
+          commissionAmount: commission,
+          totalAmount,
+          finalAmount,
+
+          couponUsed: appliedCoupon ? appliedCoupon._id : null,
+          paymentStatus: "PAID",
           user,
         },
       ],
       { session }
     );
 
-    const newBooking = booking[0];
-
-    // Step 3: Deduct from user wallet
+    // Wallet deduction
     userWallet.balance -= finalAmount;
     await userWallet.save({ session });
 
-    // Step 4: Commission split
-    const commission = await Commission.findOne({
-      serviceType: "hotel",
-      status: "active",
-    }).session(session);
+    // Split
+    const operatorShare = Number((finalAmount - commission).toFixed(2));
+    const platformFee = commission;
 
-    // Use consistent rounding to avoid ledger validation failure
-    const round2 = (n) => Number(Number(n).toFixed(2));
-
-    let platformFee = 0;
-    if (commission) {
-      if (
-        commission.commissionType === "percentage" &&
-        commission.commissionPercentage
-      ) {
-        platformFee = round2(
-          (finalAmount * commission.commissionPercentage) / 100
-        );
-      } else if (
-        commission.commissionType === "fixed" &&
-        commission.commissionRate
-      ) {
-        platformFee = round2(commission.commissionRate);
-      }
-    }
-    let operatorShare = round2(finalAmount - platformFee);
-
-    // Fix any tiny rounding diff so DEBIT == CREDIT exactly
-    const diff = round2(finalAmount - round2(operatorShare + platformFee));
-    if (diff !== 0) operatorShare = round2(operatorShare + diff);
-
-    const hotelManagerId = hotelExists.ownerId.toString();
-
-    // credit operator (hotel manager wallet)
     await WalletModel.findOneAndUpdate(
-      { userId: hotelManagerId },
+      { userId: hotelExists.ownerId },
       { $inc: { balance: operatorShare } },
-      { session, new: true, upsert: true, setDefaultsOnInsert: true }
+      { session, upsert: true }
     );
 
     const superAdmin = await AdminModel.findOne({ role: "SuperAdmin" });
-    const adminId = superAdmin?._id || "ADM001";
 
-    // credit platform/admin wallet
     await WalletModel.findOneAndUpdate(
-      { userId: adminId },
+      { userId: superAdmin._id },
       { $inc: { balance: platformFee } },
-      { session, new: true, upsert: true, setDefaultsOnInsert: true }
+      { session, upsert: true }
     );
 
-    // Step 5: ✅ NEW MODEL: Record ONE balanced ledger transaction (instead of 3 docs)
+    // Ledger entry
     await TransactionModel.create(
       [
         {
           transactionId: await TransactionModel.generateTransactionId(),
           transactionType: "Hotel Booking",
-          momoRefId: null,
-          bookingId: newBooking.bookingId,
+          bookingId: booking[0].bookingId,
           status: PaymentStatusEnum.SUCCESS,
-          currency: process.env.MOMO_CURRENCY,
           totalAmount: finalAmount,
-          description: `Hotel booking ${hotelExists.hotelName}`,
           platformFee,
           operatorShare,
           entries: [
             {
               entityType: "USER",
               entityId: bookedBy,
-              name: userExists.fullName || null,
               type: "DEBIT",
               amount: finalAmount,
             },
             {
               entityType: "HOTEL",
-              entityId: hotelManagerId, // wallet owner id
-              name: hotelExists.hotelName || null,
+              entityId: hotelExists.ownerId,
               type: "CREDIT",
               amount: operatorShare,
             },
             {
               entityType: "ADMIN",
-              entityId: adminId,
-              name: superAdmin?.fullName || "SuperAdmin",
+              entityId: superAdmin._id,
               type: "CREDIT",
               amount: platformFee,
             },
           ],
-          meta: {
-            from: {
-              name: userExists.fullName,
-              id: userExists.userId || bookedBy,
-            },
-            to: { name: hotelExists.hotelName, id: hotelId },
-            booking: {
-              bookingId: newBooking.bookingId,
-              checkInDate: formattedCheckIn,
-              checkOutDate: formattedCheckOut,
-            },
-          },
         },
       ],
       { session }
@@ -459,17 +266,9 @@ const createBooking = catchAsyncError(async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
-    return res.status(statusCode.CREATED).json(
-      new ApiResponse(
-        statusCode.CREATED,
-        {
-          ...newBooking.toObject(),
-          priceBreakup,
-          couponMessage,
-        },
-        couponMessage
-      )
-    );
+    return res
+      .status(statusCode.CREATED)
+      .json(new ApiResponse(statusCode.CREATED, booking[0], couponMessage));
   } catch (error) {
     await session.abortTransaction();
     session.endSession();
@@ -674,20 +473,17 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
     couponCode,
   } = req.body;
 
-  // ✅ Convert to numbers
   noOfRoom = Number(noOfRoom);
   noOfAdults = Number(noOfAdults);
   noOfKids = Number(noOfKids);
 
-  // ✅ Required field validation
   if (
     !hotelId ||
     !roomTypeId ||
     !checkInDate ||
     !checkOutDate ||
     !noOfRoom ||
-    !noOfAdults ||
-    !bookedBy
+    !noOfAdults
   ) {
     throw new ApiError(statusCode.BAD_REQUEST, "Missing required fields.");
   }
@@ -699,84 +495,93 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
     );
   }
 
-  // ✅ Date parsing
-  const now = new Date();
   const checkIn = new Date(checkInDate);
   const checkOut = new Date(checkOutDate);
+  const today = new Date().setHours(0, 0, 0, 0);
 
   if (isNaN(checkIn.getTime()) || isNaN(checkOut.getTime())) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Invalid date format. Please use YYYY-MM-DD."
-    );
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid date format.");
   }
 
-  // ✅ Check-in cannot be in the past
-  if (checkIn < now.setHours(0, 0, 0, 0)) {
+  if (checkIn < today) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
       "Check-in cannot be in the past."
     );
   }
 
-  // ✅ Checkout must be after check-in
   if (checkOut <= checkIn) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Check-out must be after check-in date."
+      "Check-out must be after check-in."
     );
   }
 
   const nights = Math.ceil((checkOut - checkIn) / (1000 * 60 * 60 * 24));
-  if (nights <= 0)
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Stay must be at least 1 night."
-    );
-  if (nights > 30)
-    throw new ApiError(statusCode.BAD_REQUEST, "Stay cannot exceed 30 nights.");
+  if (nights <= 0 || nights > 30) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid number of nights.");
+  }
 
-  // ✅ Guest validation
   const maxAdults = noOfRoom * 2;
   const maxKids = noOfRoom * 2;
   const maxTotal = noOfRoom * 4;
-  const totalGuests = noOfAdults + noOfKids;
 
-  if (noOfAdults > maxAdults)
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `Maximum ${maxAdults} adults allowed for ${noOfRoom} room(s).`
-    );
-  if (noOfKids > maxKids)
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `Maximum ${maxKids} children allowed for ${noOfRoom} room(s).`
-    );
-  if (totalGuests > maxTotal)
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `Maximum ${maxTotal} total guests allowed for ${noOfRoom} room(s).`
-    );
-
-  // ✅ Hotel & Room validation
-  const hotelExists = await Hotel.findById(hotelId);
-  if (!hotelExists)
-    throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
-
-  const roomType = await Room.findById(roomTypeId).select("roomPrice");
-  if (!roomType || !roomType.roomPrice || roomType.roomPrice <= 0) {
-    throw new ApiError(statusCode.NOT_FOUND, "Invalid room type or price.");
+  if (noOfAdults > maxAdults || noOfKids > maxKids) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Guest limit exceeded.");
   }
 
-  // ✅ Base total calculation
-  const totalAmount = roomType.roomPrice * noOfRoom * nights;
+  if (noOfAdults + noOfKids > maxTotal) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Guest limit exceeded.");
+  }
+
+  const hotelExists = await Hotel.findById(hotelId);
+  if (!hotelExists) {
+    throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
+  }
+
+  const roomType = await Room.findById(roomTypeId).select("roomPrice");
+  if (!roomType || roomType.roomPrice <= 0) {
+    throw new ApiError(statusCode.NOT_FOUND, "Invalid room type.");
+  }
+
+  // ---------------- PRICING ----------------
+
+  const baseAmount = roomType.roomPrice * noOfRoom * nights;
+
+  // Commission
+  const commissionConfig = await Commission.findOne({
+    serviceType: "hotel",
+    status: "active",
+  });
+
+  let commissionAmount = 0;
+
+  if (commissionConfig) {
+    if (
+      commissionConfig.commissionType === "percentage" &&
+      commissionConfig.commissionPercentage
+    ) {
+      commissionAmount =
+        (baseAmount * commissionConfig.commissionPercentage) / 100;
+    } else if (
+      commissionConfig.commissionType === "fixed" &&
+      commissionConfig.commissionRate
+    ) {
+      commissionAmount = commissionConfig.commissionRate;
+    }
+  }
+
+  commissionAmount = Number(commissionAmount.toFixed(2));
+
+  const totalAmount = Number((baseAmount + commissionAmount).toFixed(2));
+
+  // ---------------- COUPON ----------------
+
   let finalAmount = totalAmount;
   let appliedCoupon = null;
   let couponMessage = "Price calculated successfully.";
 
-  // ✅ Optional coupon logic
   if (couponCode) {
-    const currentDate = new Date();
     const coupon = await CouponModel.findOne({
       couponCode,
       status: "Active",
@@ -785,7 +590,7 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
 
     if (!coupon) {
       couponMessage = "Coupon code is invalid.";
-    } else if (coupon.expiryDate < currentDate) {
+    } else if (coupon.expiryDate < new Date()) {
       couponMessage = "Coupon code has expired.";
     } else if (
       coupon.usageHistory.some(
@@ -794,46 +599,41 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
     ) {
       couponMessage = "You have already used this coupon.";
     } else if (totalAmount < coupon.minOrderAmount) {
-      couponMessage = `Coupon valid only on orders above ₹${coupon.minOrderAmount}.`;
+      couponMessage = `Coupon valid only above ₹${coupon.minOrderAmount}.`;
     } else {
-      // ✅ Apply discount
       if (coupon.discountType === "Percentage") {
         finalAmount =
           totalAmount - (totalAmount * coupon.discountPercentage) / 100;
       } else if (coupon.discountType === "Fixed Amount") {
         finalAmount = totalAmount - coupon.discountAmount;
       }
-      if (finalAmount < 0) finalAmount = 0;
 
+      if (finalAmount < 0) finalAmount = 0;
       appliedCoupon = coupon;
       couponMessage = `Coupon ${coupon.couponCode} applied successfully.`;
     }
-  } else {
-    couponMessage = "Price calculated successfully (no coupon applied).";
   }
 
-  // ✅ Price breakup
-  const priceBreakup = {
-    noOfRooms: noOfRoom,
-    nights,
-    basePricePerRoom: roomType.roomPrice,
-    totalAmount,
-    discount: appliedCoupon ? totalAmount - finalAmount : 0,
-    finalAmount,
-  };
+  // ---------------- RESPONSE ----------------
 
-  // ✅ Response
   return res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
       {
+        baseAmount,
+        commission: commissionAmount,
         totalAmount,
+        finalAmount,
         nights,
         noOfRooms: noOfRoom,
         perRoomPrice: roomType.roomPrice,
-        adults: noOfAdults,
-        children: noOfKids,
-        priceBreakup,
+        priceBreakup: {
+          baseAmount,
+          commission: commissionAmount,
+          totalAmount,
+          discount: appliedCoupon ? totalAmount - finalAmount : 0,
+          finalAmount,
+        },
         appliedCoupon: appliedCoupon ? appliedCoupon.couponCode : null,
         couponMessage,
       },

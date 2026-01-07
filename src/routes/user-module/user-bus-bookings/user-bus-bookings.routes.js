@@ -11,7 +11,7 @@ const {
   payBusBookingPayment,
   cancelBusBooking,
   UpcomingBusBookings,
-  OldBusBookings
+  OldBusBookings,
 } = require("../../../controllers/user-module/user-bus-bookings/user-bus-bookings.controllers");
 
 const userBusBookingsRoutes = express.Router();
@@ -21,7 +21,7 @@ userBusBookingsRoutes
 
 userBusBookingsRoutes
   .route("/oldbookingbus")
-  .get(isUserAuthenticated, authorizeRole(["user"]), OldBusBookings)
+  .get(isUserAuthenticated, authorizeRole(["user"]), OldBusBookings);
 
 userBusBookingsRoutes
   .route("/my-bookings")
@@ -32,8 +32,8 @@ userBusBookingsRoutes
   .post(isUserAuthenticated, authorizeRole(["user"]), createBusBooking);
 
 userBusBookingsRoutes
-  .route("/priceDeatails")
-  .post(isUserAuthenticated, authorizeRole(["user"]), calculateBusBooking); 
+  .route("/priceDetails")
+  .post(isUserAuthenticated, authorizeRole(["user"]), calculateBusBooking);
 
 userBusBookingsRoutes
   .route("/pay/:bookingId")
@@ -46,7 +46,5 @@ userBusBookingsRoutes
 userBusBookingsRoutes
   .route("/:bookingId")
   .get(isUserAuthenticated, authorizeRole(["user"]), getBusBookingDetails);
-
-
 
 module.exports = userBusBookingsRoutes;
