@@ -198,8 +198,8 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
       filter.$or = [
         { bookingId: regex },
         { email: regex }, // in case models store it at root (hotel/bus)
-        { phoneNumber: regex }, // in case models store it at root (hotel/bus)  
-       {userId: regex},
+        { phoneNumber: regex }, // in case models store it at root (hotel/bus)
+        { userId: regex },
 
         // ride.userId (string) or any model exposing userId at root
       ];
@@ -242,8 +242,8 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
 
   const busHotelUsers = busHotelObjectIds.length
     ? await UserModel.find({ _id: { $in: busHotelObjectIds } })
-      .select("_id userId fullName email phoneNumber")
-      .lean()
+        .select("_id userId fullName email phoneNumber")
+        .lean()
     : [];
   const userByObjectId = new Map(busHotelUsers.map((u) => [String(u._id), u]));
 
@@ -267,13 +267,13 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
   const [usersByRideObjectId, usersByRideAppUserId] = await Promise.all([
     rideObjectIds.length
       ? UserModel.find({ _id: { $in: rideObjectIds } })
-        .select("_id userId fullName email phoneNumber")
-        .lean()
+          .select("_id userId fullName email phoneNumber")
+          .lean()
       : Promise.resolve([]),
     rideAppUserIds.length
       ? UserModel.find({ userId: { $in: rideAppUserIds } })
-        .select("_id userId fullName email phoneNumber")
-        .lean()
+          .select("_id userId fullName email phoneNumber")
+          .lean()
       : Promise.resolve([]),
   ]);
 
@@ -387,6 +387,7 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
       "filter and userId are required"
     );
   }
+
   if (!mongoose.Types.ObjectId.isValid(userId)) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid userId");
   }
@@ -396,16 +397,13 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.NOT_FOUND, "User not found");
   }
 
-  // build a case-insensitive prefix regex if search present
-  // build a case-insensitive prefix regex if search present
   const buildSearchQuery = (base = {}) => {
     if (search && search.trim() !== "") {
-      const regex = search;
+      const regex = new RegExp(search, "i");
       base.$or = [{ bookingId: regex }, { transactionId: regex }];
     }
     return base;
   };
-
 
   const paginate = async (Model, query, message) => {
     const [items, total] = await Promise.all([
@@ -416,6 +414,7 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
         .lean(),
       Model.countDocuments(query),
     ]);
+
     const totalPages = Math.max(Math.ceil(total / perPage), 1);
 
     return res.status(statusCode.OK).json(
@@ -430,7 +429,6 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
       )
     );
   };
-
 
   switch (filter) {
     case "bus":
@@ -457,12 +455,18 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
     case "transactions":
       return paginate(
         transactionModel,
-        buildSearchQuery({ userId }),
+        buildSearchQuery({
+          entries: {
+            $elemMatch: {
+              entityType: "USER",
+              entityId: userId,
+            },
+          },
+        }),
         "Transactions fetched successfully"
       );
 
     case "count": {
-      // reuse the same search-aware queries
       const busQuery = buildSearchQuery({ bookedBy: userId });
       const hotelQuery = buildSearchQuery({ bookedBy: userId });
       const rideQuery = buildSearchQuery({ userId });
@@ -488,7 +492,6 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
     }
 
     case "all": {
-      // each collection uses same search prefix logic
       const busQuery = buildSearchQuery({ bookedBy: userId });
       const hotelQuery = buildSearchQuery({ bookedBy: userId });
       const rideQuery = buildSearchQuery({ userId });

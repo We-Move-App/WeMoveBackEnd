@@ -13,6 +13,7 @@ const {
   resetPassword2,
   getAvailableModules,
   deleteProfile,
+  changeLanguage,
 } = require("../../../controllers/user-module/users/users.controllers");
 const {
   addMemberUnderUser,
@@ -41,6 +42,7 @@ userRoutes.route("/reset-password-without-auth").put(resetPassword2);
 userRoutes.route("/beneficiary").post(getBeneficiary);
 userRoutes.route("/available-modules").get(getAvailableModules);
 userRoutes.route("/delete-profile").delete(deleteProfile);
+userRoutes.route("/change-language").post(changeLanguage);
 
 userRoutes
   .route("/update-avatar")

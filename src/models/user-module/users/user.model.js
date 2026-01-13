@@ -7,6 +7,7 @@ const {
   ImageSchema,
 } = require("../../../utils/validation/forSchema");
 const { hash_rounds } = require("../../../config/config");
+const { LnEnum } = require("../../../utils/constants/ENUM");
 const { Schema } = mongoose;
 
 // Define the user schema
@@ -132,6 +133,11 @@ const userSchema = new mongoose.Schema(
     },
     socketId: {
       type: String,
+    },
+    ln: {
+      type: String,
+      enum: Object.values(LnEnum),
+      default: LnEnum.EN,
     },
   },
   {

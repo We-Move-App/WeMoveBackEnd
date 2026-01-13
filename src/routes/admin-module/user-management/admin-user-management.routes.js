@@ -14,7 +14,6 @@ const {
 const { cacheMiddleware } = require("../../../middlewares/redisMiddleware");
 const adminUserManagementRoutes = express.Router();
 
-
 adminUserManagementRoutes
   .route("/users")
   .get(
@@ -50,14 +49,12 @@ adminUserManagementRoutes
     getAllUsersBookings
   );
 
-adminUserManagementRoutes
-  .route("/bookings/:userId")
-  .get(
-    isAdminAuthenticated,
-    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
-    cacheMiddleware(120),
-    getAllBookingsByUserId
-  );
+adminUserManagementRoutes.route("/bookings/:userId").get(
+  isAdminAuthenticated,
+  authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+  // cacheMiddleware(120),
+  getAllBookingsByUserId
+);
 
 adminUserManagementRoutes
   .route("/wallet/:userId")

@@ -18,6 +18,7 @@ const DriverLocations = require("../../../models/new-driver-module/location/driv
 const {
   DriverDocStatusEnum,
   DriverDocEnum,
+  LnEnum,
 } = require("../../../utils/constants/ENUM");
 const {
   getDriverBasicWithDocs,
@@ -750,6 +751,50 @@ const updateDriverEmail = catchAsyncError(async (req, res) => {
   );
 });
 
+const changeLanguage = catchAsyncError(async (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  // Step 1: Validate token
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token is missing or invalid"
+    );
+  }
+
+  const accessToken = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(accessToken);
+  const driverId = decoded.driverId;
+
+  if (!driverId) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Valid token is required");
+  }
+
+  const driver = await DriverBasicDetails.findOne({ driverId });
+  if (!driver) {
+    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+  }
+
+  const { ln } = req.body;
+  if (!Object.values(LnEnum).includes(ln)) {
+    throw new ApiError(statusCode.NOT_FOUND, "Invalid Language type");
+  }
+
+  driver.ln = ln;
+
+  await driver.save();
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { ln: driver.ln },
+        "Language Changed successfully"
+      )
+    );
+});
+
 module.exports = {
   addDriverBasicDetails,
   getDriverBasicDetails,
@@ -761,4 +806,5 @@ module.exports = {
   deleteDriverProfile,
   updateDriverPhoneNumber,
   updateDriverEmail,
+  changeLanguage,
 };

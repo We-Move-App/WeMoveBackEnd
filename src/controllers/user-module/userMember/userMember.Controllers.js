@@ -342,9 +342,9 @@ const getTransactions = catchAsyncError(async (req, res) => {
   const {
     page: pageQuery,
     limit: limitQuery,
-    sortBy = "date", // 'date' or 'amount'
-    order = "desc", // 'asc' or 'desc'
-    search, // 🔍 search by transactionId or amount
+    sortBy = "date",
+    order = "desc",
+    search,
   } = req.query;
 
   const userId = decoded?._id;
@@ -352,15 +352,12 @@ const getTransactions = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
   }
 
-  // Pagination
   const page = Math.max(parseInt(pageQuery) || 1, 1);
   const limit = Math.min(Math.max(parseInt(limitQuery) || 10, 1), 100);
 
-  // Find logged-in user
   const user = await UserModel.findById(userId).lean();
   if (!user) throw new ApiError(statusCode.NOT_FOUND, "User not found");
 
-  // Get target user
   const targetUserId =
     user.role === "user-member" ? user.parentUserId : user._id;
 
@@ -371,7 +368,6 @@ const getTransactions = catchAsyncError(async (req, res) => {
     );
   }
 
-  // Find parent user
   const parentUser = await UserModel.findById(targetUserId)
     .select("fullName email")
     .lean();
@@ -380,22 +376,44 @@ const getTransactions = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.NOT_FOUND, "Parent user not found");
   }
 
-  // Base transaction filter
+  if (search) {
+    const nameMatch = parentUser.fullName
+      .toLowerCase()
+      .includes(search.toLowerCase());
+
+    const isNumeric = !isNaN(search);
+
+    if (!isNumeric && !nameMatch) {
+      return res.status(statusCode.OK).json(
+        new ApiResponse(
+          statusCode.OK,
+          {
+            transactions: [],
+            pagination: {
+              total: 0,
+              page,
+              pages: 0,
+              limit,
+            },
+          },
+          "Transactions fetched successfully"
+        )
+      );
+    }
+  }
+
   const txFilter = {
     userId: targetUserId,
     description: { $regex: /^Received from /i },
   };
 
-  // 🔍 Search filter
   if (search) {
     const searchConditions = [];
 
-    // transactionId (partial, case-insensitive)
     searchConditions.push({
       transactionId: { $regex: search, $options: "i" },
     });
 
-    // amount (exact match if numeric)
     if (!isNaN(search)) {
       searchConditions.push({ amount: Number(search) });
     }
@@ -403,21 +421,17 @@ const getTransactions = catchAsyncError(async (req, res) => {
     txFilter.$or = searchConditions;
   }
 
-  // Sorting
   const sortField = sortBy === "amount" ? "amount" : "createdAt";
   const sortOrder = order === "asc" ? 1 : -1;
 
-  // Total count
   const totalCount = await Transaction.countDocuments(txFilter);
 
-  // Fetch transactions
   const transactions = await Transaction.find(txFilter)
     .sort({ [sortField]: sortOrder })
     .skip((page - 1) * limit)
     .limit(limit)
     .lean();
 
-  // Format response
   const formattedTransactions = transactions.map((tx) => ({
     transactionId: tx.transactionId?.substring(0, 8) || "N/A",
     userName: parentUser.fullName,

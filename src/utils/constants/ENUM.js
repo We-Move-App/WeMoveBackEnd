@@ -317,6 +317,11 @@ const EntryTypeEnum = {
   HOTEL: "HOTEL",
 };
 
+const LnEnum = {
+  FR: "fr",
+  EN: "en",
+};
+
 module.exports = {
   NationalityEnum,
   NotificationTypeEnum,
@@ -337,4 +342,5 @@ module.exports = {
   CommissionTypeEnum,
   CommissionStatusEnum,
   EntryTypeEnum,
+  LnEnum,
 };

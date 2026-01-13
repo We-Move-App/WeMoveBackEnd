@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const {
   DriverBasicStatus,
   GenderEnum,
+  LnEnum,
 } = require("../../../utils/constants/ENUM");
 const AdminModel = require("../../../models/admin-module/admin/admin.model");
 
@@ -45,7 +46,7 @@ const driverBasicDetailSchema = new mongoose.Schema(
     verifiedBy: {
       // createdAt: { type: Date },
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Admin"
+      ref: "Admin",
     },
     batchVerified: {
       type: Boolean,
@@ -63,6 +64,7 @@ const driverBasicDetailSchema = new mongoose.Schema(
       default: null,
       // },
     },
+    ln: { type: String, enum: Object.values(LnEnum), default: LnEnum.EN },
   },
   { timestamps: true }
 );

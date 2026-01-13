@@ -352,7 +352,10 @@ const InactiveUserModel = require("../../../models/user-module/users/inactive-us
 const {
   sendNotification,
 } = require("../../../socket/handlers/notificationHandler");
-const { NotificationTypeEnum } = require("../../../utils/constants/ENUM");
+const {
+  NotificationTypeEnum,
+  LnEnum,
+} = require("../../../utils/constants/ENUM");
 
 const getBeneficiary = catchAsyncError(async (req, res, next) => {
   const { userId } = req.body;
@@ -437,6 +440,52 @@ const deleteProfile = catchAsyncError(async (req, res, next) => {
     );
 });
 
+const changeLanguage = catchAsyncError(async (req, res, next) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Access token missing or invalid"
+    );
+  }
+
+  const token = authHeader.split(" ")[1];
+  const decoded = decodeAccessToken(token);
+  const userId = decoded?._id;
+
+  if (!userId) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+  }
+
+  const user = await UserModel.findById(userId);
+  if (!user) {
+    throw new ApiError(statusCode.NOT_FOUND, "User not found");
+  }
+
+  const { ln } = req.body;
+  if (!Object.values(LnEnum).includes(ln)) {
+    return res
+      .status(statusCode.BAD_REQUEST)
+      .json(
+        new ApiResponse(statusCode.BAD_REQUEST, null, "Invalid language type")
+      );
+  }
+
+  user.ln = ln;
+
+  await user.save();
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { ln: user.ln },
+        "Language Changed successfully"
+      )
+    );
+});
+
 module.exports = {
   getProfile,
   getAvatar,
@@ -450,4 +499,5 @@ module.exports = {
   getBeneficiary,
   getAvailableModules,
   deleteProfile,
+  changeLanguage,
 };

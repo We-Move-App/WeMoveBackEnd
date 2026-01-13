@@ -10,6 +10,7 @@ const {
   deleteDriverProfile,
   updateDriverPhoneNumber,
   updateDriverEmail,
+  changeLanguage,
 } = require("../../../controllers/new-driver-module/basic-details/basic-details.controller");
 const {
   isNDriverAuthenticated,
@@ -53,6 +54,11 @@ driverBasicDetailsRouter.put(
   "/update-email",
   isNDriverAuthenticated,
   updateDriverEmail
+);
+driverBasicDetailsRouter.post(
+  "/change-language",
+  isNDriverAuthenticated,
+  changeLanguage
 );
 
 module.exports = driverBasicDetailsRouter;
