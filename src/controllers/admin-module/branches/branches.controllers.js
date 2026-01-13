@@ -14,69 +14,40 @@ const ApiResponse = require("../../../utils/response/ApiResponse");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const { logActivity } = require("../../../utils/ActivityLog/ActivityLog");
 
-const addBranch = catchAsyncError(async (req, res, next) => {
-  const { name } = req.body;
+const addBranch = catchAsyncError(async (req, res) => {
+  let { name, location } = req.body;
 
-  let   location = name ;
-
-  // ✅ Role check
-  if (req.user.role !== "SuperAdmin" && req.user.role !== "Admin") {
+  if (!["SuperAdmin", "Admin"].includes(req.user.role)) {
     throw new ApiError(statusCode.FORBIDDEN, "Not authorized to create branch");
   }
 
-  // ✅ Validate required fields
-  const reqField = ["name"];
-  validateRequestBody(reqField, req.body);
+  // Validate required fields
+  validateRequestBody(["name", "location"], req.body);
 
   name = name.trim();
   location = location.trim();
 
-  // ✅ Check if branch already exists in this location
+  // Check duplicate location
   const existingBranch = await BranchModel.findOne({ location });
   if (existingBranch) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      `A branch already exists in ${location}`
+      `A branch already exists at location: ${location}`
     );
   }
 
-  let branch;
-  try {
-    // ✅ Create new branch
-    branch = await BranchModel.create({
-      name,
-      location,
-    });
-  } catch (error) {
-    // ✅ Handle duplicate key error at DB level
-    if (error.code === 11000 && error.keyPattern?.location) {
-      throw new ApiError(
-        statusCode.BAD_REQUEST,
-        `A branch already exists in ${location}`
-      );
-    }
-    throw error;
-  }
+  const branch = await BranchModel.create({ name, location });
 
-  // ✅ Log activity
-  const activityLog = await logActivity({
-    userId: req.user._id,
-    activity: `Created a new branch: ${name} at ${location}`,
-    performedBy: req.user._id,
-    type: "create",
-  });
-
-  // ✅ Response
-  return res
-    .status(statusCode.CREATED)
-    .json(
-      new ApiResponse(
-        statusCode.CREATED,
-        { branch, UserActivity: activityLog },
-        "Branch created successfully"
-      )
-    );
+  return res.status(statusCode.CREATED).json(
+    new ApiResponse(
+      statusCode.CREATED,
+      branch,
+      "Branch created successfully"
+    )
+  );
 });
+
+
 
 const getAllBranches = catchAsyncError(async (req, res, next) => {
   const page = parseInt(req.query.page) || 1;
