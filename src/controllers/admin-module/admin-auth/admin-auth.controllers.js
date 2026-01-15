@@ -532,14 +532,14 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
   // Search
   const searchQuery = search
     ? {
-        $or: [
-          { userName: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
-          { phoneNumber: { $regex: search, $options: "i" } },
-          { role: { $regex: search, $options: "i" } },
-          { "branchData.name": { $regex: search, $options: "i" } },
-        ],
-      }
+      $or: [
+        { userName: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { phoneNumber: { $regex: search, $options: "i" } },
+        { role: { $regex: search, $options: "i" } },
+        { "branchData.name": { $regex: search, $options: "i" } },
+      ],
+    }
     : {};
 
   // Aggregation
@@ -601,11 +601,11 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
       createdAt: user.createdAt,
       branch: user.branchData
         ? {
-            branchId: user.branchData._id,
-            name: user.branchData.name,
-            location: user.branchData.location,
-            createdAt: user.branchData.createdAt,
-          }
+          branchId: user.branchData._id,
+          name: user.branchData.name,
+          location: user.branchData.location,
+          createdAt: user.branchData.createdAt,
+        }
         : null,
     };
   });
@@ -719,28 +719,28 @@ const getAdminById = catchAsyncError(async (req, res, next) => {
     updatedAt: admin.updatedAt,
     branch: admin.branch
       ? {
-          branchId: admin.branch?._id,
-          name: admin.branch.name || null,
-          location: admin.branch.location || null,
-        }
+        branchId: admin.branch?._id,
+        name: admin.branch.name || null,
+        location: admin.branch.location || null,
+      }
       : {
-          branchId: null,
-          name: null,
-          location: null,
-        },
+        branchId: null,
+        name: null,
+        location: null,
+      },
     reportingManager: admin.reportingManager
       ? {
-          id: admin.reportingManager._id,
-          userName: admin.reportingManager.userName,
-          phoneNumber: admin.reportingManager.phoneNumber,
-          email: admin.reportingManager.email,
-        }
+        id: admin.reportingManager._id,
+        userName: admin.reportingManager.userName,
+        phoneNumber: admin.reportingManager.phoneNumber,
+        email: admin.reportingManager.email,
+      }
       : null,
     UserActivity: lastActivity
       ? {
-          activity: lastActivity.activity,
-          time: lastActivity.createdAt,
-        }
+        activity: lastActivity.activity,
+        time: lastActivity.createdAt,
+      }
       : null,
   };
 
@@ -1465,11 +1465,11 @@ const getUserActivities = async (req, res) => {
       time: formatActivityTime(act.createdAt),
       performedBy: act.performedBy
         ? {
-            _id: act.performedBy._id,
-            name: act.performedBy.name,
-            email: act.performedBy.email,
-            role: act.performedBy.role,
-          }
+          _id: act.performedBy._id,
+          name: act.performedBy.name,
+          email: act.performedBy.email,
+          role: act.performedBy.role,
+        }
         : null,
     }));
 
@@ -1501,207 +1501,6 @@ const getUserActivities = async (req, res) => {
   }
 };
 
-// const getTransactionHistory = async (req, res) => {
-//   try {
-//     const {
-//       page = 1,
-//       limit = 10,
-//       sortBy = "createdAt",
-//       order = "desc",
-//     } = req.query;
-
-//     // Pagination + Sorting
-//     const skip = (page - 1) * limit;
-//     const sortOrder = order === "desc" ? -1 : 1;
-
-//     // === 1. Transactions with lookups ===
-//     const transactions = await Transaction.aggregate([
-//       { $sort: { [sortBy]: sortOrder } },
-//       { $skip: skip },
-//       { $limit: Number(limit) },
-
-//       // Lookup Booking
-//       {
-//         $lookup: {
-//           from: "bookings",
-//           localField: "bookingId",
-//           foreignField: "_id",
-//           as: "booking",
-//         },
-//       },
-//       { $unwind: { path: "$booking", preserveNullAndEmptyArrays: true } },
-
-//       // Lookup User from Booking
-//       {
-//         $lookup: {
-//           from: "users",
-//           localField: "booking.userId",
-//           foreignField: "_id",
-//           as: "bookingUser",
-//         },
-//       },
-//       { $unwind: { path: "$bookingUser", preserveNullAndEmptyArrays: true } },
-
-//       // Lookup direct userId
-//       {
-//         $lookup: {
-//           from: "users",
-//           localField: "userId",
-//           foreignField: "_id",
-//           as: "directUser",
-//         },
-//       },
-//       { $unwind: { path: "$directUser", preserveNullAndEmptyArrays: true } },
-
-//       // Lookup busOperator
-//       {
-//         $lookup: {
-//           from: "busoperators",
-//           localField: "busOperatorId",
-//           foreignField: "_id",
-//           as: "busOperator",
-//         },
-//       },
-//       { $unwind: { path: "$busOperator", preserveNullAndEmptyArrays: true } },
-
-//       // Lookup hotelManager
-//       {
-//         $lookup: {
-//           from: "hotelmanagers",
-//           localField: "hotelManagerId",
-//           foreignField: "_id",
-//           as: "hotelManager",
-//         },
-//       },
-//       { $unwind: { path: "$hotelManager", preserveNullAndEmptyArrays: true } },
-
-//       // Lookup admin
-//       {
-//         $lookup: {
-//           from: "admins",
-//           localField: "adminId",
-//           foreignField: "_id",
-//           as: "admin",
-//         },
-//       },
-//       { $unwind: { path: "$admin", preserveNullAndEmptyArrays: true } },
-
-//       // Lookup driver
-//       {
-//         $lookup: {
-//           from: "drivers",
-//           localField: "driverId",
-//           foreignField: "_id",
-//           as: "driver",
-//         },
-//       },
-//       { $unwind: { path: "$driver", preserveNullAndEmptyArrays: true } },
-
-//       // === Final projection ===
-//       {
-//         $project: {
-//           transactionId: 1,
-//           type: 1,
-//           amount: 1,
-//           createdAt: 1,
-//           status: 1,
-//           description: 1,
-
-//           // Priority for user name:
-//           user: {
-//             $ifNull: [
-//               "$directUser.fullName",
-//               {
-//                 $ifNull: [
-//                   "$busOperator.name",
-//                   {
-//                     $ifNull: [
-//                       "$hotelManager.fullName",
-//                       {
-//                         $ifNull: [
-//                           "$hotelManager.name",
-//                           {
-//                             $ifNull: [
-//                               "$admin.fullName",
-//                               {
-//                                 $ifNull: [
-//                                   "$driver.fullName",
-//                                   "$bookingUser.fullName",
-//                                 ],
-//                               },
-//                             ],
-//                           },
-//                         ],
-//                       },
-//                     ],
-//                   },
-//                 ],
-//               },
-//             ],
-//           },
-//         },
-//       },
-//     ]);
-
-//     // === 2. Wallet Stats ===
-//     const [totalTransactions, totalCredits, totalDebits, pendingWithdrawals] =
-//       await Promise.all([
-//         Transaction.countDocuments(),
-//         Transaction.aggregate([
-//           { $match: { type: "CREDIT", status: "SUCCESS" } },
-//           { $group: { _id: null, total: { $sum: "$amount" } } },
-//         ]),
-//         Transaction.aggregate([
-//           { $match: { type: "DEBIT", status: "SUCCESS" } },
-//           { $group: { _id: null, total: { $sum: "$amount" } } },
-//         ]),
-//         Transaction.aggregate([
-//           { $match: { type: "DEBIT", status: "PENDING" } },
-//           { $group: { _id: null, total: { $sum: "$amount" } } },
-//         ]),
-//       ]);
-
-//     // === 3. Format transactions ===
-//     const formattedTransactions = transactions.map((txn) => ({
-//       transactionId: txn.transactionId,
-//       user: txn.user || "Unknown",
-//       type: txn.type.charAt(0).toUpperCase() + txn.type.slice(1).toLowerCase(),
-//       amount: `$${txn.amount.toFixed(2)}`,
-//       date: new Date(txn.createdAt).toLocaleDateString("en-US"),
-//       status:
-//         txn.status === "SUCCESS"
-//           ? "Completed"
-//           : txn.status.charAt(0).toUpperCase() +
-//             txn.status.slice(1).toLowerCase(),
-//       description: txn.description || "",
-//     }));
-
-//     // === 4. Response ===
-//     return res.status(200).json({
-//       success: true,
-//       message: "Fetched successfully",
-//       walletManagement: {
-//         totalTransactions,
-//         totalCredits: `$${(totalCredits[0]?.total || 0).toFixed(2)}`,
-//         totalDebits: `$${(totalDebits[0]?.total || 0).toFixed(2)}`,
-//         pendingWithdrawals: `$${(pendingWithdrawals[0]?.total || 0).toFixed(2)}`,
-//       },
-//       transactionHistory: {
-//         page: Number(page),
-//         limit: Number(limit),
-//         sortBy,
-//         order,
-//         transactions: formattedTransactions,
-//       },
-//     });
-//   } catch (err) {
-//     console.error("Error fetching transactions:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error while fetching transactions",
-//     });
-//   }
-// };
 
 const getTransactionHistory = async (req, res) => {
   try {
@@ -1714,14 +1513,14 @@ const getTransactionHistory = async (req, res) => {
 
     const round2 = (n) => Number(Number(n || 0).toFixed(2));
 
-    // Build Mongo query (new model)
+
     const query = {};
 
-    // Filter by status (SUCCESS / FAILED / ALL)
+
     if (status && status !== "ALL") {
       query.status = { $regex: new RegExp(`^${status}$`, "i") };
     }
-    // Filter by type (CREDIT / DEBIT / ALL) using entries.type
+
     if (type && type !== "ALL") {
       query.entries = {
         $elemMatch: {
@@ -1729,7 +1528,7 @@ const getTransactionHistory = async (req, res) => {
         },
       };
     }
-    // Search (transactionId / description / also allow matching entry name)
+   
     if (search) {
       const regex = new RegExp(search, "i");
       query.$or = [
@@ -1739,7 +1538,7 @@ const getTransactionHistory = async (req, res) => {
       ];
     }
 
-    // Fetch transactions (LIFO)
+  
     const transactions = await TransactionModel.find(query)
       .sort({ createdAt: -1 })
       .lean();
@@ -1747,7 +1546,7 @@ const getTransactionHistory = async (req, res) => {
     const results = [];
 
     for (const txn of transactions) {
-   
+
       const entries = Array.isArray(txn.entries) ? txn.entries : [];
 
       const pickEntry =
@@ -1776,7 +1575,7 @@ const getTransactionHistory = async (req, res) => {
           user = await UserModel.findById(entityId, "fullName role").lean();
         } else {
           user = await UserModel.findOne(
-            { userId: entityId },   
+            { userId: entityId },
             "fullName role"
           ).lean();
         }
@@ -1785,8 +1584,8 @@ const getTransactionHistory = async (req, res) => {
         role = user?.role || "user";
       }
 
-      
-      
+
+
       else if (entityType === "BUS_OPERATOR" && entityId) {
         const op = await BusOperatorModel.findById(
           entityId,
@@ -1809,7 +1608,7 @@ const getTransactionHistory = async (req, res) => {
         name = admin?.userName || "Unknown Admin";
         role = admin?.role || null;
       } else if (entityType === "DRIVER" && entityId) {
-      
+
         const driver = await DriverBasicDetails.findOne(
           { driverId: entityId },
           "fullName role"
@@ -1838,7 +1637,7 @@ const getTransactionHistory = async (req, res) => {
       });
     }
 
-    // Keep the existing in-memory filtering behavior (transactionId/name/role)
+  
     const filteredResults = results.filter((item) => {
       if (!search) return true;
       const s = String(search).toLowerCase();
@@ -1853,11 +1652,11 @@ const getTransactionHistory = async (req, res) => {
     // Pagination after search
     const paginatedResults = filteredResults.slice(skip, skip + limit);
 
- 
+
     const totalRecords = filteredResults.length;
     const totalPages = Math.ceil(totalRecords / limit);
 
-   
+
     const total = await TransactionModel.countDocuments(query);
 
     // creditTotal / debitTotal based on ledger entries (SUCCESS only)
