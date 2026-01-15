@@ -1751,8 +1751,7 @@ const getTransactionHistory = async (req, res) => {
     const results = [];
 
     for (const txn of transactions) {
-      // Determine "primary" entry for display (keep old behavior: pick any meaningful one)
-      // Prefer USER, else BUS_OPERATOR, HOTEL, DRIVER, ADMIN, else first entry
+   
       const entries = Array.isArray(txn.entries) ? txn.entries : [];
 
       const pickEntry =
@@ -1772,7 +1771,6 @@ const getTransactionHistory = async (req, res) => {
       let name = null;
       let role = null;
 
-      // Keep the old name/role resolution style (DB lookup), but based on entry entityType
       const mongoose = require("mongoose");
 
       if (entityType === "USER" && entityId) {
@@ -1815,7 +1813,7 @@ const getTransactionHistory = async (req, res) => {
         name = admin?.userName || "Unknown Admin";
         role = admin?.role || null;
       } else if (entityType === "DRIVER" && entityId) {
-        // driverId can be string or ObjectId in Mixed, your driver lookup uses driverId (string)
+      
         const driver = await DriverBasicDetails.findOne(
           { driverId: entityId },
           "fullName role"
@@ -1859,11 +1857,11 @@ const getTransactionHistory = async (req, res) => {
     // Pagination after search
     const paginatedResults = filteredResults.slice(skip, skip + limit);
 
-    // Total count for pagination (match old response fields)
+ 
     const totalRecords = filteredResults.length;
     const totalPages = Math.ceil(totalRecords / limit);
 
-    // Total count from DB query (kept similar to your original variable naming)
+   
     const total = await TransactionModel.countDocuments(query);
 
     // creditTotal / debitTotal based on ledger entries (SUCCESS only)
