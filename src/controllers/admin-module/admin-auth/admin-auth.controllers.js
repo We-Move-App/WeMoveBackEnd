@@ -261,7 +261,7 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
 const addSubAdmins = catchAsyncError(async (req, res, next) => {
   const { _id: performedBy, role: loggedInRole, branch: userBranch } = req.user;
 
-  // Joi schema (reportingManager optional here, we'll enforce rules in logic)
+ 
   const schema = Joi.object({
     email: Joi.string().email().required(),
     userName: Joi.string().min(3).required(),
@@ -285,13 +285,12 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
     permissions,
   } = value;
 
-  // 🔑 Rule 1: If Admin is creating a SubAdmin → auto-assign reportingManager from token
   if (loggedInRole === "Admin" && role === "SubAdmin") {
     reportingManager = performedBy;
     branch = userBranch; // Admin can only assign within own branch
   }
 
-  // 🔑 Rule 2: If SuperAdmin is creating Admin/SubAdmin → reportingManager must be provided
+ 
   if (loggedInRole === "SuperAdmin") {
     if (!reportingManager) {
       throw new ApiError(
@@ -301,7 +300,7 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
     }
   }
 
-  // ❌ Restrict other roles
+
   if (!["Admin", "SuperAdmin"].includes(loggedInRole)) {
     throw new ApiError(403, "Only Admin or SuperAdmin can create SubAdmin");
   }
@@ -420,8 +419,7 @@ const loginAdmin = catchAsyncError(async (req, res, next) => {
     UserActivity: activityLog,
   };
 
-  // Optionally include full user object
-  // user: userObject,
+  
 
   return res
     .status(statusCode.OK)
@@ -845,13 +843,9 @@ const addSuperAdmin = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.BAD_REQUEST, "SuperAdmin already exists");
   }
 
-  // Optional: You can check if any SuperAdmin already exists if you want to allow only one
-  // const existingSuperAdmin = await AdminModel.findOne({ role: "SuperAdmin" });
-  // if (existingSuperAdmin) {
-  //   throw new ApiError(statusCode.BAD_REQUEST, "A SuperAdmin already exists");
-  // }
+ 
 
-  // Grant all permissions
+ 
   const allPermissions = {
     userManagement: true,
     busManagement: true,
@@ -866,7 +860,7 @@ const addSuperAdmin = catchAsyncError(async (req, res, next) => {
   const newUser = new AdminModel({
     email,
     userName,
-    password, // Make sure password hashing is handled (middleware or manually)
+    password, 
     phoneNumber,
     role: "SuperAdmin",
     permissions: allPermissions,
@@ -886,8 +880,8 @@ const addSuperAdmin = catchAsyncError(async (req, res, next) => {
   const activityLog = await logActivity({
     userId: newUser._id,
     activity: "SuperAdmin account created",
-    type: "create", // Type is create since this is a creation action
-    performedBy: newUser._id, // The SuperAdmin is creating their own account
+    type: "create", 
+    performedBy: newUser._id, 
   });
 
   return res.status(statusCode.OK).json(
@@ -1043,7 +1037,7 @@ const updateSubAdmin = catchAsyncError(async (req, res, next) => {
     admin.email = email;
   }
 
-  // Only allow Admin to update SubAdmin role
+
   if (role) {
     const isRoleValid = ["Admin", "SubAdmin"].includes(role);
     if (!isRoleValid) {
@@ -1109,7 +1103,7 @@ const createCoupon = catchAsyncError(async (req, res) => {
   couponCode = couponCode?.trim().toUpperCase();
   header = header?.trim().toUpperCase();
 
-  // Only SuperAdmin or Admin
+  
   if (!["SuperAdmin", "Admin"].includes(role)) {
     throw new ApiError(
       statusCode.FORBIDDEN,
@@ -1117,21 +1111,21 @@ const createCoupon = catchAsyncError(async (req, res) => {
     );
   }
 
-  // Check if coupon code already exists
+  
   const existingCoupon = await CouponModel.findOne({ couponCode });
   if (existingCoupon) {
     throw new ApiError(statusCode.BAD_REQUEST, "Coupon Code already exists");
   }
-  // Trim input strings and parse dates
+
   const start = new Date(startDate?.trim());
   const expiry = new Date(expiryDate?.trim());
 
-  // Validate parsed dates
+ 
   if (isNaN(start.getTime()) || isNaN(expiry.getTime())) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid date format");
   }
 
-  // Reset time to start of the day for safe comparison
+  
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -1146,7 +1140,7 @@ const createCoupon = catchAsyncError(async (req, res) => {
     );
   }
 
-  // Check that expiry date is after start date
+ 
   if (expiry <= start) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -1278,19 +1272,19 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     order,
   } = req.query;
 
-  // 🛠 Dynamic pagination with fallback
+ 
   page = page ? Math.max(parseInt(page, 10), 1) : 1;
   limit = limit ? Math.max(parseInt(limit, 10), 1) : 12;
 
   const skip = (page - 1) * limit;
 
-  // 🛠 Sorting (default = createdAt desc)
+
   sortBy = sortBy || "createdAt";
   order = order === "asc" ? 1 : -1;
 
   const filter = {};
 
-  // 🔍 Unified search across fields
+
   if (search) {
     filter.$or = [
       { couponCode: { $regex: search, $options: "i" } },
@@ -1300,7 +1294,7 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     ];
   }
 
-  // ✅ Status filter (All = skip filter)
+
   if (status && status !== "All") {
     filter.status = status;
   }
@@ -1310,13 +1304,13 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     filter.serviceType = serviceType;
   }
 
-  // 📅 Date range filter
+
   if (startDate && endDate) {
     filter.startDate = { $gte: new Date(startDate) };
     filter.expiryDate = { $lte: new Date(endDate) };
   }
 
-  // 📊 Count + Data
+ 
   const total = await CouponModel.countDocuments(filter);
 
   const coupons = await CouponModel.find(filter)
@@ -1419,7 +1413,7 @@ const getUserActivities = async (req, res) => {
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
 
-    // Build filter
+  
     const filter = { userId };
     if (type) filter.type = type;
 
@@ -1431,7 +1425,7 @@ const getUserActivities = async (req, res) => {
       }
     }
 
-    // Always fetch activities sorted by time (latest first)
+   
     const activities = await UserActivityModel.find(filter)
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
@@ -1504,7 +1498,7 @@ const getUserActivities = async (req, res) => {
 
 const getTransactionHistory = async (req, res) => {
   try {
-    // Pagination defaults
+   
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
@@ -1659,7 +1653,7 @@ const getTransactionHistory = async (req, res) => {
 
     const total = await TransactionModel.countDocuments(query);
 
-    // creditTotal / debitTotal based on ledger entries (SUCCESS only)
+    
     const creditAgg = await TransactionModel.aggregate([
       { $match: { status: "SUCCESS" } },
       { $unwind: "$entries" },
@@ -1677,7 +1671,7 @@ const getTransactionHistory = async (req, res) => {
     const creditTotal = creditAgg.length > 0 ? round2(creditAgg[0].total) : 0;
     const debitTotal = debitAgg.length > 0 ? round2(debitAgg[0].total) : 0;
 
-    // Keep same response structure as your old API
+   
     res.json({
       page,
       limit,
