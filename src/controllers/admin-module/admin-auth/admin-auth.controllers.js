@@ -239,7 +239,7 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
   });
 
   const userObject = newUser.toObject();
-  delete userObject.password; // don’t return password in response
+  delete userObject.password;
 
   const { accessToken, refreshToken } = await generateTokens(
     newUser,
