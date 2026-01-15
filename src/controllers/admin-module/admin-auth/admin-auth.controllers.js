@@ -1721,7 +1721,6 @@ const getTransactionHistory = async (req, res) => {
     if (status && status !== "ALL") {
       query.status = { $regex: new RegExp(`^${status}$`, "i") };
     }
-
     // Filter by type (CREDIT / DEBIT / ALL) using entries.type
     if (type && type !== "ALL") {
       query.entries = {
@@ -1730,7 +1729,6 @@ const getTransactionHistory = async (req, res) => {
         },
       };
     }
-
     // Search (transactionId / description / also allow matching entry name)
     if (search) {
       const regex = new RegExp(search, "i");
@@ -1764,16 +1762,34 @@ const getTransactionHistory = async (req, res) => {
 
       const entityType = pickEntry?.entityType || null;
       const entityId = pickEntry?.entityId ?? null;
+      console.log("Processing txn:", txn.transactionId, "EntityType:", entityType, "EntityId:", entityId);
+
 
       let name = null;
       let role = null;
 
       // Keep the old name/role resolution style (DB lookup), but based on entry entityType
+      const mongoose = require("mongoose");
+
       if (entityType === "USER" && entityId) {
-        const user = await UserModel.findById(entityId, "fullName role").lean();
+        let user = null;
+
+        if (mongoose.Types.ObjectId.isValid(entityId)) {
+          user = await UserModel.findById(entityId, "fullName role").lean();
+        } else {
+          user = await UserModel.findOne(
+            { userId: entityId },   
+            "fullName role"
+          ).lean();
+        }
+
         name = user?.fullName || "Unknown User";
         role = user?.role || "user";
-      } else if (entityType === "BUS_OPERATOR" && entityId) {
+      }
+
+      
+      
+      else if (entityType === "BUS_OPERATOR" && entityId) {
         const op = await BusOperatorModel.findById(
           entityId,
           "fullName role"
