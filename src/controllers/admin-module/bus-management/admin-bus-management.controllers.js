@@ -806,7 +806,7 @@ const searchAllBusBookings = catchAsyncError(async (req, res, next) => {
     .skip(skip)
     .limit(pageSize);
 
-  // Filter out bookings where busId is null due to busRegNumber mismatch
+ 
   const validBookings = bookings.filter((b) => b.busId);
 
   if (!validBookings.length) {
