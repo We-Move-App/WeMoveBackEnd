@@ -15,10 +15,6 @@ const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const {
-  validateEmail,
-  validatePhoneNumber,
-} = require("../../../utils/validation/forSchema");
-const {
   saveDeviceToken,
   removeDeviceToken,
 } = require("../../../utils/services/deviceToken.services");
