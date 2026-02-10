@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Your OTP Code</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #f4f6f8;
+        font-family: Arial, Helvetica, sans-serif;
+      }
+
+      .container {
+        max-width: 480px;
+        margin: 40px auto;
+        background-color: #ffffff;
+        border-radius: 8px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+        padding: 24px;
+      }
+
+      .header {
+        text-align: center;
+        margin-bottom: 20px;
+      }
+
+      .header h2 {
+        margin: 0;
+        color: #222;
+      }
+
+      .content {
+        color: #444;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .otp-box {
+        margin: 24px 0;
+        text-align: center;
+      }
+
+      .otp {
+        display: inline-block;
+        font-size: 28px;
+        font-weight: bold;
+        letter-spacing: 6px;
+        padding: 12px 20px;
+        background-color: #f0f4ff;
+        color: #1a4fff;
+        border-radius: 6px;
+      }
+
+      .footer {
+        margin-top: 30px;
+        font-size: 12px;
+        color: #888;
+        text-align: center;
+      }
+
+      .warning {
+        margin-top: 16px;
+        color: #d9534f;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div class="container">
+      <div class="header">
+        <h2>Hello <%= name %>,</h2>
+      </div>
+
+      <div class="content">
+        <p>
+          You requested a One-Time Password (OTP) to continue with your process.
+        </p>
+
+        <div class="otp-box">
+          <span class="otp"><%= otp %></span>
+        </div>
+
+        <p>
+          This OTP is valid for <strong>5 minutes</strong>. Please do not share
+          this code with anyone.
+        </p>
+
+        <p class="warning">
+          If you did not request this OTP, please ignore this email.
+        </p>
+      </div>
+
+      <div class="footer">
+        <p>© <%= new Date().getFullYear() %> WeMove. All rights reserved.</p>
+      </div>
+    </div>
+  </body>
+</html>
