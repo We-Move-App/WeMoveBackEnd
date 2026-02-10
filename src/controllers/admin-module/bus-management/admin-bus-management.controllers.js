@@ -153,7 +153,7 @@ const deleteBusOperatorAccount = catchAsyncError(async (req, res, next) => {
     await BusOperatorDocumentModel.deleteMany({ userId });
   }
 
-  // 🔥 Missing deletions — add these:
+  
   await Promise.all([
     BusOperatorModel.findByIdAndDelete(userId), // Delete user
     BusOperatorBankModel.deleteMany({ userId }), // Delete bank info
@@ -356,7 +356,7 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
 
   for (const { key, data } of documentPayloads) {
     if (data && data.file?.url) {
-      // Create or replace the document
+     
       const newDoc = await DocumentsModel.create({
         ...data,
         ownerId: userId,
@@ -368,7 +368,7 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
     }
   }
 
-  // Update BusOperatorDocumentModel
+ 
   if (newDocIds.length > 0) {
     const existing = await BusOperatorDocumentModel.findOne({ userId });
 
@@ -383,7 +383,7 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
     }
   }
 
-  // Handle avatar
+ 
   if (avatar?.url) {
     const existingUser = await BusOperatorModel.findById(userId);
     if (existingUser?.avatar?.public_id) {
@@ -591,7 +591,7 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     },
     { $unwind: { path: "$bus", preserveNullAndEmptyArrays: true } },
 
-    // Lookup busOperator
+  
     {
       $lookup: {
         from: "busoperators",
@@ -618,7 +618,7 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     },
     { $unwind: { path: "$bookedBy", preserveNullAndEmptyArrays: true } },
 
-    // Lookup bookedByOperator (operator user)
+   
     {
       $lookup: {
         from: "users",
@@ -635,7 +635,7 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     { $unwind: { path: "$passengers", preserveNullAndEmptyArrays: true } },
   ];
 
-  // ✅ Global search
+ 
   if (search && search.trim() !== "") {
     function escapeRegex(str) {
       return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -694,7 +694,7 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
       bookingId: booking._id,
       bookId: booking.bookingId,
       busRegNumber: booking.bus?.busRegNumber || "N/A",
-      branch: booking.busOperator?.branch || null, // ✅ branch comes from operator
+      branch: booking.busOperator?.branch || null, 
       bookedBy: booking.bookedBy
         ? {
           fullName: booking.bookedBy.fullName,
@@ -806,7 +806,7 @@ const searchAllBusBookings = catchAsyncError(async (req, res, next) => {
     .skip(skip)
     .limit(pageSize);
 
-  // Filter out bookings where busId is null due to busRegNumber mismatch
+ 
   const validBookings = bookings.filter((b) => b.busId);
 
   if (!validBookings.length) {

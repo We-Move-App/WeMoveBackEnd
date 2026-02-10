@@ -21,7 +21,7 @@ const createCommission = catchAsyncError(async (req, res) => {
     );
   }
 
-  // ✅ Check if commission already exists for this serviceType
+ 
   const existing = await Commission.findOne({ serviceType: value.serviceType });
   if (existing) {
     throw new ApiError(

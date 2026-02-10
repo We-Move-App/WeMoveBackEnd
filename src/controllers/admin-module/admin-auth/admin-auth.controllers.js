@@ -239,7 +239,7 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
   });
 
   const userObject = newUser.toObject();
-  delete userObject.password; // don’t return password in response
+  delete userObject.password;
 
   const { accessToken, refreshToken } = await generateTokens(
     newUser,
@@ -261,7 +261,7 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
 const addSubAdmins = catchAsyncError(async (req, res, next) => {
   const { _id: performedBy, role: loggedInRole, branch: userBranch } = req.user;
 
-  // Joi schema (reportingManager optional here, we'll enforce rules in logic)
+ 
   const schema = Joi.object({
     email: Joi.string().email().required(),
     userName: Joi.string().min(3).required(),
@@ -285,13 +285,12 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
     permissions,
   } = value;
 
-  // 🔑 Rule 1: If Admin is creating a SubAdmin → auto-assign reportingManager from token
   if (loggedInRole === "Admin" && role === "SubAdmin") {
     reportingManager = performedBy;
     branch = userBranch; // Admin can only assign within own branch
   }
 
-  // 🔑 Rule 2: If SuperAdmin is creating Admin/SubAdmin → reportingManager must be provided
+ 
   if (loggedInRole === "SuperAdmin") {
     if (!reportingManager) {
       throw new ApiError(
@@ -301,7 +300,7 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
     }
   }
 
-  // ❌ Restrict other roles
+
   if (!["Admin", "SuperAdmin"].includes(loggedInRole)) {
     throw new ApiError(403, "Only Admin or SuperAdmin can create SubAdmin");
   }
@@ -420,8 +419,7 @@ const loginAdmin = catchAsyncError(async (req, res, next) => {
     UserActivity: activityLog,
   };
 
-  // Optionally include full user object
-  // user: userObject,
+  
 
   return res
     .status(statusCode.OK)
@@ -532,14 +530,14 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
   // Search
   const searchQuery = search
     ? {
-        $or: [
-          { userName: { $regex: search, $options: "i" } },
-          { email: { $regex: search, $options: "i" } },
-          { phoneNumber: { $regex: search, $options: "i" } },
-          { role: { $regex: search, $options: "i" } },
-          { "branchData.name": { $regex: search, $options: "i" } },
-        ],
-      }
+      $or: [
+        { userName: { $regex: search, $options: "i" } },
+        { email: { $regex: search, $options: "i" } },
+        { phoneNumber: { $regex: search, $options: "i" } },
+        { role: { $regex: search, $options: "i" } },
+        { "branchData.name": { $regex: search, $options: "i" } },
+      ],
+    }
     : {};
 
   // Aggregation
@@ -601,11 +599,11 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
       createdAt: user.createdAt,
       branch: user.branchData
         ? {
-            branchId: user.branchData._id,
-            name: user.branchData.name,
-            location: user.branchData.location,
-            createdAt: user.branchData.createdAt,
-          }
+          branchId: user.branchData._id,
+          name: user.branchData.name,
+          location: user.branchData.location,
+          createdAt: user.branchData.createdAt,
+        }
         : null,
     };
   });
@@ -719,28 +717,28 @@ const getAdminById = catchAsyncError(async (req, res, next) => {
     updatedAt: admin.updatedAt,
     branch: admin.branch
       ? {
-          branchId: admin.branch?._id,
-          name: admin.branch.name || null,
-          location: admin.branch.location || null,
-        }
+        branchId: admin.branch?._id,
+        name: admin.branch.name || null,
+        location: admin.branch.location || null,
+      }
       : {
-          branchId: null,
-          name: null,
-          location: null,
-        },
+        branchId: null,
+        name: null,
+        location: null,
+      },
     reportingManager: admin.reportingManager
       ? {
-          id: admin.reportingManager._id,
-          userName: admin.reportingManager.userName,
-          phoneNumber: admin.reportingManager.phoneNumber,
-          email: admin.reportingManager.email,
-        }
+        id: admin.reportingManager._id,
+        userName: admin.reportingManager.userName,
+        phoneNumber: admin.reportingManager.phoneNumber,
+        email: admin.reportingManager.email,
+      }
       : null,
     UserActivity: lastActivity
       ? {
-          activity: lastActivity.activity,
-          time: lastActivity.createdAt,
-        }
+        activity: lastActivity.activity,
+        time: lastActivity.createdAt,
+      }
       : null,
   };
 
@@ -845,13 +843,9 @@ const addSuperAdmin = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.BAD_REQUEST, "SuperAdmin already exists");
   }
 
-  // Optional: You can check if any SuperAdmin already exists if you want to allow only one
-  // const existingSuperAdmin = await AdminModel.findOne({ role: "SuperAdmin" });
-  // if (existingSuperAdmin) {
-  //   throw new ApiError(statusCode.BAD_REQUEST, "A SuperAdmin already exists");
-  // }
+ 
 
-  // Grant all permissions
+ 
   const allPermissions = {
     userManagement: true,
     busManagement: true,
@@ -866,7 +860,7 @@ const addSuperAdmin = catchAsyncError(async (req, res, next) => {
   const newUser = new AdminModel({
     email,
     userName,
-    password, // Make sure password hashing is handled (middleware or manually)
+    password, 
     phoneNumber,
     role: "SuperAdmin",
     permissions: allPermissions,
@@ -886,8 +880,8 @@ const addSuperAdmin = catchAsyncError(async (req, res, next) => {
   const activityLog = await logActivity({
     userId: newUser._id,
     activity: "SuperAdmin account created",
-    type: "create", // Type is create since this is a creation action
-    performedBy: newUser._id, // The SuperAdmin is creating their own account
+    type: "create", 
+    performedBy: newUser._id, 
   });
 
   return res.status(statusCode.OK).json(
@@ -1043,7 +1037,7 @@ const updateSubAdmin = catchAsyncError(async (req, res, next) => {
     admin.email = email;
   }
 
-  // Only allow Admin to update SubAdmin role
+
   if (role) {
     const isRoleValid = ["Admin", "SubAdmin"].includes(role);
     if (!isRoleValid) {
@@ -1109,7 +1103,7 @@ const createCoupon = catchAsyncError(async (req, res) => {
   couponCode = couponCode?.trim().toUpperCase();
   header = header?.trim().toUpperCase();
 
-  // Only SuperAdmin or Admin
+  
   if (!["SuperAdmin", "Admin"].includes(role)) {
     throw new ApiError(
       statusCode.FORBIDDEN,
@@ -1117,21 +1111,21 @@ const createCoupon = catchAsyncError(async (req, res) => {
     );
   }
 
-  // Check if coupon code already exists
+  
   const existingCoupon = await CouponModel.findOne({ couponCode });
   if (existingCoupon) {
     throw new ApiError(statusCode.BAD_REQUEST, "Coupon Code already exists");
   }
-  // Trim input strings and parse dates
+
   const start = new Date(startDate?.trim());
   const expiry = new Date(expiryDate?.trim());
 
-  // Validate parsed dates
+ 
   if (isNaN(start.getTime()) || isNaN(expiry.getTime())) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid date format");
   }
 
-  // Reset time to start of the day for safe comparison
+  
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -1146,7 +1140,7 @@ const createCoupon = catchAsyncError(async (req, res) => {
     );
   }
 
-  // Check that expiry date is after start date
+ 
   if (expiry <= start) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -1278,19 +1272,19 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     order,
   } = req.query;
 
-  // 🛠 Dynamic pagination with fallback
+ 
   page = page ? Math.max(parseInt(page, 10), 1) : 1;
   limit = limit ? Math.max(parseInt(limit, 10), 1) : 12;
 
   const skip = (page - 1) * limit;
 
-  // 🛠 Sorting (default = createdAt desc)
+
   sortBy = sortBy || "createdAt";
   order = order === "asc" ? 1 : -1;
 
   const filter = {};
 
-  // 🔍 Unified search across fields
+
   if (search) {
     filter.$or = [
       { couponCode: { $regex: search, $options: "i" } },
@@ -1300,7 +1294,7 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     ];
   }
 
-  // ✅ Status filter (All = skip filter)
+
   if (status && status !== "All") {
     filter.status = status;
   }
@@ -1310,13 +1304,13 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     filter.serviceType = serviceType;
   }
 
-  // 📅 Date range filter
+
   if (startDate && endDate) {
     filter.startDate = { $gte: new Date(startDate) };
     filter.expiryDate = { $lte: new Date(endDate) };
   }
 
-  // 📊 Count + Data
+ 
   const total = await CouponModel.countDocuments(filter);
 
   const coupons = await CouponModel.find(filter)
@@ -1419,7 +1413,7 @@ const getUserActivities = async (req, res) => {
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
 
-    // Build filter
+  
     const filter = { userId };
     if (type) filter.type = type;
 
@@ -1431,7 +1425,7 @@ const getUserActivities = async (req, res) => {
       }
     }
 
-    // Always fetch activities sorted by time (latest first)
+   
     const activities = await UserActivityModel.find(filter)
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
@@ -1465,11 +1459,11 @@ const getUserActivities = async (req, res) => {
       time: formatActivityTime(act.createdAt),
       performedBy: act.performedBy
         ? {
-            _id: act.performedBy._id,
-            name: act.performedBy.name,
-            email: act.performedBy.email,
-            role: act.performedBy.role,
-          }
+          _id: act.performedBy._id,
+          name: act.performedBy.name,
+          email: act.performedBy.email,
+          role: act.performedBy.role,
+        }
         : null,
     }));
 
@@ -1501,211 +1495,10 @@ const getUserActivities = async (req, res) => {
   }
 };
 
-// const getTransactionHistory = async (req, res) => {
-//   try {
-//     const {
-//       page = 1,
-//       limit = 10,
-//       sortBy = "createdAt",
-//       order = "desc",
-//     } = req.query;
-
-//     // Pagination + Sorting
-//     const skip = (page - 1) * limit;
-//     const sortOrder = order === "desc" ? -1 : 1;
-
-//     // === 1. Transactions with lookups ===
-//     const transactions = await Transaction.aggregate([
-//       { $sort: { [sortBy]: sortOrder } },
-//       { $skip: skip },
-//       { $limit: Number(limit) },
-
-//       // Lookup Booking
-//       {
-//         $lookup: {
-//           from: "bookings",
-//           localField: "bookingId",
-//           foreignField: "_id",
-//           as: "booking",
-//         },
-//       },
-//       { $unwind: { path: "$booking", preserveNullAndEmptyArrays: true } },
-
-//       // Lookup User from Booking
-//       {
-//         $lookup: {
-//           from: "users",
-//           localField: "booking.userId",
-//           foreignField: "_id",
-//           as: "bookingUser",
-//         },
-//       },
-//       { $unwind: { path: "$bookingUser", preserveNullAndEmptyArrays: true } },
-
-//       // Lookup direct userId
-//       {
-//         $lookup: {
-//           from: "users",
-//           localField: "userId",
-//           foreignField: "_id",
-//           as: "directUser",
-//         },
-//       },
-//       { $unwind: { path: "$directUser", preserveNullAndEmptyArrays: true } },
-
-//       // Lookup busOperator
-//       {
-//         $lookup: {
-//           from: "busoperators",
-//           localField: "busOperatorId",
-//           foreignField: "_id",
-//           as: "busOperator",
-//         },
-//       },
-//       { $unwind: { path: "$busOperator", preserveNullAndEmptyArrays: true } },
-
-//       // Lookup hotelManager
-//       {
-//         $lookup: {
-//           from: "hotelmanagers",
-//           localField: "hotelManagerId",
-//           foreignField: "_id",
-//           as: "hotelManager",
-//         },
-//       },
-//       { $unwind: { path: "$hotelManager", preserveNullAndEmptyArrays: true } },
-
-//       // Lookup admin
-//       {
-//         $lookup: {
-//           from: "admins",
-//           localField: "adminId",
-//           foreignField: "_id",
-//           as: "admin",
-//         },
-//       },
-//       { $unwind: { path: "$admin", preserveNullAndEmptyArrays: true } },
-
-//       // Lookup driver
-//       {
-//         $lookup: {
-//           from: "drivers",
-//           localField: "driverId",
-//           foreignField: "_id",
-//           as: "driver",
-//         },
-//       },
-//       { $unwind: { path: "$driver", preserveNullAndEmptyArrays: true } },
-
-//       // === Final projection ===
-//       {
-//         $project: {
-//           transactionId: 1,
-//           type: 1,
-//           amount: 1,
-//           createdAt: 1,
-//           status: 1,
-//           description: 1,
-
-//           // Priority for user name:
-//           user: {
-//             $ifNull: [
-//               "$directUser.fullName",
-//               {
-//                 $ifNull: [
-//                   "$busOperator.name",
-//                   {
-//                     $ifNull: [
-//                       "$hotelManager.fullName",
-//                       {
-//                         $ifNull: [
-//                           "$hotelManager.name",
-//                           {
-//                             $ifNull: [
-//                               "$admin.fullName",
-//                               {
-//                                 $ifNull: [
-//                                   "$driver.fullName",
-//                                   "$bookingUser.fullName",
-//                                 ],
-//                               },
-//                             ],
-//                           },
-//                         ],
-//                       },
-//                     ],
-//                   },
-//                 ],
-//               },
-//             ],
-//           },
-//         },
-//       },
-//     ]);
-
-//     // === 2. Wallet Stats ===
-//     const [totalTransactions, totalCredits, totalDebits, pendingWithdrawals] =
-//       await Promise.all([
-//         Transaction.countDocuments(),
-//         Transaction.aggregate([
-//           { $match: { type: "CREDIT", status: "SUCCESS" } },
-//           { $group: { _id: null, total: { $sum: "$amount" } } },
-//         ]),
-//         Transaction.aggregate([
-//           { $match: { type: "DEBIT", status: "SUCCESS" } },
-//           { $group: { _id: null, total: { $sum: "$amount" } } },
-//         ]),
-//         Transaction.aggregate([
-//           { $match: { type: "DEBIT", status: "PENDING" } },
-//           { $group: { _id: null, total: { $sum: "$amount" } } },
-//         ]),
-//       ]);
-
-//     // === 3. Format transactions ===
-//     const formattedTransactions = transactions.map((txn) => ({
-//       transactionId: txn.transactionId,
-//       user: txn.user || "Unknown",
-//       type: txn.type.charAt(0).toUpperCase() + txn.type.slice(1).toLowerCase(),
-//       amount: `$${txn.amount.toFixed(2)}`,
-//       date: new Date(txn.createdAt).toLocaleDateString("en-US"),
-//       status:
-//         txn.status === "SUCCESS"
-//           ? "Completed"
-//           : txn.status.charAt(0).toUpperCase() +
-//             txn.status.slice(1).toLowerCase(),
-//       description: txn.description || "",
-//     }));
-
-//     // === 4. Response ===
-//     return res.status(200).json({
-//       success: true,
-//       message: "Fetched successfully",
-//       walletManagement: {
-//         totalTransactions,
-//         totalCredits: `$${(totalCredits[0]?.total || 0).toFixed(2)}`,
-//         totalDebits: `$${(totalDebits[0]?.total || 0).toFixed(2)}`,
-//         pendingWithdrawals: `$${(pendingWithdrawals[0]?.total || 0).toFixed(2)}`,
-//       },
-//       transactionHistory: {
-//         page: Number(page),
-//         limit: Number(limit),
-//         sortBy,
-//         order,
-//         transactions: formattedTransactions,
-//       },
-//     });
-//   } catch (err) {
-//     console.error("Error fetching transactions:", err);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error while fetching transactions",
-//     });
-//   }
-// };
 
 const getTransactionHistory = async (req, res) => {
   try {
-    // Pagination defaults
+   
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
@@ -1714,14 +1507,14 @@ const getTransactionHistory = async (req, res) => {
 
     const round2 = (n) => Number(Number(n || 0).toFixed(2));
 
-    // Build Mongo query (new model)
+
     const query = {};
 
-    // Filter by status (SUCCESS / FAILED / ALL)
+
     if (status && status !== "ALL") {
       query.status = { $regex: new RegExp(`^${status}$`, "i") };
     }
-    // Filter by type (CREDIT / DEBIT / ALL) using entries.type
+
     if (type && type !== "ALL") {
       query.entries = {
         $elemMatch: {
@@ -1729,7 +1522,7 @@ const getTransactionHistory = async (req, res) => {
         },
       };
     }
-    // Search (transactionId / description / also allow matching entry name)
+   
     if (search) {
       const regex = new RegExp(search, "i");
       query.$or = [
@@ -1739,7 +1532,7 @@ const getTransactionHistory = async (req, res) => {
       ];
     }
 
-    // Fetch transactions (LIFO)
+  
     const transactions = await TransactionModel.find(query)
       .sort({ createdAt: -1 })
       .lean();
@@ -1747,8 +1540,7 @@ const getTransactionHistory = async (req, res) => {
     const results = [];
 
     for (const txn of transactions) {
-      // Determine "primary" entry for display (keep old behavior: pick any meaningful one)
-      // Prefer USER, else BUS_OPERATOR, HOTEL, DRIVER, ADMIN, else first entry
+
       const entries = Array.isArray(txn.entries) ? txn.entries : [];
 
       const pickEntry =
@@ -1768,7 +1560,6 @@ const getTransactionHistory = async (req, res) => {
       let name = null;
       let role = null;
 
-      // Keep the old name/role resolution style (DB lookup), but based on entry entityType
       const mongoose = require("mongoose");
 
       if (entityType === "USER" && entityId) {
@@ -1778,7 +1569,7 @@ const getTransactionHistory = async (req, res) => {
           user = await UserModel.findById(entityId, "fullName role").lean();
         } else {
           user = await UserModel.findOne(
-            { userId: entityId },   
+            { userId: entityId },
             "fullName role"
           ).lean();
         }
@@ -1787,8 +1578,8 @@ const getTransactionHistory = async (req, res) => {
         role = user?.role || "user";
       }
 
-      
-      
+
+
       else if (entityType === "BUS_OPERATOR" && entityId) {
         const op = await BusOperatorModel.findById(
           entityId,
@@ -1811,7 +1602,7 @@ const getTransactionHistory = async (req, res) => {
         name = admin?.userName || "Unknown Admin";
         role = admin?.role || null;
       } else if (entityType === "DRIVER" && entityId) {
-        // driverId can be string or ObjectId in Mixed, your driver lookup uses driverId (string)
+
         const driver = await DriverBasicDetails.findOne(
           { driverId: entityId },
           "fullName role"
@@ -1840,7 +1631,7 @@ const getTransactionHistory = async (req, res) => {
       });
     }
 
-    // Keep the existing in-memory filtering behavior (transactionId/name/role)
+  
     const filteredResults = results.filter((item) => {
       if (!search) return true;
       const s = String(search).toLowerCase();
@@ -1855,14 +1646,14 @@ const getTransactionHistory = async (req, res) => {
     // Pagination after search
     const paginatedResults = filteredResults.slice(skip, skip + limit);
 
-    // Total count for pagination (match old response fields)
+
     const totalRecords = filteredResults.length;
     const totalPages = Math.ceil(totalRecords / limit);
 
-    // Total count from DB query (kept similar to your original variable naming)
+
     const total = await TransactionModel.countDocuments(query);
 
-    // creditTotal / debitTotal based on ledger entries (SUCCESS only)
+    
     const creditAgg = await TransactionModel.aggregate([
       { $match: { status: "SUCCESS" } },
       { $unwind: "$entries" },
@@ -1880,7 +1671,7 @@ const getTransactionHistory = async (req, res) => {
     const creditTotal = creditAgg.length > 0 ? round2(creditAgg[0].total) : 0;
     const debitTotal = debitAgg.length > 0 ? round2(debitAgg[0].total) : 0;
 
-    // Keep same response structure as your old API
+   
     res.json({
       page,
       limit,

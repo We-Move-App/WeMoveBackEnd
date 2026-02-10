@@ -31,7 +31,7 @@ const sendSingleNotificationsToUsers = catchAsyncError(
   }
 );
 
-// 📌 1. Get All Notifications (filtered by read/unread/all)
+
 const getNotifications = catchAsyncError(async (req, res) => {
   const { _id: userId } = req.user;
 
@@ -40,13 +40,13 @@ const getNotifications = catchAsyncError(async (req, res) => {
   return res.status(statusCode.OK).json(response);
 });
 
-// 📌 2. Get Notification by ID
+
 const getNotificationById = catchAsyncError(async (req, res) => {
   const notification = await getSingleNotificationById(req);
   return res.status(statusCode.OK).json(notification);
 });
 
-// 📌 3. Mark a Single Notification as Read
+
 const markAsRead = catchAsyncError(async (req, res) => {
   const { notificationId } = req.params;
 
@@ -55,14 +55,14 @@ const markAsRead = catchAsyncError(async (req, res) => {
   return res.status(statusCode.OK).json(notification);
 });
 
-// 📌 4. Mark Multiple Notifications as Read
+
 const markMultipleAsRead = catchAsyncError(async (req, res) => {
   const response = await markAsReadMultiple(req);
 
   return res.status(statusCode.OK).json(response);
 });
 
-// 📌 5. Mark All Notifications as Read
+
 const markAllAsRead = catchAsyncError(async (req, res) => {
   const response = await markAsReadAll(req);
   return res.status(statusCode.OK).json(response);
@@ -75,7 +75,7 @@ const deleteNotification = catchAsyncError(async (req, res) => {
   return res.status(statusCode.OK).json(response);
 });
 
-// 📌 7. Delete Multiple Selected Notifications
+
 const deleteMultipleNotifications = catchAsyncError(async (req, res) => {
   const response = await deleteMultipleNotificationsAtOnce(req);
 
