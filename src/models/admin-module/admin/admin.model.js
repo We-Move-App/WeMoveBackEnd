@@ -6,6 +6,7 @@ const {
 } = require("../../../utils/validation/forSchema");
 const { hash_rounds } = require("../../../config/config");
 const bcrypt = require("bcrypt");
+const { boolean, required } = require("joi");
 
 const defaultPermissions = {
   userManagement: { type: Boolean, default: false },
@@ -19,6 +20,7 @@ const defaultPermissions = {
   roleManagement: { type: Boolean, default: false },
   commissionManagement: { type: Boolean, default: false },
   couponManagement: { type: Boolean, default: false },
+  referralManagement: { type: Boolean, default: false },
 };
 
 // Admin Schema
@@ -69,6 +71,12 @@ const AdminSchema = new mongoose.Schema(
       default: null,
     },
 
+    isSpecialAdmin: {
+      type: Boolean,
+      default: false,
+      required: true,
+    },
+
     branch: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Branch",
@@ -117,8 +125,10 @@ AdminSchema.pre("save", function (next) {
       roleManagement: true,
       commissionManagement: true,
       couponManagement: true,
+      referralManagement:true,
     };
   }
+    this.isSpecialAdmin = true;
   next();
 });
 

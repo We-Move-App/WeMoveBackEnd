@@ -169,7 +169,15 @@ const TransactionModel = require("../../../models/transaction-module/transaction
 //     .json(new ApiResponse(statusCode.OK, data, `created successfully`));
 // });
 const addAdmins = catchAsyncError(async (req, res, next) => {
-  const { email, userName, phoneNumber, branch, role, permissions } = req.body;
+  const {
+    email,
+    userName,
+    phoneNumber,
+    branch,
+    role,
+    permissions,
+    isSpecialAdmin,
+  } = req.body;
   const { _id, performedBy } = req.user;
 
   const isRoleValid = ["Admin", "SubAdmin"].includes(role);
@@ -183,6 +191,7 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
     "phoneNumber",
     "branch",
     "role",
+    "isSpecialAdmin",
     "permissions",
   ];
   validateRequestBody(reqField, req.body);
@@ -222,6 +231,7 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
     password: defaultPassword,
     phoneNumber,
     role,
+    isSpecialAdmin,
     branch,
     permissions: { ...defaultPermissions, ...permissions },
     parentUserId: _id,
@@ -258,10 +268,10 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
     .status(statusCode.OK)
     .json(new ApiResponse(statusCode.OK, data, `created successfully`));
 });
+
 const addSubAdmins = catchAsyncError(async (req, res, next) => {
   const { _id: performedBy, role: loggedInRole, branch: userBranch } = req.user;
 
- 
   const schema = Joi.object({
     email: Joi.string().email().required(),
     userName: Joi.string().min(3).required(),
@@ -270,6 +280,7 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
     branch: Joi.string().optional(),
     reportingManager: Joi.string().optional(),
     permissions: Joi.object().optional(),
+    isSpecialAdmin: Joi.boolean().optional(),
   });
 
   const { error, value } = schema.validate(req.body);
@@ -280,6 +291,7 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
     userName,
     phoneNumber,
     role,
+    isSpecialAdmin,
     branch,
     reportingManager,
     permissions,
@@ -290,7 +302,6 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
     branch = userBranch; // Admin can only assign within own branch
   }
 
- 
   if (loggedInRole === "SuperAdmin") {
     if (!reportingManager) {
       throw new ApiError(
@@ -299,7 +310,6 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
       );
     }
   }
-
 
   if (!["Admin", "SuperAdmin"].includes(loggedInRole)) {
     throw new ApiError(403, "Only Admin or SuperAdmin can create SubAdmin");
@@ -322,6 +332,7 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
     userName,
     phoneNumber,
     role,
+    isSpecialAdmin,
     branch,
     reportingManager,
     permissions: { ...defaultPermissions, ...permissions },
@@ -418,8 +429,6 @@ const loginAdmin = catchAsyncError(async (req, res, next) => {
     refreshToken,
     UserActivity: activityLog,
   };
-
-  
 
   return res
     .status(statusCode.OK)
@@ -530,14 +539,14 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
   // Search
   const searchQuery = search
     ? {
-      $or: [
-        { userName: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { phoneNumber: { $regex: search, $options: "i" } },
-        { role: { $regex: search, $options: "i" } },
-        { "branchData.name": { $regex: search, $options: "i" } },
-      ],
-    }
+        $or: [
+          { userName: { $regex: search, $options: "i" } },
+          { email: { $regex: search, $options: "i" } },
+          { phoneNumber: { $regex: search, $options: "i" } },
+          { role: { $regex: search, $options: "i" } },
+          { "branchData.name": { $regex: search, $options: "i" } },
+        ],
+      }
     : {};
 
   // Aggregation
@@ -599,11 +608,11 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
       createdAt: user.createdAt,
       branch: user.branchData
         ? {
-          branchId: user.branchData._id,
-          name: user.branchData.name,
-          location: user.branchData.location,
-          createdAt: user.branchData.createdAt,
-        }
+            branchId: user.branchData._id,
+            name: user.branchData.name,
+            location: user.branchData.location,
+            createdAt: user.branchData.createdAt,
+          }
         : null,
     };
   });
@@ -717,28 +726,28 @@ const getAdminById = catchAsyncError(async (req, res, next) => {
     updatedAt: admin.updatedAt,
     branch: admin.branch
       ? {
-        branchId: admin.branch?._id,
-        name: admin.branch.name || null,
-        location: admin.branch.location || null,
-      }
+          branchId: admin.branch?._id,
+          name: admin.branch.name || null,
+          location: admin.branch.location || null,
+        }
       : {
-        branchId: null,
-        name: null,
-        location: null,
-      },
+          branchId: null,
+          name: null,
+          location: null,
+        },
     reportingManager: admin.reportingManager
       ? {
-        id: admin.reportingManager._id,
-        userName: admin.reportingManager.userName,
-        phoneNumber: admin.reportingManager.phoneNumber,
-        email: admin.reportingManager.email,
-      }
+          id: admin.reportingManager._id,
+          userName: admin.reportingManager.userName,
+          phoneNumber: admin.reportingManager.phoneNumber,
+          email: admin.reportingManager.email,
+        }
       : null,
     UserActivity: lastActivity
       ? {
-        activity: lastActivity.activity,
-        time: lastActivity.createdAt,
-      }
+          activity: lastActivity.activity,
+          time: lastActivity.createdAt,
+        }
       : null,
   };
 
@@ -843,9 +852,6 @@ const addSuperAdmin = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.BAD_REQUEST, "SuperAdmin already exists");
   }
 
- 
-
- 
   const allPermissions = {
     userManagement: true,
     busManagement: true,
@@ -860,7 +866,7 @@ const addSuperAdmin = catchAsyncError(async (req, res, next) => {
   const newUser = new AdminModel({
     email,
     userName,
-    password, 
+    password,
     phoneNumber,
     role: "SuperAdmin",
     permissions: allPermissions,
@@ -880,8 +886,8 @@ const addSuperAdmin = catchAsyncError(async (req, res, next) => {
   const activityLog = await logActivity({
     userId: newUser._id,
     activity: "SuperAdmin account created",
-    type: "create", 
-    performedBy: newUser._id, 
+    type: "create",
+    performedBy: newUser._id,
   });
 
   return res.status(statusCode.OK).json(
@@ -1037,7 +1043,6 @@ const updateSubAdmin = catchAsyncError(async (req, res, next) => {
     admin.email = email;
   }
 
-
   if (role) {
     const isRoleValid = ["Admin", "SubAdmin"].includes(role);
     if (!isRoleValid) {
@@ -1103,7 +1108,6 @@ const createCoupon = catchAsyncError(async (req, res) => {
   couponCode = couponCode?.trim().toUpperCase();
   header = header?.trim().toUpperCase();
 
-  
   if (!["SuperAdmin", "Admin"].includes(role)) {
     throw new ApiError(
       statusCode.FORBIDDEN,
@@ -1111,7 +1115,6 @@ const createCoupon = catchAsyncError(async (req, res) => {
     );
   }
 
-  
   const existingCoupon = await CouponModel.findOne({ couponCode });
   if (existingCoupon) {
     throw new ApiError(statusCode.BAD_REQUEST, "Coupon Code already exists");
@@ -1120,12 +1123,10 @@ const createCoupon = catchAsyncError(async (req, res) => {
   const start = new Date(startDate?.trim());
   const expiry = new Date(expiryDate?.trim());
 
- 
   if (isNaN(start.getTime()) || isNaN(expiry.getTime())) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid date format");
   }
 
-  
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
@@ -1140,7 +1141,6 @@ const createCoupon = catchAsyncError(async (req, res) => {
     );
   }
 
- 
   if (expiry <= start) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -1272,18 +1272,15 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     order,
   } = req.query;
 
- 
   page = page ? Math.max(parseInt(page, 10), 1) : 1;
   limit = limit ? Math.max(parseInt(limit, 10), 1) : 12;
 
   const skip = (page - 1) * limit;
 
-
   sortBy = sortBy || "createdAt";
   order = order === "asc" ? 1 : -1;
 
   const filter = {};
-
 
   if (search) {
     filter.$or = [
@@ -1294,7 +1291,6 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     ];
   }
 
-
   if (status && status !== "All") {
     filter.status = status;
   }
@@ -1304,13 +1300,11 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     filter.serviceType = serviceType;
   }
 
-
   if (startDate && endDate) {
     filter.startDate = { $gte: new Date(startDate) };
     filter.expiryDate = { $lte: new Date(endDate) };
   }
 
- 
   const total = await CouponModel.countDocuments(filter);
 
   const coupons = await CouponModel.find(filter)
@@ -1413,7 +1407,6 @@ const getUserActivities = async (req, res) => {
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
 
-  
     const filter = { userId };
     if (type) filter.type = type;
 
@@ -1425,7 +1418,6 @@ const getUserActivities = async (req, res) => {
       }
     }
 
-   
     const activities = await UserActivityModel.find(filter)
       .sort({ createdAt: -1 })
       .skip((pageNum - 1) * limitNum)
@@ -1459,11 +1451,11 @@ const getUserActivities = async (req, res) => {
       time: formatActivityTime(act.createdAt),
       performedBy: act.performedBy
         ? {
-          _id: act.performedBy._id,
-          name: act.performedBy.name,
-          email: act.performedBy.email,
-          role: act.performedBy.role,
-        }
+            _id: act.performedBy._id,
+            name: act.performedBy.name,
+            email: act.performedBy.email,
+            role: act.performedBy.role,
+          }
         : null,
     }));
 
@@ -1495,10 +1487,8 @@ const getUserActivities = async (req, res) => {
   }
 };
 
-
 const getTransactionHistory = async (req, res) => {
   try {
-   
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
@@ -1507,9 +1497,7 @@ const getTransactionHistory = async (req, res) => {
 
     const round2 = (n) => Number(Number(n || 0).toFixed(2));
 
-
     const query = {};
-
 
     if (status && status !== "ALL") {
       query.status = { $regex: new RegExp(`^${status}$`, "i") };
@@ -1522,7 +1510,7 @@ const getTransactionHistory = async (req, res) => {
         },
       };
     }
-   
+
     if (search) {
       const regex = new RegExp(search, "i");
       query.$or = [
@@ -1532,7 +1520,6 @@ const getTransactionHistory = async (req, res) => {
       ];
     }
 
-  
     const transactions = await TransactionModel.find(query)
       .sort({ createdAt: -1 })
       .lean();
@@ -1540,7 +1527,6 @@ const getTransactionHistory = async (req, res) => {
     const results = [];
 
     for (const txn of transactions) {
-
       const entries = Array.isArray(txn.entries) ? txn.entries : [];
 
       const pickEntry =
@@ -1554,8 +1540,14 @@ const getTransactionHistory = async (req, res) => {
 
       const entityType = pickEntry?.entityType || null;
       const entityId = pickEntry?.entityId ?? null;
-      console.log("Processing txn:", txn.transactionId, "EntityType:", entityType, "EntityId:", entityId);
-
+      console.log(
+        "Processing txn:",
+        txn.transactionId,
+        "EntityType:",
+        entityType,
+        "EntityId:",
+        entityId
+      );
 
       let name = null;
       let role = null;
@@ -1576,11 +1568,7 @@ const getTransactionHistory = async (req, res) => {
 
         name = user?.fullName || "Unknown User";
         role = user?.role || "user";
-      }
-
-
-
-      else if (entityType === "BUS_OPERATOR" && entityId) {
+      } else if (entityType === "BUS_OPERATOR" && entityId) {
         const op = await BusOperatorModel.findById(
           entityId,
           "fullName role"
@@ -1602,7 +1590,6 @@ const getTransactionHistory = async (req, res) => {
         name = admin?.userName || "Unknown Admin";
         role = admin?.role || null;
       } else if (entityType === "DRIVER" && entityId) {
-
         const driver = await DriverBasicDetails.findOne(
           { driverId: entityId },
           "fullName role"
@@ -1631,7 +1618,6 @@ const getTransactionHistory = async (req, res) => {
       });
     }
 
-  
     const filteredResults = results.filter((item) => {
       if (!search) return true;
       const s = String(search).toLowerCase();
@@ -1646,14 +1632,11 @@ const getTransactionHistory = async (req, res) => {
     // Pagination after search
     const paginatedResults = filteredResults.slice(skip, skip + limit);
 
-
     const totalRecords = filteredResults.length;
     const totalPages = Math.ceil(totalRecords / limit);
 
-
     const total = await TransactionModel.countDocuments(query);
 
-    
     const creditAgg = await TransactionModel.aggregate([
       { $match: { status: "SUCCESS" } },
       { $unwind: "$entries" },
@@ -1671,7 +1654,6 @@ const getTransactionHistory = async (req, res) => {
     const creditTotal = creditAgg.length > 0 ? round2(creditAgg[0].total) : 0;
     const debitTotal = debitAgg.length > 0 ? round2(debitAgg[0].total) : 0;
 
-   
     res.json({
       page,
       limit,

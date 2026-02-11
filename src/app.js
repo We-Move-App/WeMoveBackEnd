@@ -111,6 +111,7 @@ const {
 } = require("./routes/user-module/userCountry/userCountryroutes");
 const userMemberRoutes = require("./routes/user-module/userMemberRoutes/userMember.routes");
 const staticRouter = require("./routes/static/static.route");
+const nearbyDriversRoutes = require("./routes/new-driver-module/nearbyDriver/nearbyDrivers");
 
 if (node_env !== "production") {
   require("dotenv").config();
@@ -196,6 +197,8 @@ app.use("/api/v1/user/rides", userRidesBookingRoutes);
 app.use("/api/v1/user/bus-bookings", userBusBookingsRoutes);
 app.use("/api/v1/user/hotel-booking", hotelbookingRoutes);
 app.use("/api/v1/user/available-coupons", userCouponsRoutes);
+
+app.use("/api/v1/user", nearbyDriversRoutes);
 
 // app.use("/api/v1/user/wallet", userDigitalWalletRoutes);
 app.use("/api/v1/user/notifications", userNotificationRoutes);

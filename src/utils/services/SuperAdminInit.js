@@ -27,7 +27,7 @@ async function initSuperAdmin() {
     },
   };
 
-  // res only needs status + json since that’s all your controller calls
+
   const res = {
     status: (code) => ({
       json: (data) => {
