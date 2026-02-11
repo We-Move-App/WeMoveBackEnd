@@ -1,43 +1,61 @@
-const nodemailer = require("nodemailer");
+const { SESClient, SendEmailCommand } = require("@aws-sdk/client-ses");
 const ejs = require("ejs");
 const path = require("path");
 const {
-  email_user,
-  email_pass,
-  smtp_service,
-  smtp_port,
-  smtp_host,
+  aws_region,
+  aws_access_key_id,
+  aws_secret_access_key,
   email_from,
 } = require("../../config/config");
-require("dotenv").config();
+
+const sesClient = new SESClient({
+  region: aws_region,
+  credentials: {
+    accessKeyId: aws_access_key_id,
+    secretAccessKey: aws_secret_access_key,
+  },
+});
 
 async function sendEmail({ to, name, otp, template }) {
-
   try {
-    const templatePath = path.join(__dirname, "../../mailTemplates", template);
+    console.log({
+      aws_region,
+      aws_access_key_present: !!aws_access_key_id,
+      aws_secret_key_present: !!aws_secret_access_key,
+    });
+
+    console.log("GOtCha email");
+
+    const templatePath = path.join(process.cwd(), "src", "templates", template);
     console.log("Resolved template path:", templatePath);
+
     const emailContent = await ejs.renderFile(templatePath, { name, otp });
 
-    const transporter = nodemailer.createTransport({
-      service: smtp_service,
-      auth: {
-        user: email_user,
-        pass: email_pass,
+    const command = new SendEmailCommand({
+      Source: email_from,
+      Destination: {
+        ToAddresses: [to],
       },
-      port: parseInt(smtp_port || "587"),
-      host: smtp_host,
+      Message: {
+        Subject: {
+          Data: "Your OTP Code",
+          Charset: "UTF-8",
+        },
+        Body: {
+          Html: {
+            Data: emailContent,
+            Charset: "UTF-8",
+          },
+        },
+      },
     });
 
-    const info = await transporter.sendMail({
-      from: email_from,
-      to,
-      subject: "Your OTP Code",
-      html: emailContent,
-    });
+    const response = await sesClient.send(command);
+    console.log("Email sent successfully:", response.MessageId);
 
-    console.log("Email sent successfully:", info.messageId);
+    return response;
   } catch (error) {
-    console.error("Failed to send email:", error.message);
+    console.error("Failed to send email:", error);
     throw error;
   }
 }
