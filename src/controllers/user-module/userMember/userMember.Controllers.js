@@ -12,30 +12,17 @@ const generateCustomId = require("../../../utils/customId/generateCustomId");
 const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
 const {
   generateTokens,
-
-  refreshAccessToken,
-  saveRefreshToken,
   setTokenCookies,
 } = require("../../../utils/jwtToken/generateTokens");
 const {
   decodeAccessToken,
 } = require("../../../utils/jwtToken/customTokenService");
-const { v4: uuidv4 } = require("uuid");
 const Transaction = require("../../../models/transaction-module/transaction.model");
-const walletModel = require("../../../models/wallet-module/wallets.model");
-const {
-  sendOtpToPhone,
-  sendOtpToEmail,
-  verifyEmailOtp,
-  verifyPhoneOtp,
-} = require("../../../utils/otpService/otpService");
-const BlackListTokenModel = require("../../../models/global-module/blacklist-tokens/blacklist-token.model");
-const emailVerifyModel = require("../../../models/global-module/verifications/emailVerification.model");
-const phoneNumberVerifyModel = require("../../../models/global-module/verifications/phoneNumberVerification");
 const {
   validateEmail,
   validatePhoneNumber,
 } = require("../../../utils/validation/forSchema");
+const { AccessTokenModel } = require("../../../models/token/token.model");
 
 const addMemberUnderUser = catchAsyncError(async (req, res, next) => {
   const { name, email, password, confirmPassword, accessForView } = req.body;
@@ -177,6 +164,17 @@ const loginUser = catchAsyncError(async (req, res, next) => {
 
   // Step 6: Set cookies for session management
   setTokenCookies(res, accessToken, refreshToken);
+
+  await AccessTokenModel.findOneAndUpdate(
+    { user: existingUser._id },
+    { token: accessToken },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true,
+      runValidators: true,
+    }
+  );
 
   // Step 7: Prepare response data
   const responseData = {
@@ -403,8 +401,13 @@ const getTransactions = catchAsyncError(async (req, res) => {
   }
 
   const txFilter = {
-    userId: targetUserId,
-    description: { $regex: /^Received from /i },
+    entries: {
+      $elemMatch: {
+        entityType: "USER",
+        entityId: targetUserId,
+        type: "CREDIT",
+      },
+    },
   };
 
   if (search) {
@@ -433,7 +436,7 @@ const getTransactions = catchAsyncError(async (req, res) => {
     .lean();
 
   const formattedTransactions = transactions.map((tx) => ({
-    transactionId: tx.transactionId?.substring(0, 8) || "N/A",
+    transactionId: tx.transactionId || "N/A",
     userName: parentUser.fullName,
     email: parentUser.email,
     amount: tx.amount,

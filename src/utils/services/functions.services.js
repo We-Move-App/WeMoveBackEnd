@@ -718,7 +718,7 @@ const verifyOtpFunc = async ({
 
   try {
     const io = getIO();
-    const userRoom = user.userId.toString();
+    const userRoom = user._id.toString();
     console.log(userRoom);
 
     io.to(userRoom).emit("session:logout", {

@@ -35,12 +35,12 @@ const sendOtpToEmail = async (email) => {
     { upsert: true, new: true }
   );
 
-  await sendEmail({
-    to: email,
-    name: email.split("@")[0],
-    otp,
-    template: "otp.ejs",
-  });
+  // await sendEmail({
+  //   to: email,
+  //   name: email.split("@")[0],
+  //   otp,
+  //   template: "otp.ejs",
+  // });
 
   return {
     expiresAt,
