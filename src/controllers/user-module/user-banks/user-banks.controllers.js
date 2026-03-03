@@ -44,8 +44,6 @@ const updateBankDetails = catchAsyncError(async (req, res, next) => {
 });
 
 const deleteBankDetails = catchAsyncError(async (req, res, next) => {
-  logger.info("deleting bank details...");
-
   const result = await deleteBankFunc({
     req,
     res,
@@ -53,7 +51,6 @@ const deleteBankDetails = catchAsyncError(async (req, res, next) => {
   });
   return res.status(statusCode.OK).json(result);
 });
-
 
 module.exports = {
   createBankDetails,

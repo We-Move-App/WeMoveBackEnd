@@ -3,7 +3,6 @@ const statusCode = require("../../../utils/constants/statusCode");
 const logger = require("../../../utils/logger/logger");
 const UserModel = require("../../../models/user-module/users/user.model");
 const ApiResponse = require("../../../utils/response/ApiResponse");
-const UserBankModel = require("../../../models/user-module/user-banks/user-banks.model");
 const {
   saveDeviceToken,
   removeDeviceToken,
@@ -15,7 +14,6 @@ const {
 const { TypeOfUser } = require("../../../utils/constants/constants");
 const {
   registerUserWithEmailOrPhoneAndOtp,
-  sendOtpOnlyWithoutUserCreation,
   registerUserWithEmailAndPhoneNumber,
   loginUserWithEmailAndPhoneNumber,
   logoutUserFunc,
@@ -35,6 +33,7 @@ const {
   verifyPhoneOtp,
 } = require("../../../utils/otpService/otpService");
 const ApiError = require("../../../utils/response/ApiError");
+const { translateLn } = require("../../../utils/services/translator.service");
 
 //=====================|| REGISTER USER ||============================
 // const registerUserWithOtp = catchAsyncError(async (req, res, next) => {
@@ -77,16 +76,11 @@ const registerUserWithOtp = catchAsyncError(async (req, res, next) => {
   });
 
   const isSuccess = result;
+  const ln = "en";
 
   return res
     .status(statusCode.OK)
-    .json(
-      new ApiResponse(
-        statusCode.OK,
-        null,
-        `OTP is sent successfully to this ${req.body.emailOrPhone}`
-      )
-    );
+    .json(new ApiResponse(statusCode.OK, null, translateLn(ln, "OTP_SENT")));
 });
 
 const registerUser = catchAsyncError(async (req, res, next) => {
@@ -140,14 +134,19 @@ const sendOtpToPhoneHandler = catchAsyncError(async (req, res) => {
   const { phoneNo } = req.body;
 
   if (!phoneNo) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Phone number is required");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "PHONE_REQUIRED")
+    );
   }
 
   await sendOtpToPhone(phoneNo);
 
   return res
     .status(statusCode.CREATED)
-    .json(new ApiResponse(statusCode.CREATED, null, "Otp Sent successfully"));
+    .json(
+      new ApiResponse(statusCode.CREATED, null, translateLn(ln, "OTP_SENT"))
+    );
 });
 
 const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
@@ -156,7 +155,7 @@ const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
   if (!phoneNo || !otp) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Phone number and OTP are required"
+      translateLn(ln, "PHONE_AND_OTP_REQUIRED")
     );
   }
 
@@ -164,7 +163,9 @@ const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
 
   return res
     .status(statusCode.OK)
-    .json(new ApiResponse(statusCode.OK, {}, "Phone verified successfully"));
+    .json(
+      new ApiResponse(statusCode.OK, {}, translateLn(ln, "PHONE_VERIFIED"))
+    );
 });
 
 // =====================|| RESEND OTP ||=====================================

@@ -263,6 +263,17 @@ const verifyEmailOtpHandler = catchAsyncError(async (req, res) => {
 
   const { accessToken: newAccessToken, refreshToken } = generateTokens(driver);
 
+  await AccessTokenModel.findOneAndUpdate(
+    { user: driver.driverId },
+    { token: accessToken },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true,
+      runValidators: true,
+    }
+  );
+
   await saveRefreshToken({
     userId: driver.driverId,
     userType: EntityCodeEnum.DRIVER,
@@ -276,12 +287,12 @@ const verifyEmailOtpHandler = catchAsyncError(async (req, res) => {
     new ApiResponse(
       statusCode.CREATED,
       {
-        accessToken: newAccessToken,
-        refreshToken,
-        driverId: driver.driverId,
-        phoneNo: driver.phoneNo,
-        email: driver.email,
-        status: driver.status || null,
+        // accessToken: newAccessToken,
+        // refreshToken,
+        // driverId: driver.driverId,
+        // phoneNo: driver.phoneNo,
+        // email: driver.email,
+        // status: driver.status || null,
       },
       "Email verified successfully"
     )

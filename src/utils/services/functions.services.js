@@ -57,6 +57,7 @@ const {
   UserAddressModel,
 } = require("../../models/user-module/user-address/user-address.model");
 const { getIO } = require("../../socket");
+const { translateLn } = require("./translator.service");
 // ==============================================
 const registerUserWithEmailAndPhoneNumber = async ({
   req,
@@ -1304,9 +1305,13 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
 }) => {
   try {
     const { emailOrPhone } = req.body;
+    const ln = "en";
 
     if (!emailOrPhone) {
-      throw new ApiError(statusCode.BAD_REQUEST, "Please enter email or phone");
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        translateLn(ln, "ENTER_EMAIL_OR_PHONE")
+      );
     }
 
     const isEmail = validateEmail(emailOrPhone);
@@ -1315,7 +1320,7 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
     if (!isEmail && !isPhoneNumber) {
       throw new ApiError(
         statusCode.BAD_REQUEST,
-        "Enter a valid email or phone number"
+        translateLn(ln, "VALID_EMAIL_OR_PHONE")
       );
     }
 
@@ -1349,10 +1354,12 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
     } else {
       // 🚨 Blocked or Rejected users should NOT proceed
       if (["blocked", "rejected"].includes(user.verificationStatus)) {
-        throw new ApiError(
-          statusCode.FORBIDDEN,
-          `Your account is ${user.verificationStatus}. Please contact support.`
-        );
+        const key =
+          user.verificationStatus === "blocked"
+            ? "ACCOUNT_BLOCKED"
+            : "ACCOUNT_REJECTED";
+
+        throw new ApiError(statusCode.FORBIDDEN, translateLn(ln, key));
       }
     }
 
@@ -1370,14 +1377,15 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
     // const { accessToken, refreshToken } = await generateTokens(user, typeOfUser);
     // setTokenCookies(res, accessToken, refreshToken);
 
+    const key = isEmail ? "OTP_SENT_EMAIL" : "OTP_SENT_PHONE";
+
     return {
       success: true,
-      message: `OTP sent to ${isEmail ? "email" : "phone number"}`,
+      message: translateLn(ln, key),
       contact: emailOrPhone,
       expiresAt: otpData.expiresAt,
     };
   } catch (error) {
-    console.error("❌ Error in registerUserWithEmailOrPhoneAndOtp:", error);
     if (error instanceof ApiError) {
       // Already an ApiError → rethrow as-is
       throw error;

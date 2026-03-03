@@ -16,9 +16,7 @@ const {
 const BusModel = require("../../../models/bus-module/buses/buses.model");
 const BusRouteModel = require("../../../models/bus-module/bus-routes/bus-routes.model");
 const mongoose = require("mongoose");
-const moment = require("moment");
 const BusSeatsLayoutModel = require("../../../models/bus-module/bus-seats-management/buses-seats.model");
-const { PaymentStatus } = require("../../../utils/constants/constants");
 const ValidateSecurePin = require("../../../utils/services/securePin.services");
 const {
   PaymentStatusEnum,
@@ -35,9 +33,13 @@ const {
 const generateCustomId = require("../../../utils/customId/generateCustomId");
 const Transaction = require("../../../models/transaction-module/transaction.model");
 const UserModel = require("../../../models/user-module/users/user.model");
+const { fetchLn } = require("../../../utils/services/user.services");
+const { translateLn } = require("../../../utils/services/translator.service");
 
 const getUserBusBookings = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
+
+  const ln = await fetchLn(_id);
 
   const bookings = await BusBookingModel.find({ bookedBy: userId })
     .sort({ createdAt: -1 })
@@ -49,7 +51,10 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
     .lean();
 
   if (!bookings || bookings.length === 0) {
-    throw new ApiError(statusCode.NOT_FOUND, "Bookings not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "BOOKINGS_NOT_FOUND")
+    );
   }
 
   const transformedBookings = await Promise.all(
@@ -89,7 +94,7 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
       new ApiResponse(
         statusCode.OK,
         transformedBookings,
-        "User bus bookings retrieved successfully"
+        translateLn(ln, "BUS_BOOKINGS_FETCHED")
       )
     );
 });
@@ -112,6 +117,8 @@ const createBusBooking = catchAsyncError(async (req, res) => {
     termAndConditions,
   } = req.body;
 
+  const ln = await fetchLn(_id);
+
   /* ---------- VALIDATION ---------- */
   validateRequestBody(
     [
@@ -129,7 +136,10 @@ const createBusBooking = catchAsyncError(async (req, res) => {
   );
 
   if (!Array.isArray(passengers) || passengers.length !== noOfPassengers) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Passenger count mismatch");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "PASSENGER_COUNT_MISMATCH")
+    );
   }
 
   isValidFutureDate(journeyDate);
@@ -142,7 +152,10 @@ const createBusBooking = catchAsyncError(async (req, res) => {
     /* ---------- USER ---------- */
     const user = await UserModel.findById(userId);
     if (!user) {
-      throw new ApiError(statusCode.NOT_FOUND, "User not found");
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        translateLn(ln, "USER_NOT_FOUND")
+      );
     }
 
     /* ---------- BUS & ROUTE ---------- */
@@ -151,8 +164,16 @@ const createBusBooking = catchAsyncError(async (req, res) => {
       BusRouteModel.findById(routeId).lean(),
     ]);
 
-    if (!bus) throw new ApiError(statusCode.NOT_FOUND, "Bus not found");
-    if (!route) throw new ApiError(statusCode.NOT_FOUND, "Route not found");
+    if (!bus)
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        translateLn(ln, "BUS_NOT_FOUND")
+      );
+    if (!route)
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        translateLn(ln, "ROUTE_NOT_FOUND")
+      );
 
     /* ---------- AMOUNT CALCULATION ---------- */
     const finalAmount = Math.max(0, price - discountApplied); // USER PAYS
@@ -161,7 +182,10 @@ const createBusBooking = catchAsyncError(async (req, res) => {
     /* ---------- WALLET CHECK ---------- */
     const wallet = await WalletModel.findOne({ userId }).session(session);
     if (!wallet || wallet.balance < finalAmount) {
-      throw new ApiError(statusCode.BAD_REQUEST, "Insufficient wallet balance");
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        translateLn(ln, "INSUFFICIENT_BALANCE")
+      );
     }
 
     /* ---------- CREATE BOOKING ---------- */
@@ -210,7 +234,10 @@ const createBusBooking = catchAsyncError(async (req, res) => {
     /* ---------- ADMIN WALLET (CREDIT) ---------- */
     const admin = await AdminModel.findOne({ role: "SuperAdmin" });
     if (!admin) {
-      throw new ApiError(statusCode.NOT_FOUND, "Admin not found");
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        translateLn(ln, "ADMIN_NOT_FOUND")
+      );
     }
 
     await WalletModel.findOneAndUpdate(
@@ -334,7 +361,7 @@ const createBusBooking = catchAsyncError(async (req, res) => {
         new ApiResponse(
           statusCode.CREATED,
           bookingWithDetails,
-          "Bus booked successfully"
+          translateLn(ln, "BUS_BOOKED_SUCCESS")
         )
       );
   } catch (error) {
@@ -355,13 +382,18 @@ const calculateBusBooking = catchAsyncError(async (req, res) => {
     couponCode,
   } = req.body;
 
+  const ln = await fetchLn(_id);
+
   validateRequestBody(
     ["busId", "routeId", "passengers", "noOfPassengers", "journeyDate"],
     req.body
   );
 
   if (!Array.isArray(passengers) || passengers.length !== noOfPassengers) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Passenger count mismatch");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "PASSENGER_COUNT_MISMATCH")
+    );
   }
 
   isValidFutureDate(journeyDate);
@@ -372,8 +404,13 @@ const calculateBusBooking = catchAsyncError(async (req, res) => {
     BusRouteModel.findById(routeId).lean(),
   ]);
 
-  if (!bus) throw new ApiError(statusCode.NOT_FOUND, "Bus not found");
-  if (!route) throw new ApiError(statusCode.NOT_FOUND, "Route not found");
+  if (!bus)
+    throw new ApiError(statusCode.NOT_FOUND, translateLn(ln, "BUS_NOT_FOUND"));
+  if (!route)
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "ROUTE_NOT_FOUND")
+    );
 
   /* ---------- PRICE ---------- */
   const pricePerSeat = route.pricePerSeat || bus.pricePerSeat || 0;
@@ -429,7 +466,7 @@ const calculateBusBooking = catchAsyncError(async (req, res) => {
 
   return res.status(statusCode.OK).json({
     success: true,
-    message: "Price calculated successfully",
+    message: translateLn(ln, "PRICE_CALCULATED"),
     data: {
       journeyDate: journeyDateNormalized,
       noOfPassengers,
@@ -457,7 +494,10 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
 
   if (!bookingId) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Booking ID is required");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "BOOKING_ID_REQUIRED")
+    );
   }
 
   const booking = await BusBookingModel.findById(bookingId)
@@ -472,7 +512,10 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
     delete booking.routeId.endLocation;
   }
   if (!booking) {
-    throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "BOOKINGS_NOT_FOUND")
+    );
   }
   const busId = booking?.busId?._id;
   if (busId) {
@@ -519,7 +562,7 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
       new ApiResponse(
         statusCode.OK,
         booking,
-        "Bus booking details retrieved successfully"
+        translateLn(ln, "BUS_BOOKINGS_FETCHED")
       )
     );
 });
@@ -533,14 +576,19 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
   );
 
   if (!booking) {
-    throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "BOOKINGS_NOT_FOUND")
+    );
   }
 
   if (["Cancelled", "Completed"].includes(booking.status)) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      `Your booking is already ${booking.status}`
-    );
+    const key =
+      booking.status === "Cancelled"
+        ? "BOOKING_ALREADY_CANCELLED"
+        : "BOOKING_ALREADY_COMPLETED";
+
+    throw new ApiError(statusCode.BAD_REQUEST, translateLn(req.ln, key));
   }
 
   const bus = await BusModel.findById(booking.busId).select(
@@ -551,7 +599,10 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
   );
 
   if (!bus || !route) {
-    throw new ApiError(statusCode.NOT_FOUND, "Bus or Route details not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "BUS_OR_ROUTE_NOT_FOUND")
+    );
   }
 
   const journeyDate = new Date(booking.journeyDate);
@@ -574,7 +625,7 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
     if (!operatorTxn) {
       throw new ApiError(
         statusCode.NOT_FOUND,
-        "Transaction not found for this booking"
+        translateLn(ln, "TRANSACTION_NOT_FOUND")
       );
     }
     const busOperatorId = operatorTxn.busOperatorId;
@@ -583,7 +634,7 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
     if (!userWallet) {
       throw new ApiError(
         statusCode.NOT_FOUND,
-        "Wallet not found for this user"
+        translateLn(ln, "WALLET_NOT_FOUND")
       );
     }
 
@@ -606,13 +657,13 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
     if (!operatorWallet) {
       throw new ApiError(
         statusCode.NOT_FOUND,
-        "Wallet not found for bus operator"
+        translateLn(ln, "WALLET_NOT_FOUND")
       );
     }
     if (operatorWallet.balance < refundAmount) {
       throw new ApiError(
         statusCode.BAD_REQUEST,
-        "Insufficient balance in bus operator wallet to process refund"
+        translateLn(ln, "OPERATOR_INSUFFICIENT_BALANCE")
       );
     }
 
@@ -641,7 +692,10 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
   });
 
   if (!bookedSeat) {
-    throw new ApiError(statusCode.NOT_FOUND, "Booked seat layout not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "BOOKED_SEAT_LAYOUT_NOT_FOUND")
+    );
   }
 
   bookedSeat.seats = bookedSeat.seats.map((seat) => {
@@ -689,7 +743,7 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
       new ApiResponse(
         statusCode.OK,
         bookingResponse,
-        "Booking cancelled successfully"
+        translateLn(ln, "BOOKING_CANCELLED")
       )
     );
 });
@@ -706,7 +760,9 @@ const payBusBookingPayment = catchAsyncError(async (req, res, next) => {
 
   return res
     .status(statusCode.OK)
-    .json(new ApiResponse(statusCode.OK, {}, "Payment Successfully Done"));
+    .json(
+      new ApiResponse(statusCode.OK, {}, translateLn(ln, "PAYMENT_SUCCESS"))
+    );
 });
 // const UpcomingBusBookings = catchAsyncError(async (req, res) => {
 //   const { page = 1, limit = 10 } = req.query;
@@ -821,6 +877,7 @@ const payBusBookingPayment = catchAsyncError(async (req, res, next) => {
 const UpcomingBusBookings = catchAsyncError(async (req, res) => {
   const { page = 1, limit = 10 } = req.query;
   const userId = req.user._id;
+  const ln = await fetchLn(userId);
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -932,13 +989,14 @@ const UpcomingBusBookings = catchAsyncError(async (req, res) => {
         limit: parseInt(limit),
         bookings: enhancedBookings,
       },
-      "Upcoming bus bookings fetched successfully"
+      translateLn(ln, "UPCOMING_BUS_BOOKINGS")
     )
   );
 });
 const OldBusBookings = catchAsyncError(async (req, res) => {
   const { page = 1, limit = 10 } = req.query;
   const userId = req.user._id;
+  const ln = await fetchLn(userId);
 
   const now = new Date();
 
@@ -1029,7 +1087,7 @@ const OldBusBookings = catchAsyncError(async (req, res) => {
         limit: parseInt(limit),
         bookings: enhancedBookings,
       },
-      "Old bus bookings fetched successfully"
+      translateLn(ln, "OLD_BUS_BOOKINGS")
     )
   );
 });

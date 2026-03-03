@@ -7,6 +7,7 @@ const statusCode = require("../constants/statusCode");
 const HotelBookingModel = require("../../models/hotel-module/hotel-bookings/hotel-bookings.model");
 const QRCode = require("qrcode");
 const Transaction = require("../../models/transaction-module/transaction.model");
+const BusModel = require("../../models/bus-module/buses/buses.model");
 
 const formatAmount = (amount) =>
   Number(amount || 0).toLocaleString("en-US", {
@@ -256,11 +257,14 @@ const getBusInvoice = catchAsyncError(async (req, res, next) => {
   const booking =
     await BusBookingModel.findById(bookingId).populate("passengers");
 
+  const bus = await BusModel.findById(booking.busId);
+  const busName = bus.busName || "";
+
   if (!booking) {
     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
   }
 
-  const base64Pdf = await generateBusBookingInvoiceBase64(booking);
+  const base64Pdf = await generateBusBookingInvoiceBase64(booking, busName);
 
   return res
     .status(statusCode.OK)
@@ -347,7 +351,9 @@ const drawLabelValue = (page, { x, y, label, value, font, size = 14 }) => {
 };
 
 /* ---------- main ---------- */
-const generateBusBookingInvoiceBase64 = async (booking) => {
+const generateBusBookingInvoiceBase64 = async (booking, busName) => {
+  console.log("busName", busName);
+
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage([900, 520]); // wide ticket style
   const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -470,13 +476,11 @@ const generateBusBookingInvoiceBase64 = async (booking) => {
     font,
   });
 
-  const busReg =
-    booking?.bus?.regNumber || booking?.busRegNumber || booking?.bus || "-";
   y1 = drawLabelValue(page, {
     x: col1X,
     y: y1,
     label: "Bus",
-    value: busReg,
+    value: busName,
     font,
   });
 

@@ -1,0 +1,67 @@
+module.exports = {
+  ADDRESS_REQUIRED_FIELDS: "zoneCode, area et townCity sont obligatoires",
+  ADDRESS_ALREADY_EXISTS: "Cette adresse existe déjà pour l'utilisateur",
+  ADDRESS_CREATED: "Adresse créée avec succès",
+  ADDRESS_UPDATED: "Adresse mise à jour avec succès",
+  ADDRESS_NOT_FOUND: "Adresse non trouvée",
+  ADDRESSES_FETCHED: "Adresses récupérées avec succès",
+  USER_NOT_FOUND: "Utilisateur introuvable",
+  ADDRESS_ID_MISSING: "L'identifiant de l'adresse est manquant",
+  ADDRESSES_DELETED: "Adresses supprimées avec succès",
+
+  OTP_SENT: "Le code OTP a été envoyé avec succès à",
+  ENTER_EMAIL_OR_PHONE: "Veuillez entrer un email ou un numéro de téléphone",
+  VALID_EMAIL_OR_PHONE: "Entrez un email ou un numéro de téléphone valide",
+  ACCOUNT_BLOCKED: "Votre compte est bloqué. Veuillez contacter le support",
+  ACCOUNT_REJECTED: "Votre compte est rejeté. Veuillez contacter le support",
+  OTP_SENT_EMAIL: "OTP envoyé à l'email",
+  OTP_SENT_PHONE: "OTP envoyé au numéro de téléphone",
+  PHONE_REQUIRED: "Le numéro de téléphone est requis",
+  PHONE_AND_OTP_REQUIRED: "Le numéro de téléphone et le code OTP sont requis",
+  PHONE_VERIFIED: "Numéro de téléphone vérifié avec succès",
+
+  BANK_FILES_REQUIRED:
+    "Les documents des coordonnées bancaires sont obligatoires",
+  ACCOUNT_NUMBER_REQUIRED: "Le numéro de compte est requis",
+  BANK_ALREADY_EXISTS:
+    "L'utilisateur possède déjà un compte bancaire enregistré",
+  ACCOUNT_NUMBER_EXISTS: "Ce numéro de compte est déjà enregistré",
+  INVALID_DOCUMENT_TYPES: "Types de documents invalides",
+  BANK_ADD_ERROR:
+    "Une erreur s'est produite lors de l'ajout des coordonnées bancaires",
+  BANK_ADDED_SUCCESS: "Coordonnées bancaires ajoutées avec succès",
+  BANK_NOT_FOUND: "Coordonnée bancaire introuvable",
+  BANK_FOUND: "Données bancaires trouvées",
+  BANK_DELETED: "Coordonnées bancaires supprimées avec succès",
+  BANK_UPDATED: "Coordonnées bancaires mises à jour avec succès",
+
+  BOOKINGS_NOT_FOUND: "Réservations introuvables",
+  BUS_BOOKINGS_FETCHED: "Réservations de bus récupérées avec succès",
+  PASSENGER_COUNT_MISMATCH: "Nombre de passagers incohérent",
+  BUS_NOT_FOUND: "Bus introuvable",
+  ROUTE_NOT_FOUND: "Itinéraire introuvable",
+  INSUFFICIENT_BALANCE: "Solde du portefeuille insuffisant",
+  BUS_BOOKED_SUCCESS: "Bus réservé avec succès",
+  BOOKING_ID_REQUIRED: "L'identifiant de réservation est requis",
+  BOOKING_ALREADY_CANCELLED: "Votre réservation est déjà annulée",
+  BOOKING_ALREADY_COMPLETED: "Votre réservation est déjà terminée",
+  BUS_OR_ROUTE_NOT_FOUND: "Détails du bus ou de l'itinéraire introuvables",
+
+  PRICE_CALCULATED: "Prix calculé avec succès",
+  ADMIN_NOT_FOUND: "Administrateur introuvable",
+
+  TRANSACTION_NOT_FOUND: "Transaction introuvable",
+  WALLET_NOT_FOUND: "Portefeuille introuvable",
+  OPERATOR_INSUFFICIENT_BALANCE:
+    "Solde insuffisant dans le portefeuille de l'opérateur de bus pour traiter le remboursement",
+  BOOKED_SEAT_LAYOUT_NOT_FOUND: "Disposition des sièges réservés introuvable",
+  BOOKING_CANCELLED: "Réservation annulée avec succès",
+  PAYMENT_SUCCESS: "Paiement effectué avec succès",
+
+  UPCOMING_BUS_BOOKINGS: "Réservations de bus à venir récupérées avec succès",
+  OLD_BUS_BOOKINGS: "Anciennes réservations de bus récupérées avec succès",
+
+  // Sent
+  NO_BUS_ROUTES_FOUND: "Aucun itinéraire de bus correspondant trouvé",
+  BUS_ROUTES_FOUND: "Itinéraires de bus trouvés avec succès",
+};

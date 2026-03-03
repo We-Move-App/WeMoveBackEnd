@@ -200,7 +200,7 @@ const getHotelInvoiceHTML = (booking, logoDataUrl) => {
     <div class="value">Phone: ${booking.user[0].phoneNumber || "N/A"}</div>
 
     <table class="info-table">
-      <tr><td>Booking ID</td><td>${booking._id}</td></tr>
+      <tr><td>Booking ID</td><td>${booking.bookingId}</td></tr>
       <tr><td>Hotel</td><td>${booking.hotelId?.hotelName}</td></tr>
       <tr><td>No of Rooms</td><td>${booking.noOfRoom}</td></tr>
       <tr>

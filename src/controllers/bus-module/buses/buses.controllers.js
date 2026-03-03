@@ -24,6 +24,8 @@ const BusRouteModel = require("../../../models/bus-module/bus-routes/bus-routes.
 const BusSeatsLayoutModel = require("../../../models/bus-module/bus-seats-management/buses-seats.model");
 const { getFinalPrice } = require("../../../utils/services/prices.services");
 const UserRecentSearchModel = require("../../../models/user-module/user-recent-search/user-recent-search.model");
+const { fetchLn } = require("../../../utils/services/user.services");
+const { translateLn } = require("../../../utils/services/translator.service");
 
 // =================|| ADD BUS ||==================
 const addBus = catchAsyncError(async (req, res, next) => {
@@ -39,7 +41,6 @@ const addBus = catchAsyncError(async (req, res, next) => {
     runningDays,
     noOfSeats,
   } = req.body;
-
 
   const { busImages, bus_license_front } = req.files;
 
@@ -223,10 +224,10 @@ const getAllBuses = catchAsyncError(async (req, res, next) => {
     const regex = new RegExp(escapeRegex(search), "i");
 
     query.$or = [
-      { busRegNumber: regex },       // ✅ registration number
-      { busName: regex },            // ✅ bus name
-      { busModelNumber: regex },     // ✅ model number
-      { status: regex },             // ✅ status
+      { busRegNumber: regex }, // ✅ registration number
+      { busName: regex }, // ✅ bus name
+      { busModelNumber: regex }, // ✅ model number
+      { status: regex }, // ✅ status
     ];
   }
 
@@ -236,7 +237,9 @@ const getAllBuses = catchAsyncError(async (req, res, next) => {
     .skip(startIndex)
     .populate("assignedDriver", "fullName")
     .populate("busImages", "images")
-    .select("assignedDriver busRegNumber busName busModelNumber status noOfSeats");
+    .select(
+      "assignedDriver busRegNumber busName busModelNumber status noOfSeats"
+    );
 
   if (!buses || buses.length === 0) {
     throw new ApiError(statusCode.NOT_FOUND, "No buses found");
@@ -275,7 +278,6 @@ const getAllBuses = catchAsyncError(async (req, res, next) => {
     .status(statusCode.OK)
     .json(new ApiResponse(statusCode.OK, results, "Data found successfully"));
 });
-
 
 // =================|| GET BUS BY ID ||==================
 const getSingleBus = catchAsyncError(async (req, res, next) => {
@@ -333,6 +335,8 @@ const changeBusStatus = catchAsyncError(async (req, res, next) => {
 // =================|| SEARCHES BUS BY USERS||==================
 const searchBuses = catchAsyncError(async (req, res, next) => {
   const { from, to, dateOfJourney } = req.query;
+  const _id = req.user._id;
+  const ln = await fetchLn(_id);
 
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
@@ -427,7 +431,6 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
     })
   );
 
-
   // Add bus images
   await Promise.all(
     findRoutes.map(async (route) => {
@@ -450,7 +453,7 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
 
   if (!findRoutes.length) {
     return next(
-      new ApiError(statusCode.NOT_FOUND, "No matching bus routes found")
+      new ApiError(statusCode.NOT_FOUND, translateLn(ln, "NO_BUS_ROUTES_FOUND"))
     );
   }
 
@@ -462,14 +465,18 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
       startDate.setHours(depHour, depMin, 0, 0);
 
       const [arrHour, arrMin] = route.arrivalTime.split(":").map(Number);
-      let diffInMinutes = (arrHour * 60 + arrMin) - (depHour * 60 + depMin);
+      let diffInMinutes = arrHour * 60 + arrMin - (depHour * 60 + depMin);
       if (diffInMinutes < 0) diffInMinutes += 24 * 60;
 
       const endDate = new Date(startDate);
       endDate.setMinutes(endDate.getMinutes() + diffInMinutes);
 
       // Get price
-      const pricePerSeat = await getFinalPrice("bus", route.pricePerSeat, new Date());
+      const pricePerSeat = await getFinalPrice(
+        "bus",
+        route.pricePerSeat,
+        new Date()
+      );
 
       // Transform the route object
       const transformedRoute = {
@@ -496,13 +503,15 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
     })
   );
 
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      updatedRoutes,
-      "Bus routes found successfully"
-    )
-  );
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        updatedRoutes,
+        translateLn(ln, "BUS_ROUTES_FOUND")
+      )
+    );
 });
 
 const deletePermanentBus = catchAsyncError(async (req, res, next) => {
@@ -551,7 +560,6 @@ const deletePermanentBus = catchAsyncError(async (req, res, next) => {
 });
 
 module.exports = {
-
   addBus,
   updateBus,
   getAllBuses,

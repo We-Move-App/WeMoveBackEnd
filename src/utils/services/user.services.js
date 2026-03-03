@@ -1,11 +1,15 @@
 const UserModel = require("../../models/user-module/users/user.model");
 
 const fetchLn = async (userId) => {
-  const user = await UserModel.findById(userId);
+  try {
+    if (!userId) return "en";
 
-  const ln = user.ln ? user.ln : "en";
+    const user = await UserModel.findById(userId).select("ln");
 
-  return ln;
+    return user?.ln || "en";
+  } catch (err) {
+    return "en";
+  }
 };
 
 module.exports = { fetchLn };
