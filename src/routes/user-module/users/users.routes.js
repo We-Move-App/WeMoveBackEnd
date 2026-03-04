@@ -40,7 +40,9 @@ userRoutes.route("/assign-branch").put(isUserAuthenticated, assignBranch);
 userRoutes.route("/reset-password").put(isUserAuthenticated, resetPassword);
 userRoutes.route("/reset-password-without-auth").put(resetPassword2);
 userRoutes.route("/beneficiary").post(getBeneficiary);
-userRoutes.route("/available-modules").get(getAvailableModules);
+userRoutes
+  .route("/available-modules")
+  .get(isUserAuthenticated, getAvailableModules);
 userRoutes.route("/delete-profile").delete(deleteProfile);
 userRoutes.route("/change-language").post(changeLanguage);
 

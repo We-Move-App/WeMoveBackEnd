@@ -64,4 +64,12 @@ module.exports = {
   // Sent
   NO_BUS_ROUTES_FOUND: "Aucun itinéraire de bus correspondant trouvé",
   BUS_ROUTES_FOUND: "Itinéraires de bus trouvés avec succès",
+  NO_COUPONS_AVAILABLE: "Aucun coupon disponible",
+  USE: "Utilisez",
+  ON_ORDER_ABOVE: "sur une commande supérieure à",
+  MODULE_BUS: "Bus",
+  MODULE_HOTEL: "Hôtel",
+  MODULE_TAXI: "Taxi",
+  MODULE_BIKE: "Moto",
+  AVAILABLE_MODULES: "Modules disponibles",
 };

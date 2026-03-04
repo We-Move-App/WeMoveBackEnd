@@ -356,6 +356,8 @@ const {
   NotificationTypeEnum,
   LnEnum,
 } = require("../../../utils/constants/ENUM");
+const { fetchLn } = require("../../../utils/services/user.services");
+const { translateLn } = require("../../../utils/services/translator.service");
 
 const getBeneficiary = catchAsyncError(async (req, res, next) => {
   const { userId } = req.body;
@@ -378,13 +380,21 @@ const getBeneficiary = catchAsyncError(async (req, res, next) => {
 });
 
 const getAvailableModules = catchAsyncError(async (req, res, next) => {
+  const userId = req.user?._id;
+  const ln = await fetchLn(userId);
+
+  const features = availableModule.map((module) => ({
+    ...module,
+    name: translateLn(ln, `MODULE_${module.name.toUpperCase()}`),
+  }));
+
   return res
     .status(statusCode.OK)
     .json(
       new ApiResponse(
         statusCode.OK,
-        { features: availableModule },
-        "Available modules"
+        { features },
+        translateLn(ln, "AVAILABLE_MODULES")
       )
     );
 });
