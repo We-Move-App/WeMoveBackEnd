@@ -90,4 +90,15 @@ module.exports = {
   OF: "of",
   ADULTS: "Adults",
   KIDS: "Kids",
+
+  ACCESS_TOKEN_INVALID: "Access token is missing or invalid",
+  ENTITY_PARAM_REQUIRED:
+    "Entity parameter is required and must be 'driver' or 'user'",
+  INVALID_VEHICLE_TYPE: "Invalid vehicle type",
+  INVALID_DRIVER_TOKEN: "Invalid driver token",
+  INVALID_USER_TOKEN: "Invalid user token",
+  DRIVER_NOT_FOUND: "Driver not found",
+  TRIP_HISTORY_FETCHED: "Trip history fetched successfully",
+  UNKNOWN_USER: "Unknown User",
+  UNKNOWN_DRIVER: "Unknown Driver",
 };

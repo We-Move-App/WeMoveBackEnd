@@ -38,6 +38,7 @@ const Commission = require("../../models/admin-module/commission-management/comm
 const { AdminModel } = require("../../models/admin-module/admin/admin.model");
 const Transaction = require("../../models/transaction-module/transaction.model");
 const { fetchLn } = require("../../utils/services/user.services");
+const { translateLn } = require("../../utils/services/translator.service");
 
 function calculateFare(type, distanceInKm, durationInMin) {
   const config = vehicleConfig[type];
@@ -1182,7 +1183,7 @@ const getTripHistory = catchAsyncError(async (req, res) => {
   if (!authHeader?.startsWith("Bearer ")) {
     throw new ApiError(
       statusCode.UNAUTHORIZED,
-      "Access token is missing or invalid"
+      translateLn("en", "ACCESS_TOKEN_INVALID")
     );
   }
 
@@ -1191,17 +1192,16 @@ const getTripHistory = catchAsyncError(async (req, res) => {
   const _id = decoded._id;
   const ln = await fetchLn(_id);
 
-  // Entity is mandatory, no default
   const entity = req.query.entity;
   if (!entity || !["driver", "user"].includes(entity)) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Entity parameter is required and must be 'driver' or 'user'"
+      translateLn(ln, "ENTITY_PARAM_REQUIRED")
     );
   }
 
-  // Get vehicle type filter (optional)
   const vehicleType = req.query.vehicle;
+
   if (
     vehicleType &&
     vehicleType !== VehicleTypeEnum.TAXI &&
@@ -1209,24 +1209,32 @@ const getTripHistory = catchAsyncError(async (req, res) => {
   ) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      `Vehicle type must be one of: ['${VehicleTypeEnum.TAXI}', '${VehicleTypeEnum.BIKE}']`
+      translateLn(ln, "INVALID_VEHICLE_TYPE")
     );
   }
 
   let entityId;
+
   if (entity === "driver") {
     entityId = decoded?.driverId;
+
     if (!entityId) {
-      throw new ApiError(statusCode.UNAUTHORIZED, "Invalid driver token");
+      throw new ApiError(
+        statusCode.UNAUTHORIZED,
+        translateLn(ln, "INVALID_DRIVER_TOKEN")
+      );
     }
   } else {
-    entityId = decoded?._id; // Use _id for users
+    entityId = decoded?._id;
+
     if (!entityId) {
-      throw new ApiError(statusCode.UNAUTHORIZED, "Invalid user token");
+      throw new ApiError(
+        statusCode.UNAUTHORIZED,
+        translateLn(ln, "INVALID_USER_TOKEN")
+      );
     }
   }
 
-  // Get pagination parameters with defaults
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
@@ -1235,8 +1243,8 @@ const getTripHistory = catchAsyncError(async (req, res) => {
     totalTrips,
     nameMap = {};
 
-  // Build base query conditions
   let baseConditions = {};
+
   if (entity === "driver") {
     baseConditions = {
       $or: [
@@ -1254,34 +1262,34 @@ const getTripHistory = catchAsyncError(async (req, res) => {
     };
   }
 
-  // Add vehicle type filter if provided
   if (vehicleType) {
     baseConditions.vehicleType = vehicleType;
   }
 
   if (entity === "driver") {
-    // DRIVER FLOW
     const driverExists = await DriverBasicDetails.exists({
       driverId: entityId,
     });
+
     if (!driverExists) {
-      throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        translateLn(ln, "DRIVER_NOT_FOUND")
+      );
     }
 
-    // Get trips with vehicle filter
     [allTrips, totalTrips] = await Promise.all([
       RideBookingDetail.find(baseConditions)
         .sort({ "timestamps.completedAt": -1, "timestamps.cancelledAt": -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
+
       RideBookingDetail.countDocuments(baseConditions),
     ]);
 
-    // Get user IDs from all trips
     const userIds = allTrips.map((trip) => trip.userId).filter((id) => id);
 
-    // Fetch user details for all trips
     const users = await UserModel.find(
       { _id: { $in: userIds } },
       { _id: 1, fullName: 1 }
@@ -1291,26 +1299,27 @@ const getTripHistory = catchAsyncError(async (req, res) => {
       nameMap[user._id.toString()] = user.fullName;
     });
   } else {
-    // USER FLOW
     const userExists = await UserModel.exists({ _id: entityId });
+
     if (!userExists) {
-      throw new ApiError(statusCode.NOT_FOUND, "User not found");
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        translateLn(ln, "USER_NOT_FOUND")
+      );
     }
 
-    // Get trips with vehicle filter
     [allTrips, totalTrips] = await Promise.all([
       RideBookingDetail.find(baseConditions)
         .sort({ "timestamps.completedAt": -1, "timestamps.cancelledAt": -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
+
       RideBookingDetail.countDocuments(baseConditions),
     ]);
 
-    // Get driver IDs from all trips
     const driverIds = allTrips.map((trip) => trip.driverId).filter((id) => id);
 
-    // Fetch driver details for all trips
     const drivers = await DriverBasicDetails.find(
       { driverId: { $in: driverIds } },
       { driverId: 1, fullName: 1 }
@@ -1321,7 +1330,6 @@ const getTripHistory = catchAsyncError(async (req, res) => {
     });
   }
 
-  // Process all trips into a single array
   const tripHistory = allTrips.map((trip) => {
     const baseData = {
       rideId: trip.bookingId,
@@ -1335,10 +1343,9 @@ const getTripHistory = catchAsyncError(async (req, res) => {
     };
 
     if (entity === "driver") {
-      // DRIVER RESPONSE
-      baseData.userName = nameMap[trip.userId?.toString()] || "Unknown User";
+      baseData.userName =
+        nameMap[trip.userId?.toString()] || translateLn(ln, "UNKNOWN_USER");
 
-      // Check if it's a completed trip
       if (
         trip.rideStatus === RideBookStatusEnum.COMPLETED &&
         trip.driverId === entityId
@@ -1352,10 +1359,10 @@ const getTripHistory = catchAsyncError(async (req, res) => {
         };
       }
 
-      // Check if it's a cancelled trip by this driver
       const cancelledRecord = trip.cancelledByDrivers?.find(
         (c) => c.driverId === entityId
       );
+
       if (cancelledRecord) {
         return {
           ...baseData,
@@ -1367,10 +1374,9 @@ const getTripHistory = catchAsyncError(async (req, res) => {
         };
       }
     } else {
-      // USER RESPONSE - Both completed and cancelled trips
-      baseData.driverName = nameMap[trip.driverId] || "Unknown Driver";
+      baseData.driverName =
+        nameMap[trip.driverId] || translateLn(ln, "UNKNOWN_DRIVER");
 
-      // Check if it's a completed trip
       if (trip.rideStatus === RideBookStatusEnum.COMPLETED) {
         return {
           ...baseData,
@@ -1381,7 +1387,6 @@ const getTripHistory = catchAsyncError(async (req, res) => {
         };
       }
 
-      // Check if it's a cancelled trip
       if (trip.rideStatus === RideBookStatusEnum.CANCELLED) {
         return {
           ...baseData,
@@ -1392,7 +1397,6 @@ const getTripHistory = catchAsyncError(async (req, res) => {
       }
     }
 
-    // Fallback (shouldn't happen based on our queries)
     return {
       ...baseData,
       status: "unknown",
@@ -1400,10 +1404,8 @@ const getTripHistory = catchAsyncError(async (req, res) => {
     };
   });
 
-  // Sort by timestamp (most recent first)
   tripHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
 
-  // Calculate pagination metadata
   const pagination = {
     page,
     limit,
@@ -1414,14 +1416,18 @@ const getTripHistory = catchAsyncError(async (req, res) => {
   const data = {
     [entity === "driver" ? "driverId" : "userId"]: entityId,
     rides: tripHistory,
-    pagination: pagination,
-    ...(vehicleType && { vehicleFilter: vehicleType }), // Include filter info in response
+    pagination,
+    ...(vehicleType && { vehicleFilter: vehicleType }),
   };
 
   return res
     .status(statusCode.OK)
     .json(
-      new ApiResponse(statusCode.OK, data, "Trip history fetched successfully")
+      new ApiResponse(
+        statusCode.OK,
+        data,
+        translateLn(ln, "TRIP_HISTORY_FETCHED")
+      )
     );
 });
 
