@@ -37,6 +37,7 @@ const DriverVehicleDetails = require("../../models/new-driver-module/vehicle-det
 const Commission = require("../../models/admin-module/commission-management/commission.model");
 const { AdminModel } = require("../../models/admin-module/admin/admin.model");
 const Transaction = require("../../models/transaction-module/transaction.model");
+const { fetchLn } = require("../../utils/services/user.services");
 
 function calculateFare(type, distanceInKm, durationInMin) {
   const config = vehicleConfig[type];
@@ -1187,6 +1188,8 @@ const getTripHistory = catchAsyncError(async (req, res) => {
 
   const accessToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(accessToken);
+  const _id = decoded._id;
+  const ln = await fetchLn(_id);
 
   // Entity is mandatory, no default
   const entity = req.query.entity;

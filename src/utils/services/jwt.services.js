@@ -89,7 +89,7 @@ const verifyTokenResult = async (req, model, next) => {
   throw new ApiError(
     statusCode.FORBIDDEN,
     message[user?.verificationStatus] ||
-    "Your account is awaiting admin approval."
+      "Your account is awaiting admin approval."
   );
 };
 
@@ -161,7 +161,7 @@ const verifyTokenResultUser = async (req, model, next) => {
   throw new ApiError(
     statusCode.FORBIDDEN,
     message[user?.verificationStatus] ||
-    "Your account is awaiting admin approval."
+      "Your account is awaiting admin approval."
   );
 };
 
@@ -171,12 +171,12 @@ const verifyTokenResultDriver = async (req) => {
   const auth = req.get?.("authorization") || req.headers?.authorization || "";
   const [scheme, rawToken] = auth.split(" ");
 
-  if (!rawToken || !/^Bearer$/i.test(scheme)) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Authorization header missing or not using Bearer scheme"
-    );
-  }
+  // if (!rawToken || !/^Bearer$/i.test(scheme)) {
+  //   throw new ApiError(
+  //     statusCode.BAD_REQUEST,
+  //     "Authorization header missing or not using Bearer scheme"
+  //   );
+  // }
 
   const token = rawToken.trim();
 

@@ -1,158 +1,159 @@
 const path = require("path");
+const { translateLn } = require("../../utils/services/translator.service");
 
-const getHotelInvoiceHTML = (booking, logoDataUrl) => {
+const getHotelInvoiceHTML = (booking, logoDataUrl, ln) => {
   return `
 <!DOCTYPE html>
-<html lang="en">
+<html lang="${ln}">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Hotel Booking Invoice</title>
+<title>${translateLn(ln, "INVOICE_TITLE")}</title>
 <style>
 /* Hide content on non-mobile screens */
-      @media (min-width: 768px) {
-        body::before {
-          content: "This invoice is optimized for mobile devices only.";
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          height: 100vh;
-          font-family: Arial, Helvetica, sans-serif;
-          font-size: 16px;
-          color: #374151;
-          background: #f5f6f8;
-        }
+@media (min-width: 768px) {
+  body::before {
+    content: "This invoice is optimized for mobile devices only.";
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 16px;
+    color: #374151;
+    background: #f5f6f8;
+  }
 
-        .invoice-container {
-          display: none;
-        }
-      }
+  .invoice-container {
+    display: none;
+  }
+}
 
-      /* Mobile styles */
-      @media (max-width: 767px) {
-        body {
-          font-family: Arial, Helvetica, sans-serif;
-          background: #f5f6f8;
-          margin: 0;
-          padding: 16px;
-          color: #1f2937;
-        }
+/* Mobile styles */
+@media (max-width: 767px) {
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    background: #f5f6f8;
+    margin: 0;
+    padding: 16px;
+    color: #1f2937;
+  }
 
-        .invoice-container {
-          background: #ffffff;
-          border-radius: 10px;
-          padding: 20px;
-          box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
-        }
+  .invoice-container {
+    background: #ffffff;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+  }
 
-        .header {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-        }
+  .header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
 
-        .logo {
-          height: 32px;
-        }
+  .logo {
+    height: 32px;
+  }
 
-        .company-name {
-          font-size: 16px;
-          font-weight: 600;
-          color: #14532d;
-        }
+  .company-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #14532d;
+  }
 
-        .title {
-          font-size: 22px;
-          font-weight: 700;
-          margin: 20px 0 6px;
-        }
+  .title {
+    font-size: 22px;
+    font-weight: 700;
+    margin: 20px 0 6px;
+  }
 
-        .booking-id {
-          font-size: 13px;
-          color: #374151;
-          word-break: break-all;
-        }
+  .booking-id {
+    font-size: 13px;
+    color: #374151;
+    word-break: break-all;
+  }
 
-        hr {
-          border: none;
-          border-top: 1px solid #e5e7eb;
-          margin: 20px 0;
-        }
+  hr {
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    margin: 20px 0;
+  }
 
-        .two-column {
-          display: flex;
-          flex-direction: column;
-          gap: 20px;
-        }
+  .two-column {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
 
-        .section-title {
-          font-weight: 700;
-          margin-bottom: 10px;
-          font-size: 14px;
-        }
+  .section-title {
+    font-weight: 700;
+    margin-bottom: 10px;
+    font-size: 14px;
+  }
 
-        .label {
-          font-size: 12px;
-          color: #6b7280;
-          margin-top: 6px;
-        }
+  .label {
+    font-size: 12px;
+    color: #6b7280;
+    margin-top: 6px;
+  }
 
-        .value {
-          font-size: 14px;
-          margin-top: 2px;
-        }
+  .value {
+    font-size: 14px;
+    margin-top: 2px;
+  }
 
-        .status {
-          color: #15803d;
-          font-weight: 600;
-        }
+  .status {
+    color: #15803d;
+    font-weight: 600;
+  }
 
-        .guest-name {
-          font-weight: 700;
-          margin-bottom: 4px;
-          font-size: 15px;
-        }
+  .guest-name {
+    font-weight: 700;
+    margin-bottom: 4px;
+    font-size: 15px;
+  }
 
-        .info-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-top: 20px;
-        }
+  .info-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+  }
 
-        .info-table td {
-          padding: 10px 0;
-          border-bottom: 1px solid #e5e7eb;
-          font-size: 14px;
-          vertical-align: top;
-        }
+  .info-table td {
+    padding: 10px 0;
+    border-bottom: 1px solid #e5e7eb;
+    font-size: 14px;
+    vertical-align: top;
+  }
 
-        .info-table td:last-child {
-          text-align: right;
-          font-weight: 500;
-          padding-left: 12px;
-        }
+  .info-table td:last-child {
+    text-align: right;
+    font-weight: 500;
+    padding-left: 12px;
+  }
 
-        .total {
-          font-weight: 700;
-          font-size: 16px;
-        }
+  .total {
+    font-weight: 700;
+    font-size: 16px;
+  }
 
-        .thank-you {
-          text-align: center;
-          color: #15803d;
-          font-weight: 600;
-          margin: 24px 0;
-          font-size: 14px;
-        }
+  .thank-you {
+    text-align: center;
+    color: #15803d;
+    font-weight: 600;
+    margin: 24px 0;
+    font-size: 14px;
+  }
 
-        .footer {
-          display: flex;
-          justify-content: space-between;
-          font-size: 11px;
-          color: #6b7280;
-          margin-top: 24px;
-        }
-      }
+  .footer {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #6b7280;
+    margin-top: 24px;
+  }
+}
 </style>
 </head>
 
@@ -163,29 +164,31 @@ const getHotelInvoiceHTML = (booking, logoDataUrl) => {
       <div class="company-name">WeMove All.</div>
     </div>
 
-    <div class="title">HOTEL BOOKING INVOICE</div>
+    <div class="title">${translateLn(ln, "INVOICE_TITLE")}</div>
     <div class="booking-id">${booking.bookingId}</div>
 
     <hr />
 
     <div class="two-column">
       <div>
-        <div class="section-title">Booking Details</div>
-        <div class="label">Booking By</div>
+        <div class="section-title">${translateLn(ln, "BOOKING_DETAILS")}</div>
+
+        <div class="label">${translateLn(ln, "BOOKING_BY")}</div>
         <div class="value">${booking.bookingBy}</div>
 
-        <div class="label">Status</div>
+        <div class="label">${translateLn(ln, "STATUS")}</div>
         <div class="value status">${booking.status}</div>
       </div>
 
       <div>
-        <div class="section-title">Check-In Details</div>
-        <div class="label">Check-In:</div>
+        <div class="section-title">${translateLn(ln, "CHECKIN_DETAILS")}</div>
+
+        <div class="label">${translateLn(ln, "CHECKIN")}:</div>
         <div class="value">${new Date(
           booking.checkInDate
         ).toLocaleString()}</div>
 
-        <div class="label">Check-Out:</div>
+        <div class="label">${translateLn(ln, "CHECKOUT")}:</div>
         <div class="value">${new Date(
           booking.checkOutDate
         ).toLocaleString()}</div>
@@ -194,32 +197,49 @@ const getHotelInvoiceHTML = (booking, logoDataUrl) => {
 
     <hr />
 
-    <div class="section-title">Guest</div>
+    <div class="section-title">${translateLn(ln, "GUEST")}</div>
     <div class="guest-name">${booking.user[0].name}</div>
-    <div class="value">Email: ${booking.user[0].email || "N/A"}</div>
-    <div class="value">Phone: ${booking.user[0].phoneNumber || "N/A"}</div>
+
+    <div class="value">${translateLn(ln, "EMAIL")}: ${
+      booking.user[0].email || "N/A"
+    }</div>
+
+    <div class="value">${translateLn(ln, "PHONE")}: ${
+      booking.user[0].phoneNumber || "N/A"
+    }</div>
 
     <table class="info-table">
-      <tr><td>Booking ID</td><td>${booking.bookingId}</td></tr>
-      <tr><td>Hotel</td><td>${booking.hotelId?.hotelName}</td></tr>
-      <tr><td>No of Rooms</td><td>${booking.noOfRoom}</td></tr>
       <tr>
-        <td>Guests</td>
-        <td>${booking.noOfAdults} Adults, ${booking.noOfKids} Kids</td>
+        <td>${translateLn(ln, "BOOKING_ID")}</td>
+        <td>${booking.bookingId}</td>
       </tr>
+
       <tr>
-        <td class="total">Total Amount</td>
-        <td class="total">${booking.totalAmount} ${
-          process.env.MOMO_CURRENCY
-        }</td>
+        <td>${translateLn(ln, "HOTEL")}</td>
+        <td>${booking.hotelId?.hotelName}</td>
+      </tr>
+
+      <tr>
+        <td>${translateLn(ln, "NO_OF_ROOMS")}</td>
+        <td>${booking.noOfRoom}</td>
+      </tr>
+
+      <tr>
+        <td>${translateLn(ln, "GUESTS")}</td>
+        <td>${booking.noOfAdults} ${translateLn(ln, "ADULTS")}, ${booking.noOfKids} ${translateLn(ln, "KIDS")}</td>
+      </tr>
+
+      <tr>
+        <td class="total">${translateLn(ln, "TOTAL_AMOUNT")}</td>
+        <td class="total">${booking.totalAmount} ${process.env.MOMO_CURRENCY}</td>
       </tr>
     </table>
 
-    <div class="thank-you">Thank You For booking with us!</div>
+    <div class="thank-you">${translateLn(ln, "THANK_YOU_BOOKING")}</div>
 
     <div class="footer">
       <div>${new Date().toDateString()}</div>
-      <div>Page 1 of 1</div>
+      <div>${translateLn(ln, "PAGE")} 1 ${translateLn(ln, "OF")} 1</div>
     </div>
   </div>
 </body>

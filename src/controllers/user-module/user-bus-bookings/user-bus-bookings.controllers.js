@@ -372,6 +372,7 @@ const createBusBooking = catchAsyncError(async (req, res) => {
 });
 
 const calculateBusBooking = catchAsyncError(async (req, res) => {
+  const id = req.user._id;
   const { _id: userId } = req.user;
   const {
     busId,
@@ -382,7 +383,7 @@ const calculateBusBooking = catchAsyncError(async (req, res) => {
     couponCode,
   } = req.body;
 
-  const ln = await fetchLn(_id);
+  const ln = await fetchLn(id);
 
   validateRequestBody(
     ["busId", "routeId", "passengers", "noOfPassengers", "journeyDate"],

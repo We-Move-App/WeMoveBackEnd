@@ -7,7 +7,7 @@ const {
 const fs = require("fs");
 const path = require("path");
 
-const generateHotelInvoiceBase64 = async (booking) => {
+const generateHotelInvoiceBase64 = async (booking, ln) => {
   const browser = await puppeteer.launch({
     headless: "new",
     executablePath: process.env.CHROME_PATH || "/usr/bin/chromium-browser",
@@ -32,7 +32,7 @@ const generateHotelInvoiceBase64 = async (booking) => {
   const logoBase64 = fs.readFileSync(logoPath).toString("base64");
   const logoDataUrl = `data:image/png;base64,${logoBase64}`;
 
-  const html = getHotelInvoiceHTML(booking, logoDataUrl);
+  const html = getHotelInvoiceHTML(booking, logoDataUrl, ln);
 
   await page.setContent(html, { waitUntil: "networkidle0" });
 

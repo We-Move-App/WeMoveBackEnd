@@ -15,7 +15,7 @@ const {
   getDriverActiveRide,
   getDriverAnalytics,
   getTripHistory,
-  giveRatings
+  giveRatings,
 } = require("../../controllers/ride-module/ride.controller");
 
 rideRoutes.post("/estimate", estimateRide);
