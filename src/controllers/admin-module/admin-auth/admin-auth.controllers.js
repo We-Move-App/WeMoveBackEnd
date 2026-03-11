@@ -1540,14 +1540,6 @@ const getTransactionHistory = async (req, res) => {
 
       const entityType = pickEntry?.entityType || null;
       const entityId = pickEntry?.entityId ?? null;
-      console.log(
-        "Processing txn:",
-        txn.transactionId,
-        "EntityType:",
-        entityType,
-        "EntityId:",
-        entityId
-      );
 
       let name = null;
       let role = null;
