@@ -101,6 +101,7 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
 
 const createBusBooking = catchAsyncError(async (req, res) => {
   const { _id: userId } = req.user;
+  const id = req.user._id;
 
   const {
     from,
@@ -117,7 +118,7 @@ const createBusBooking = catchAsyncError(async (req, res) => {
     termAndConditions,
   } = req.body;
 
-  const ln = await fetchLn(_id);
+  const ln = await fetchLn(id);
 
   /* ---------- VALIDATION ---------- */
   validateRequestBody(
