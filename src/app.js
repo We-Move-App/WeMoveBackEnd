@@ -112,6 +112,7 @@ const {
 const userMemberRoutes = require("./routes/user-module/userMemberRoutes/userMember.routes");
 const staticRouter = require("./routes/static/static.route");
 const nearbyDriversRoutes = require("./routes/new-driver-module/nearbyDriver/nearbyDrivers");
+const globalNotificationRouter = require("./routes/global-notifications/global-notification.router");
 
 if (node_env !== "production") {
   require("dotenv").config();
@@ -301,6 +302,7 @@ app.use("/api/v1", staticRouter);
 
 //Notification
 app.use("/api/v1/notification", notificationRouter);
+app.use("/api/v1/global/notification", globalNotificationRouter);
 
 app.use((req, res, next) => {
   console.log("Incoming:", req.method, req.url);

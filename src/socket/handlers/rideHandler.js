@@ -94,6 +94,13 @@ const assignRideToDrivers = async (
       rideId: bookingId,
       reason: "No drivers accepted",
     });
+
+    await createNotification(
+      booking.userId,
+      "Ride Cancelled",
+      "No drivers were available for your ride"
+    );
+
     stopAssigning(io, bookingId);
     return;
   }
@@ -180,6 +187,23 @@ const assignRideToDrivers = async (
     }
 
     console.log(`✅ Driver ${data.driverId} accepted ride ${bookingId}`);
+
+    try {
+      await Promise.all([
+        createNotification(
+          data.driverId,
+          "Ride Assigned",
+          `You have successfully accepted ride ${bookingId}`
+        ),
+        createNotification(
+          booking.userId,
+          "Driver Assigned",
+          "Your ride has been accepted by a driver"
+        ),
+      ]);
+    } catch (err) {
+      console.error("Notification failed:", err.message);
+    }
 
     // Stop timers + listeners
     stopAssigning(io, bookingId);

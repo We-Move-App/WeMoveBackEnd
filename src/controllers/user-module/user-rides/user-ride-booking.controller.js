@@ -17,6 +17,9 @@ const {
 const {
   calculateFareForVehicle,
 } = require("../../../utils/services/ride.services");
+const {
+  createNotification,
+} = require("../../global-notification-module/global-notification.controller");
 
 const generateOtp = () => {
   return Math.floor(1000 + Math.random() * 9000).toString();
@@ -53,7 +56,6 @@ const getVehicleFaresForRide = catchAsyncError(async (req, res, next) => {
   });
 
   if (recentSearch) {
-   
     recentSearch.searchDetails.vehicle.pickup = {
       address: pickup,
       latitude: pickupCoordinates.ltd,
@@ -197,6 +199,17 @@ const createRide = catchAsyncError(async (req, res, next) => {
 
   // Save to the database
   await newRide.save();
+
+  try {
+    await createNotification(
+      req.user._id,
+      "Ride Requested",
+      `Your ride from ${pickup} to ${drop} has been created`
+    );
+  } catch (err) {
+    console.error("Notification error:", err.message);
+  }
+
   const io = getIo();
   io.emit("searchCaptain", newRide._id);
 
@@ -463,7 +476,6 @@ const addRidesReview = catchAsyncError(async (req, res, next) => {
 });
 
 const userActiveRide = catchAsyncError(async (req, res, next) => {
-
   const activeRide = await RideModel.findOne({
     user: req.user._id,
     status: {

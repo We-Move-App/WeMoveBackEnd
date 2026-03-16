@@ -1,4 +1,3 @@
-const { createDecipheriv } = require("crypto");
 const statusCode = require("../../../utils/constants/statusCode");
 const ApiError = require("../../../utils/response/ApiError");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
@@ -7,7 +6,6 @@ const BusBookingModel = require("../../../models/bus-module/bus-bookings/bus-boo
 const BusImagesModel = require("../../../models/bus-module/bus-images/bus-images.model");
 const WalletModel = require("../../../models/wallet-module/wallets.model");
 const TransactionModel = require("../../../models/transaction-module/transaction.model");
-const { v4: uuidv4 } = require("uuid");
 const {
   validateRequestBody,
   normalizeDate,
@@ -36,6 +34,9 @@ const UserModel = require("../../../models/user-module/users/user.model");
 const { fetchLn } = require("../../../utils/services/user.services");
 const { translateLn } = require("../../../utils/services/translator.service");
 const BusTravellerModel = require("../../../models/bus-module/bus-traveller/bus-traveller.model");
+const {
+  createNotification,
+} = require("../../global-notification-module/global-notification.controller");
 
 const getUserBusBookings = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
@@ -102,7 +103,7 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
 
 const createBusBooking = catchAsyncError(async (req, res) => {
   const { _id: userId } = req.user;
-  const id = req.user._id;
+  const id = req.user.userId;
 
   const {
     from,
@@ -119,7 +120,7 @@ const createBusBooking = catchAsyncError(async (req, res) => {
     termAndConditions,
   } = req.body;
 
-  const ln = await fetchLn(id);
+  const ln = await fetchLn(userId);
 
   /* ---------- VALIDATION ---------- */
   validateRequestBody(
@@ -304,6 +305,23 @@ const createBusBooking = catchAsyncError(async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    try {
+      await Promise.all([
+        createNotification(
+          userId,
+          "Bus Booking Confirmed",
+          `Your booking ${booking.bookingId} from ${from} to ${to} is confirmed`
+        ),
+        createNotification(
+          bus.ownerId,
+          "New Bus Booking",
+          `New booking received for bus ${bus.busName} on ${journeyDateNormalized}`
+        ),
+      ]);
+    } catch (err) {
+      console.error("Notification failed:", err.message);
+    }
 
     /* ======================================================
        RESPONSE SHAPING (MATCHES OLD API RESPONSE)
@@ -574,6 +592,9 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
 });
 
 const cancelBusBooking = catchAsyncError(async (req, res, next) => {
+  const userId = req.user._id;
+  const ln = await fetchLn(userId);
+
   const { bookingId } = req.params;
   const { cancelReason } = req.body;
 
@@ -731,6 +752,20 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
   bookedSeat.availableSeats = totalSeats - bookedSeatsCount;
 
   await Promise.all([booking.save(), bookedSeat.save()]);
+
+  await createNotification(
+    userId,
+    "Bus Booking Cancelled",
+    `Your booking ${bookingId} has been cancelled successfully`
+  );
+
+  if (bus?.ownerId) {
+    await createNotification(
+      bus.ownerId,
+      "Bus Booking Cancelled",
+      `A booking ${bookingId} has been cancelled by the user`
+    );
+  }
 
   // sanitize response
   const bookingResponse = {

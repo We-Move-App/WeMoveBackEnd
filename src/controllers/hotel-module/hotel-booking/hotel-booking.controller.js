@@ -41,6 +41,9 @@ const {
 const generateCustomId = require("../../../utils/customId/generateCustomId");
 const HotelManagerModel = require("../../../models/hotel-module/hotel-manager/hotel-manager.model");
 const Transaction = require("../../../models/transaction-module/transaction.model");
+const {
+  createNotification,
+} = require("../../global-notification-module/global-notification.controller");
 
 //-------------------- create booking --------------------
 const createBooking = catchAsyncError(async (req, res) => {
@@ -266,6 +269,24 @@ const createBooking = catchAsyncError(async (req, res) => {
 
     await session.commitTransaction();
     session.endSession();
+
+    try {
+      await Promise.all([
+        createNotification(
+          bookedBy,
+          "Hotel Booking Confirmed",
+          `Your booking ${booking[0].bookingId} at ${hotelExists.hotelName} is confirmed`
+        ),
+
+        createNotification(
+          hotelExists.ownerId,
+          "New Hotel Booking",
+          `You received a new booking ${booking[0].bookingId}`
+        ),
+      ]);
+    } catch (err) {
+      console.error("Notification error:", err.message);
+    }
 
     return res
       .status(statusCode.CREATED)
