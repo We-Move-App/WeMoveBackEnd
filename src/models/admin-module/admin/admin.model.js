@@ -104,6 +104,7 @@ const AdminSchema = new mongoose.Schema(
     socketId: {
       type: String,
     },
+    ln: { type: String, default: "en" },
   },
   {
     timestamps: true,
@@ -125,10 +126,10 @@ AdminSchema.pre("save", function (next) {
       roleManagement: true,
       commissionManagement: true,
       couponManagement: true,
-      referralManagement:true,
+      referralManagement: true,
     };
   }
-    this.isSpecialAdmin = true;
+  this.isSpecialAdmin = true;
   next();
 });
 

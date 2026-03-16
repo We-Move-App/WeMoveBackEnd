@@ -1815,6 +1815,33 @@ const adminUpdatePassword = catchAsyncError(async (req, res) => {
     );
 });
 
+const changeLn = catchAsyncError(async (req, res) => {
+  const adminId = req.user._id;
+  const { ln } = req.body;
+
+  if (!ln) {
+    throw new ApiError(statusCode.BAD_REQUEST, "ln is required");
+  }
+
+  if (!["fr", "en"].includes(ln)) {
+    throw new ApiError(statusCode.BAD_REQUEST, "ln should be fr or en");
+  }
+
+  const admin = await AdminModel.findById(adminId);
+  if (!admin) {
+    throw new ApiError(statusCode.NOT_FOUND, "Admin not found");
+  }
+
+  admin.ln = ln;
+  await admin.save();
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(statusCode.OK, null, "language changed successfully")
+    );
+});
+
 module.exports = {
   addAdmins,
   loginAdmin,
@@ -1843,4 +1870,5 @@ module.exports = {
   adminAuthVerifyOtp,
   adminResetPassword,
   adminUpdatePassword,
+  changeLn,
 };

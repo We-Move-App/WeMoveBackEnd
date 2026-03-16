@@ -28,6 +28,7 @@ const {
   adminAuthVerifyOtp,
   adminResetPassword,
   adminUpdatePassword,
+  changeLn,
 } = require("../../../controllers/admin-module/admin-auth/admin-auth.controllers");
 const {
   authorizeRole,
@@ -193,6 +194,14 @@ adminAuthRoutes
     isAdminAuthenticated,
     authorizeRole(["SuperAdmin", "Admin", "addSubAdmins"]),
     adminUpdatePassword
+  );
+
+adminAuthRoutes
+  .route("/change-ln")
+  .post(
+    isAdminAuthenticated,
+    authorizeRole(["SuperAdmin", "Admin", "addSubAdmins"]),
+    changeLn
   );
 
 module.exports = {

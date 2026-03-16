@@ -25,6 +25,8 @@ const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const transactionModel = require("../../../models/transaction-module/transaction.model");
 const walletsModel = require("../../../models/wallet-module/wallets.model");
+const { fetchAdminLn } = require("../../../utils/services/user.services");
+const { translateLn } = require("../../../utils/services/translator.service");
 
 const getAllUsers = catchAsyncError(async (req, res) => {
   const {
@@ -172,6 +174,9 @@ const deleteUserPermanently = catchAsyncError(async (req, res, next) => {
 });
 
 const getAllUsersBookings = catchAsyncError(async (req, res) => {
+  const adminId = req.user._id;
+  const ln = await fetchAdminLn(adminId);
+
   const {
     page = 1,
     limit = 10,
@@ -295,7 +300,7 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
       fullName: u?.fullName || null,
       email: u?.email || null,
       phone: u?.phoneNumber || null,
-      serviceType: "bus",
+      serviceType: translateLn(ln, "MODULE_BUS"),
       bookingDate: b.journeyDate || null,
       amount: b.price ?? 0,
       paymentStatus: b.paymentStatus || "PENDING",
@@ -312,7 +317,7 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
       fullName: u?.fullName || null,
       email: u?.email || null,
       phone: u?.phoneNumber || null,
-      serviceType: "hotel",
+      serviceType: translateLn(ln, "MODULE_HOTEL"),
       bookingDate: h.checkInDate || null,
       amount: h.totalAmount ?? 0,
       paymentStatus: h.paymentStatus || "PENDING",
@@ -330,7 +335,7 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
       fullName: u?.fullName || null,
       email: u?.email || null,
       phone: u?.phoneNumber || null,
-      serviceType: "ride",
+      serviceType: translateLn(ln, "MODULE_RIDE"),
       bookingDate: r.timestamps?.completedAt || null,
       amount: r.fare ?? 0,
       paymentStatus: r.paymentStatus || "PENDING",
