@@ -495,6 +495,9 @@ const calculateBusBooking = catchAsyncError(async (req, res) => {
 
 const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
+  const uid = req.user._id;
+
+  const ln = await fetchLn(uid);
 
   if (!bookingId) {
     throw new ApiError(

@@ -34,6 +34,7 @@ const {
 } = require("../../../utils/otpService/otpService");
 const ApiError = require("../../../utils/response/ApiError");
 const { translateLn } = require("../../../utils/services/translator.service");
+const { fetchLn } = require("../../../utils/services/user.services");
 
 //=====================|| REGISTER USER ||============================
 // const registerUserWithOtp = catchAsyncError(async (req, res, next) => {
@@ -132,6 +133,8 @@ const refreshToken = catchAsyncError(async (req, res, next) => {
 
 const sendOtpToPhoneHandler = catchAsyncError(async (req, res) => {
   const { phoneNo } = req.body;
+  const userId = req.user._id;
+  const ln = await fetchLn(userId);
 
   if (!phoneNo) {
     throw new ApiError(
