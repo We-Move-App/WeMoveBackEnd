@@ -1,22 +1,32 @@
 const fs = require("fs");
 const path = require("path");
 const catchAsyncError = require("../../utils/response/catchAsyncError");
-const { fetchLn } = require("../../utils/services/user.services");
+const {
+  fetchLn,
+  fetchDriverLn,
+} = require("../../utils/services/user.services");
 
 const privacyPolicy = catchAsyncError(async (req, res) => {
   const _id = req.user._id;
+  const role = req.user.role;
 
-  const ln = await fetchLn(_id);
+  let ln = await fetchLn(_id);
+
+  if (role === "driver") {
+    ln = await fetchDriverLn(_id);
+  }
+
+  const folder = role === "driver" ? "drivers" : "users";
 
   let filePath = path.join(
     __dirname,
-    "../../static/users/privacy_policy_eng.html"
+    `../../static/${folder}/privacy_policy_eng.html`
   );
 
-  if (ln == "fr") {
+  if (ln === "fr") {
     filePath = path.join(
       __dirname,
-      "../../static/users/privacy_policy_fr.html"
+      `../../static/${folder}/privacy_policy_fr.html`
     );
   }
 
@@ -28,13 +38,20 @@ const privacyPolicy = catchAsyncError(async (req, res) => {
 
 const termsAndCondition = catchAsyncError(async (req, res) => {
   const _id = req.user._id;
+  const role = req.user.role;
 
-  const ln = await fetchLn(_id);
+  let ln = await fetchLn(_id);
 
-  let filePath = path.join(__dirname, "../../static/users/t&c_eng.html");
+  if (role === "driver") {
+    ln = await fetchDriverLn(_id);
+  }
+
+  const folder = role === "driver" ? "drivers" : "users";
+
+  let filePath = path.join(__dirname, `../../static/${folder}/t&c_eng.html`);
 
   if (ln == "fr") {
-    filePath = path.join(__dirname, "../../static/users/t&c_fr.html");
+    filePath = path.join(__dirname, `../../static/${folder}/t&c_fr.html`);
   }
 
   const html = fs.readFileSync(filePath, "utf8");
@@ -45,18 +62,23 @@ const termsAndCondition = catchAsyncError(async (req, res) => {
 
 const generalDisclaimer = catchAsyncError(async (req, res) => {
   const _id = req.user._id;
+  const role = req.user.role;
 
-  const ln = await fetchLn(_id);
+  let ln = await fetchLn(_id);
+
+  if (role === "driver") {
+    ln = await fetchDriverLn(_id);
+  }
 
   let filePath = path.join(
     __dirname,
-    "../../static/users/gen_disclaimer_eng.html"
+    `../../static/general-disclaimer/gen_disclaimer_eng.html`
   );
 
   if (ln == "fr") {
     filePath = path.join(
       __dirname,
-      "../../static/users/gen_disclaimer_fr.html"
+      `../../static/general-disclaimer/gen_disclaimer_fr.html`
     );
   }
 

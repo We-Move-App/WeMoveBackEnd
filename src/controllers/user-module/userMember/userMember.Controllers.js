@@ -439,7 +439,7 @@ const getTransactions = catchAsyncError(async (req, res) => {
     transactionId: tx.transactionId || "N/A",
     userName: parentUser.fullName,
     email: parentUser.email,
-    amount: tx.amount,
+    amount: tx.totalAmount,
     description: tx.description,
     status: tx.status,
     date: tx.createdAt?.toISOString().split("T")[0],

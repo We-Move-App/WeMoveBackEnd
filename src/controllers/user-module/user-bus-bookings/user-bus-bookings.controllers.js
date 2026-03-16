@@ -35,6 +35,7 @@ const Transaction = require("../../../models/transaction-module/transaction.mode
 const UserModel = require("../../../models/user-module/users/user.model");
 const { fetchLn } = require("../../../utils/services/user.services");
 const { translateLn } = require("../../../utils/services/translator.service");
+const BusTravellerModel = require("../../../models/bus-module/bus-traveller/bus-traveller.model");
 
 const getUserBusBookings = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
@@ -995,6 +996,7 @@ const UpcomingBusBookings = catchAsyncError(async (req, res) => {
     )
   );
 });
+
 const OldBusBookings = catchAsyncError(async (req, res) => {
   const { page = 1, limit = 10 } = req.query;
   const userId = req.user._id;
@@ -1094,6 +1096,62 @@ const OldBusBookings = catchAsyncError(async (req, res) => {
   );
 });
 
+const addTraveller = catchAsyncError(async (req, res) => {
+  const userId = req.user._id;
+  // const ln = await fetchLn(userId);
+
+  const {
+    travellerName,
+    travellerAge,
+    travellerGender,
+    travellerPhoneNumber,
+    travellerEmail,
+  } = req.body;
+
+  if (!travellerName || !travellerAge || !travellerGender) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "travellerName, travellerAge & travellerGender required"
+    );
+  }
+
+  const traveller = await BusTravellerModel.create({
+    userId,
+    travellerName,
+    travellerAge,
+    travellerGender,
+    travellerEmail: travellerEmail || null,
+    travellerPhoneNumber: travellerPhoneNumber || null,
+  });
+
+  return res
+    .status(statusCode.OK)
+    .json(new ApiResponse(statusCode.OK, { traveller }, "traveller added"));
+});
+
+const getTravellers = catchAsyncError(async (req, res) => {
+  const userId = req.user._id;
+  // const ln = await fetchLn(userId);
+
+  const travellers = await BusTravellerModel.find({
+    userId,
+  });
+
+  return res
+    .status(statusCode.OK)
+    .json(new ApiResponse(statusCode.OK, { travellers }, "travellers fetched"));
+});
+
+const getTravellerById = catchAsyncError(async (req, res) => {
+  const travellerId = req.params.travellerId;
+
+  const traveller = await BusTravellerModel.findById(travellerId);
+
+  return res
+    .status(statusCode.OK)
+    .json(new ApiResponse(statusCode.OK, traveller, "traveller fetched"));
+});
+
 module.exports = {
   getUserBusBookings,
   createBusBooking,
@@ -1103,4 +1161,7 @@ module.exports = {
   payBusBookingPayment,
   UpcomingBusBookings,
   OldBusBookings,
+  addTraveller,
+  getTravellers,
+  getTravellerById,
 };

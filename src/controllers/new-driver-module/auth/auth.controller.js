@@ -309,7 +309,16 @@ const refreshAccessTokenHandler = catchAsyncError(async (req, res) => {
     );
   }
 
-  const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+  let decoded;
+
+  try {
+    decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+  } catch (error) {
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      "Invalid or expired refresh token"
+    );
+  }
 
   const { accessToken, refreshToken: newRefreshToken } =
     await refreshAccessToken(refreshToken);
@@ -324,8 +333,6 @@ const refreshAccessTokenHandler = catchAsyncError(async (req, res) => {
       runValidators: true,
     }
   );
-
-  console.log("newTokens", newTokens);
 
   return res
     .status(statusCode.OK)

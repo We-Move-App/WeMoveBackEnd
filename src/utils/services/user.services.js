@@ -1,4 +1,5 @@
 const UserModel = require("../../models/user-module/users/user.model");
+const DriverBasicDetails = require("../../models/new-driver-module/basic-details/basic-details.model");
 
 const fetchLn = async (userId) => {
   try {
@@ -12,4 +13,16 @@ const fetchLn = async (userId) => {
   }
 };
 
-module.exports = { fetchLn };
+const fetchDriverLn = async (driverId) => {
+  try {
+    if (!driverId) return "en";
+
+    const driver = await DriverBasicDetails.findById(driverId).select("ln");
+
+    return driver?.ln || "en";
+  } catch (err) {
+    return "en";
+  }
+};
+
+module.exports = { fetchLn, fetchDriverLn };

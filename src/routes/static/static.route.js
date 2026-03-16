@@ -4,15 +4,11 @@ const {
   termsAndCondition,
   generalDisclaimer,
 } = require("../../controllers/static/static-controlle");
-const { isUserAuthenticated } = require("../../middlewares/authUser");
+const { authenticate } = require("../../middlewares/authenticator");
 const staticRouter = express.Router();
 
-staticRouter.get("/privacy-policy", isUserAuthenticated, privacyPolicy);
-staticRouter.get(
-  "/terms-and-conditions",
-  isUserAuthenticated,
-  termsAndCondition
-);
-staticRouter.get("/general-disclaimer", isUserAuthenticated, generalDisclaimer);
+staticRouter.get("/privacy-policy", authenticate, privacyPolicy);
+staticRouter.get("/terms-and-conditions", authenticate, termsAndCondition);
+staticRouter.get("/general-disclaimer", authenticate, generalDisclaimer);
 
 module.exports = staticRouter;
