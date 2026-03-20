@@ -1138,28 +1138,19 @@ const addTraveller = catchAsyncError(async (req, res) => {
   const userId = req.user._id;
   // const ln = await fetchLn(userId);
 
-  const {
-    travellerName,
-    travellerAge,
-    travellerGender,
-    travellerPhoneNumber,
-    travellerEmail,
-  } = req.body;
+  const { name, age, gender, contactNumber, email } = req.body;
 
-  if (!travellerName || !travellerAge || !travellerGender) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "travellerName, travellerAge & travellerGender required"
-    );
+  if (!name || !age || !gender) {
+    throw new ApiError(statusCode.BAD_REQUEST, "name, age & gender required");
   }
 
   const traveller = await BusTravellerModel.create({
     userId,
-    travellerName,
-    travellerAge,
-    travellerGender,
-    travellerEmail: travellerEmail || null,
-    travellerPhoneNumber: travellerPhoneNumber || null,
+    name,
+    age,
+    gender,
+    email: email || null,
+    contactNumber: contactNumber || null,
   });
 
   return res
@@ -1184,6 +1175,10 @@ const getTravellerById = catchAsyncError(async (req, res) => {
   const travellerId = req.params.travellerId;
 
   const traveller = await BusTravellerModel.findById(travellerId);
+
+  if (!traveller) {
+    throw new ApiError(statusCode.NOT_FOUND, "Traveller not found");
+  }
 
   return res
     .status(statusCode.OK)
