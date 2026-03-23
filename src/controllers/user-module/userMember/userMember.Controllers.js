@@ -374,32 +374,6 @@ const getTransactions = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.NOT_FOUND, "Parent user not found");
   }
 
-  if (search) {
-    const nameMatch = parentUser.fullName
-      .toLowerCase()
-      .includes(search.toLowerCase());
-
-    const isNumeric = !isNaN(search);
-
-    if (!isNumeric && !nameMatch) {
-      return res.status(statusCode.OK).json(
-        new ApiResponse(
-          statusCode.OK,
-          {
-            transactions: [],
-            pagination: {
-              total: 0,
-              page,
-              pages: 0,
-              limit,
-            },
-          },
-          "Transactions fetched successfully"
-        )
-      );
-    }
-  }
-
   const txFilter = {
     entries: {
       $elemMatch: {
@@ -411,17 +385,27 @@ const getTransactions = catchAsyncError(async (req, res) => {
   };
 
   if (search) {
-    const searchConditions = [];
+    const isNumeric = !isNaN(search);
 
-    searchConditions.push({
-      transactionId: { $regex: search, $options: "i" },
-    });
+    const nameMatch = parentUser.fullName
+      .toLowerCase()
+      .includes(search.toLowerCase());
 
-    if (!isNaN(search)) {
-      searchConditions.push({ amount: Number(search) });
+    if (nameMatch && !isNumeric) {
+      // do nothing → keep original txFilter
+    } else {
+      const searchConditions = [
+        {
+          transactionId: { $regex: search, $options: "i" },
+        },
+      ];
+
+      if (isNumeric) {
+        searchConditions.push({ totalAmount: Number(search) });
+      }
+
+      txFilter.$or = searchConditions;
     }
-
-    txFilter.$or = searchConditions;
   }
 
   const sortField = sortBy === "amount" ? "amount" : "createdAt";
