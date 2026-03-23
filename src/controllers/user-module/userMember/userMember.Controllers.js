@@ -99,9 +99,9 @@ const addMemberUnderUser = catchAsyncError(async (req, res, next) => {
       )
     );
 });
+
 const loginUser = catchAsyncError(async (req, res, next) => {
   const { emailOrPhone, password } = req.body;
-  console.log(emailOrPhone, password);
 
   // Step 1: Validate inputs
   if (!emailOrPhone) {
@@ -193,9 +193,9 @@ const loginUser = catchAsyncError(async (req, res, next) => {
     .status(statusCode.OK)
     .json(new ApiResponse(statusCode.OK, responseData, "Login successfully"));
 });
+
 const getAllMembersUnderUser = catchAsyncError(async (req, res, next) => {
   const { _id: parentId } = req.user;
-  console.log("req.user =>", req.user);
 
   const { search = "" } = req.query;
 
