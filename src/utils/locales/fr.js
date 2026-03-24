@@ -71,7 +71,7 @@ module.exports = {
   MODULE_HOTEL: "Hôtel",
   MODULE_TAXI: "Taxi",
   MODULE_BIKE: "Moto",
-  MODULE_RIDE: "Ride",
+  MODULE_RIDE: "Trajet",
   AVAILABLE_MODULES: "Modules disponibles",
 
   INVOICE_TITLE: "Facture de réservation d'hôtel",
