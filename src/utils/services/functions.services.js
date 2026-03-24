@@ -9,8 +9,8 @@ const statusCode = require("../constants/statusCode");
 const Wallet = require("../../models/wallet-module/wallets.model");
 const generateUniqueCardNumber = require("../../utils/customId/generateUniqueCardNumber");
 const {
-  generateTokens,
   setTokenCookies,
+  generateUserTokens,
 } = require("../jwtToken/generateTokens");
 const {
   validateRequestBody,
@@ -33,12 +33,8 @@ const { assignBranchToUserUsingGeolib } = require("./branches.services");
 const {
   UserBankModel,
 } = require("../../models/user-module/user-banks/user-banks.model");
-const sendEmail = require("../emailService/sendEmail");
 const SecurePinModel = require("../../models/global-module/secure-pins/secure-pins.model");
-const {
-  HotelManagerBankModel,
-} = require("../../models/hotel-module/hotel-manager-banks/hotel-manager-banks.model");
-const { WalletCurrencyEnum, EntityCodeEnum } = require("../constants/ENUM");
+const { EntityCodeEnum } = require("../constants/ENUM");
 const {
   sendOtpToPhone,
   sendOtpToEmail,
@@ -135,7 +131,7 @@ const registerUserWithEmailAndPhoneNumber = async ({
     const userObject = existingUser.toObject();
     delete userObject.password;
 
-    const { accessToken, refreshToken } = await generateTokens(
+    const { accessToken, refreshToken } = await generateUserTokens(
       existingUser,
       typeOfUser
     );
@@ -183,7 +179,7 @@ const registerUserWithEmailAndPhoneNumber = async ({
   const userObject = newUser.toObject();
   delete userObject.password;
 
-  const { accessToken, refreshToken } = await generateTokens(
+  const { accessToken, refreshToken } = await generateUserTokens(
     newUser,
     typeOfUser
   );
@@ -262,7 +258,7 @@ const loginUserWithEmailAndPhoneNumber = async ({
   const userObject = existingUser.toObject();
   delete userObject.password;
 
-  const { accessToken, refreshToken } = await generateTokens(
+  const { accessToken, refreshToken } = await generateUserTokens(
     existingUser,
     typeOfUser
   );
@@ -423,7 +419,10 @@ const refreshTokenFunc = async ({ req, res, reqModel, typeOfUser }) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Driver not found");
   }
 
-  const { accessToken, refreshToken } = await generateTokens(user, typeOfUser);
+  const { accessToken, refreshToken } = await generateUserTokens(
+    user,
+    typeOfUser
+  );
   setTokenCookies(res, accessToken, refreshToken);
   const data = {
     accessToken,
@@ -705,7 +704,10 @@ const verifyOtpFunc = async ({
     });
   }
 
-  const { accessToken, refreshToken } = await generateTokens(user, typeOfUser);
+  const { accessToken, refreshToken } = await generateUserTokens(
+    user,
+    typeOfUser
+  );
 
   res.clearCookie("accessToken");
   res.clearCookie("refreshToken");
@@ -1278,7 +1280,7 @@ const updateAvatarFunc = async ({ req, res, reqModel }) => {
 //     { upsert: true, new: true, setDefaultsOnInsert: true }
 //   );
 
-//   const { accessToken, refreshToken } = await generateTokens(
+//   const { accessToken, refreshToken } = await generateUserTokens(
 //     createdUser,
 //     typeOfUser
 //   );
@@ -1374,7 +1376,7 @@ const registerUserWithEmailOrPhoneAndOtp = async ({
     console.log("✅ OTP sent:", otpData);
 
     // 🔹 Later you can return tokens if needed
-    // const { accessToken, refreshToken } = await generateTokens(user, typeOfUser);
+    // const { accessToken, refreshToken } = await generateUserTokens(user, typeOfUser);
     // setTokenCookies(res, accessToken, refreshToken);
 
     const key = isEmail ? "OTP_SENT_EMAIL" : "OTP_SENT_PHONE";
