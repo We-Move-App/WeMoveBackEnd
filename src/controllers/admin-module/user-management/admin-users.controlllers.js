@@ -109,7 +109,6 @@ const getSingleUser = catchAsyncError(async (req, res, next) => {
     );
   }
 
-  // ✅ 2. Find the user using custom userId (not _id)
   const user = await UserModel.findById(_id)
 
     .select("-password -__v") // keep userId

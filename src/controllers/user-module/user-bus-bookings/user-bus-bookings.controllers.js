@@ -41,7 +41,7 @@ const {
 const getUserBusBookings = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
 
-  const ln = await fetchLn(_id);
+  const ln = await fetchLn(userId);
 
   const bookings = await BusBookingModel.find({ bookedBy: userId })
     .sort({ createdAt: -1 })
@@ -122,7 +122,7 @@ const createBusBooking = catchAsyncError(async (req, res) => {
 
   const ln = await fetchLn(userId);
 
-  /* ---------- VALIDATION ---------- */
+
   validateRequestBody(
     [
       "from",
@@ -152,7 +152,7 @@ const createBusBooking = catchAsyncError(async (req, res) => {
   session.startTransaction();
 
   try {
-    /* ---------- USER ---------- */
+ 
     const user = await UserModel.findById(userId);
     if (!user) {
       throw new ApiError(
@@ -574,7 +574,6 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
   const cancellationWindow = booking.busId?.cancellationWindowInHours ?? 24;
   const isCancellable = hoursLeft >= cancellationWindow;
 
-  // ✅ Attach computed fields
   booking.startDate = startDate;
   booking.endDate = endDate;
   booking.hoursLeft = hoursLeft;
