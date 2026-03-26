@@ -21,6 +21,9 @@ const {
 } = require("../../controllers/firebase/fcm-token.controller");
 const logger = require("../../utils/logger/logger");
 const { Logger } = require("winston");
+const {
+  createNotification,
+} = require("../../controllers/global-notification-module/global-notification.controller");
 /**
  * Assigns ride sequentially to nearby drivers
  */
