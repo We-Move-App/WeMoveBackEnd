@@ -737,6 +737,7 @@ const getBookings = catchAsyncError(async (req, res) => {
 const getHotelsByLocation = catchAsyncError(async (req, res) => {
   const {
     townCity,
+    hotelName,
     requiredRooms,
     checkInDate,
     checkOutDate,
@@ -758,15 +759,18 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       "requiredRooms must be a positive integer."
     );
   }
+
   if (isNaN(adultsCount) || adultsCount <= 0) {
     throw new ApiError(statusCode.BAD_REQUEST, "At least 1 adult is required.");
   }
+
   if (isNaN(kidsCount) || kidsCount < 0) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
       "Number of children cannot be negative."
     );
   }
+
   const totalGuests = adultsCount + kidsCount;
   if (totalGuests > requiredRoomCount * 2) {
     throw new ApiError(
@@ -774,12 +778,11 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       "Total guests exceed maximum allowed occupancy (2 per room)."
     );
   }
-  if (!requiredRoomCount) {
-    throw new ApiError(statusCode.BAD_REQUEST, "requiredRooms is required.");
-  }
+
   if (!townCity || typeof townCity !== "string") {
     throw new ApiError(statusCode.BAD_REQUEST, "townCity is required.");
   }
+
   if (!checkInDate || !checkOutDate) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -791,12 +794,14 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
   const checkOut = new Date(checkOutDate);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
   if (checkIn < today) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
       "Check-in date cannot be in the past."
     );
   }
+
   if (checkOut <= checkIn) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
@@ -823,6 +828,7 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
   }
 
   const addressIds = matchingAddresses.map((a) => a._id);
+
   const hotelAddressLinks = await HotelAddressModel.find({
     address: { $in: addressIds },
   })
@@ -830,6 +836,7 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
     .lean();
 
   const hotelIds = hotelAddressLinks.map((l) => l.hotelId);
+
   if (hotelIds.length === 0) {
     return res
       .status(statusCode.OK)
@@ -842,18 +849,32 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       );
   }
 
-  // ⬅️ Include ownerId so we can compute badge
-  const hotels = await Hotel.find({ _id: { $in: hotelIds } })
+  // hotel filter with optional hotelName
+  const hotelFilter = {
+    _id: { $in: hotelIds },
+  };
+
+  if (hotelName && typeof hotelName === "string") {
+    hotelFilter.hotelName = {
+      $regex: hotelName.trim(),
+      $options: "i",
+    };
+  }
+
+  const hotels = await Hotel.find(hotelFilter)
     .select("ownerId hotelName rating totalRoom")
     .skip((pageNum - 1) * limitNum)
     .limit(limitNum)
     .lean();
 
-  // 🔎 Bulk fetch managers’ verificationStatus once
   const ownerIds = [...new Set(hotels.map((h) => String(h.ownerId)))];
-  const managers = await HotelManagerModel.find({ _id: { $in: ownerIds } })
+
+  const managers = await HotelManagerModel.find({
+    _id: { $in: ownerIds },
+  })
     .select("_id verificationStatus")
     .lean();
+
   const managerMap = new Map(
     managers.map((m) => [String(m._id), m.verificationStatus])
   );
@@ -865,22 +886,26 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
         hotelImages,
         hotelAddress,
         hotelPolicies,
-        HotelFeedbacks,
+        hotelFeedbacks,
       ] = await Promise.all([
         Room.find({ hotelId: hotel._id })
           .select("roomType roomPrice numberOfRoom")
           .lean(),
+
         hotelImagesModel
           .findOne({ hotelId: hotel._id })
           .select("images")
           .lean(),
+
         HotelAddressModel.findOne({ hotelId: hotel._id })
           .populate("address", "townCity address landmark")
           .select("address")
           .lean(),
+
         HotelPolicyModel.findOne({ hotelId: hotel._id })
-          .select("amenities checkInTime checkOutTime ")
+          .select("amenities checkInTime checkOutTime")
           .lean(),
+
         HotelFeedbackModel.find({ hotelId: hotel._id }).select("rating").lean(),
       ]);
 
@@ -888,7 +913,6 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
 
       const filteredRoomTypes = await Promise.all(
         roomTypes.map(async (roomType) => {
-          // Step 1️⃣: Fetch all rooms for this hotel and room type
           const rooms = await individualRoomModule
             .find({ hotelId: hotel._id, roomTypeId: roomType._id })
             .select("_id")
@@ -896,43 +920,36 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
 
           const roomIds = rooms.map((r) => r._id);
 
-          // Step 2️⃣: Set check-in/check-out datetime properly
           const checkInStart = new Date(checkIn);
           checkInStart.setHours(0, 0, 0, 0);
 
           const checkOutEnd = new Date(checkOut);
           checkOutEnd.setHours(23, 59, 59, 999);
 
-          // Step 3️⃣: Find conflicting bookings
           const conflictingBookings = await HotelBooking.find({
-            assignedRooms: { $in: roomIds }, // ✅ use assignedRooms array
-            status: "Booked", // ✅ only consider active bookings
+            assignedRooms: { $in: roomIds },
+            status: "Booked",
             checkInDate: { $lt: checkOutEnd },
             checkOutDate: { $gt: checkInStart },
           })
             .select("assignedRooms")
             .lean();
 
-          // Step 4️⃣: Build a set of booked room IDs
           const bookedRoomIds = new Set();
+
           conflictingBookings.forEach((booking) => {
             booking.assignedRooms.forEach((roomId) =>
               bookedRoomIds.add(String(roomId))
             );
           });
 
-          // Step 5️⃣: Calculate availability
           const availableRooms = roomIds.filter(
             (id) => !bookedRoomIds.has(String(id))
           ).length;
+
           const totalRooms = rooms.length;
           const bookedRooms = totalRooms - availableRooms;
 
-          console.log(
-            `Room Type: ${roomType.roomType}, Total: ${totalRooms}, Booked: ${bookedRooms}, Available: ${availableRooms}`
-          );
-
-          // Step 6️⃣: Only return room type if enough rooms are available
           if (availableRooms >= requiredRoomCount) {
             return {
               _id: roomType._id,
@@ -943,6 +960,7 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
               bookedRooms,
             };
           }
+
           return null;
         })
       );
@@ -950,7 +968,6 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
       const availableRoomTypes = filteredRoomTypes.filter(Boolean);
 
       if (availableRoomTypes.length > 0) {
-        // 🏷️ Compute badge from owner’s verificationStatus
         const isApproved = managerMap.get(String(hotel.ownerId)) === "approved";
 
         return {
@@ -959,28 +976,30 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
             hotelName: hotel.hotelName,
             rating: hotel.rating,
             totalRoom: hotel.totalRoom,
-            badge: isApproved, // ✅ added here
+            badge: isApproved,
           },
           hotelImage: selectedImage,
           hotelAddress,
           hotelPolicies,
-          hotelFeedbacks: HotelFeedbacks,
+          hotelFeedbacks,
           roomTypes: availableRoomTypes,
         };
       }
+
       return null;
     })
   );
 
   const filteredHotels = hotelRoomTypeLayout.filter(Boolean);
+
   const responseMessage =
     filteredHotels.length === 0
       ? "No room found"
       : "Hotels retrieved successfully.";
 
-  // (Your recent search saving logic stays unchanged) ...
   if (filteredHotels.length > 0) {
     const firstHotelName = filteredHotels[0]?.hotel?.hotelName || null;
+
     const existingSearch = await UserRecentSearchModel.findOne({
       user: req.user._id,
       category: "hotel",
@@ -994,7 +1013,10 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
           category: "hotel",
           searchDetails: {
             hotel: {
-              location: { hotelName: firstHotelName, address: townCity },
+              location: {
+                hotelName: firstHotelName,
+                address: townCity,
+              },
               checkInDate: new Date(checkInDate),
               checkOutDate: new Date(checkOutDate),
               requiredRooms: parseInt(requiredRooms),
