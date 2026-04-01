@@ -154,6 +154,9 @@ const sendOtpToPhoneHandler = catchAsyncError(async (req, res) => {
 
 const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
   const { phoneNo, otp } = req.body;
+  const _id = req.user._id;
+
+  const ln = await fetchLn(_id);
 
   if (!phoneNo || !otp) {
     throw new ApiError(
