@@ -403,17 +403,26 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
     .skip(startIndex)
     .limit(limit)
     .populate("seats", "bookedSeats availableSeats noOfSeats")
-    .populate("busId", "busRegNumber busName busModelNumber rating")
+    .populate("busId", "busRegNumber busName busModelNumber rating noOfSeats")
     .lean();
 
   // 🟢 Add proper seat layout details for each bus route
   const BusSeatsLayoutModel = require("../../../models/bus-module/bus-seats-management/buses-seats.model");
 
+  const startOfDay = new Date(dateOfJourney);
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const endOfDay = new Date(dateOfJourney);
+  endOfDay.setHours(23, 59, 59, 999);
+
   await Promise.all(
     findRoutes.map(async (route) => {
       const seatLayout = await BusSeatsLayoutModel.findOne({
         routeId: route._id,
-        journeyDate: new Date(dateOfJourney),
+        journeyDate: {
+          $gte: startOfDay,
+          $lte: endOfDay,
+        },
       })
         .select("seats bookedSeats availableSeats noOfSeats")
         .lean();
@@ -424,9 +433,18 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
           availableSeats: seatLayout.availableSeats,
           noOfSeats: seatLayout.noOfSeats,
         };
-        route.seatLayout = seatLayout.seats; // 👈 full seat details (seatNumber, status, type, etc.)
+
+        route.seatLayout = seatLayout.seats;
       } else {
-        route.seatLayout = []; // No seat layout found
+        const totalSeats = Number(route.busId?.noOfSeats || 0);
+
+        route.seats = {
+          bookedSeats: 0,
+          availableSeats: totalSeats,
+          noOfSeats: totalSeats,
+        };
+
+        route.seatLayout = [];
       }
     })
   );

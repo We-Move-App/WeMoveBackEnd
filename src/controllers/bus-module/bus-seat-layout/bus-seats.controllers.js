@@ -18,11 +18,10 @@ const createBusSeat = catchAsyncError(async (req, res, next) => {
 
   if (!busId) {
     throw new ApiError(statusCode.BAD_REQUEST, "Bus ID is required");
-  } 
+  }
 
   const journeyDateNormalized = getTodayNormalized();
 
-  // Check if seat layout already exists for this bus on the same journey date
   const existingSeatLayout = await BusSeatsLayoutModel.findOne({
     busId,
     journeyDate: journeyDateNormalized,
@@ -35,19 +34,16 @@ const createBusSeat = catchAsyncError(async (req, res, next) => {
     );
   }
 
-  // Find the bus and check if it exists
   const findBus = await BusModel.findById(busId).select("_id noOfSeats");
   if (!findBus) {
     throw new ApiError(statusCode.NOT_FOUND, "Bus not found");
   }
 
-  // Find the bus route and ensure it exists
   const findRoute = await BusRouteModel.findOne({ busId }).select("_id");
   if (!findRoute) {
     throw new ApiError(statusCode.NOT_FOUND, "No routes found for this bus");
   }
 
-  // Count booked seats for this bus on the journey date
   const bookedSeatsCount = await BusSeatsLayoutModel.countDocuments({
     busId,
     journeyDate: journeyDateNormalized,
@@ -216,8 +212,8 @@ const deleteOldSeats = async () => {
     const cutoffDate = moment().subtract(2, "days").startOf("day").toDate(); // Ensuring midnight local time
 
     const result = await BusSeatsLayoutModel.deleteMany({
-      journeyDate: { $lt: cutoffDate }, 
-      journeyComplete: true
+      journeyDate: { $lt: cutoffDate },
+      journeyComplete: true,
     });
 
     console.log(
