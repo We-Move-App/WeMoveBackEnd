@@ -19,6 +19,11 @@ const ChatModel = require("../../models/new-driver-module/chat-details/chat-deta
 const {
   sendPushNotification,
 } = require("../../controllers/firebase/fcm-token.controller");
+const logger = require("../../utils/logger/logger");
+const { Logger } = require("winston");
+const {
+  createNotification,
+} = require("../../controllers/global-notification-module/global-notification.controller");
 /**
  * Assigns ride sequentially to nearby drivers
  */
@@ -54,13 +59,7 @@ const assignRideToDrivers = async (
   batchIndex = 0,
   batchSize = 5
 ) => {
-  console.log("bookingId", bookingId);
-
-  // 🚦 Hard stop if ride already accepted
   if (await isAlreadyAssigned(bookingId)) {
-    console.log(
-      `⚠️ Ride ${bookingId} already assigned — aborting batch ${batchIndex + 1}`
-    );
     stopAssigning(io, bookingId);
     return;
   }
@@ -73,14 +72,12 @@ const assignRideToDrivers = async (
   if (currentBatch.length === 0) {
     // Double-check before cancelling
     if (await isAlreadyAssigned(bookingId)) {
-      console.log(
-        `ℹ️ Ride ${bookingId} became ACCEPTED just before cancel check — skip cancel`
-      );
       stopAssigning(io, bookingId);
       return;
     }
 
-    console.log("🚫 No more drivers to assign - cancelling ride");
+    logger.info("No more drivers to assign - cancelling ride");
+
     await RideBookingDetail.findOneAndUpdate(
       { bookingId, rideStatus: { $ne: RideBookStatusEnum.ACCEPTED } }, // don't overwrite if accepted
       {
@@ -105,11 +102,6 @@ const assignRideToDrivers = async (
     return;
   }
 
-  console.log(
-    `📦 Assigning ride ${bookingId} to drivers batch ${batchIndex + 1} (${start + 1}–${end})`
-  );
-
-  // ---- Send ride:incoming to all drivers in this batch
   for (const driver of currentBatch) {
     const driverLoc = driver.location?.coordinates;
     const pickupLoc = booking.pickupLocation?.location?.coordinates;
@@ -126,14 +118,13 @@ const assignRideToDrivers = async (
         distanceToPickup = distanceInKm.toString();
         timeToPickup = durationInMin.toString();
       } catch (err) {
-        console.error(
-          `❌ Failed to get distance/time for driver ${driver.driverId}:`,
+        logger.error(
+          `Failed to get distance/time for driver ${driver.driverId}:`,
           err.message
         );
       }
     }
 
-    console.log(`📢 Emitting 'ride:incoming' to driver ${driver.driverId}`);
     io.to(driver.driverId).emit("ride:incoming", {
       rideId: bookingId,
       pickup: {
@@ -151,7 +142,6 @@ const assignRideToDrivers = async (
       distanceToPickup,
       timeToPickup,
     });
-    console.log("Ride:Incoming Push Notifi...");
     await sendPushNotification(
       driver.driverId,
       "New Ride Request",
@@ -186,7 +176,7 @@ const assignRideToDrivers = async (
       return;
     }
 
-    console.log(`✅ Driver ${data.driverId} accepted ride ${bookingId}`);
+    logger.info(`Driver ${data.driverId} accepted ride ${bookingId}`);
 
     try {
       await Promise.all([
@@ -202,7 +192,7 @@ const assignRideToDrivers = async (
         ),
       ]);
     } catch (err) {
-      console.error("Notification failed:", err.message);
+      logger.error("Notification failed:", err.message);
     }
 
     // Stop timers + listeners
@@ -234,16 +224,10 @@ const assignRideToDrivers = async (
   // ---- Timeout after 8s
   const timeoutId = setTimeout(async () => {
     if (await isAlreadyAssigned(bookingId)) {
-      console.log(
-        `⏳ Timeout fired but ${bookingId} already ACCEPTED — stopping`
-      );
       stopAssigning(io, bookingId);
       return;
     }
 
-    console.log(
-      `⏰ 8s timeout - none of the drivers in batch ${batchIndex + 1} accepted ride ${bookingId}`
-    );
     io.off(acceptEvent, acceptHandler);
 
     // Mark this batch as ignored
@@ -283,14 +267,14 @@ const assignRideToDrivers = async (
  * Main ride socket handler
  */
 const rideHandler = (socket, io, role) => {
-  console.log(`⚡ New ${role} connection: ${socket.id}`);
+  logger.info(`New ${role} connection: ${socket.id}`);
 
   if (role === "driver") {
-    console.log(`🚕 Driver connected: ${socket.data.driverId}`);
+    logger.info(`Driver connected: ${socket.data.driverId}`);
 
     socket.on("ride:accept", async (data, ack) => {
       try {
-        console.log("bookingId ...", data.bookingId);
+        logger.info(`bookingId ...", data.bookingId`);
 
         // Update driverId now when accepting
         const updated = await RideBookingDetail.findOneAndUpdate(
@@ -403,7 +387,8 @@ const rideHandler = (socket, io, role) => {
             ].reverse(),
           },
         });
-        console.log("Ride:Accept Push Notifi...");
+
+        // console.log("Ride:Accept Push Notifi...");
         await sendPushNotification(
           updated.userId,
           "Ride Accepted",
@@ -435,7 +420,7 @@ const rideHandler = (socket, io, role) => {
           ride: rideData,
         });
       } catch (err) {
-        console.error("Accept error:", err);
+        logger.error("Accept error:", err);
         ack({ success: false, error: "Failed to accept ride" });
       }
     });
@@ -455,7 +440,7 @@ const rideHandler = (socket, io, role) => {
         );
         ack({ success: true });
       } catch (err) {
-        console.error("Reject error:", err);
+        logger.error("Reject error:", err);
         ack({ success: false, error: "Failed to reject ride" });
       }
     });
@@ -475,7 +460,7 @@ const rideHandler = (socket, io, role) => {
         io.to(booking.userId).emit("ride:arrived", {
           bookingId: data.bookingId,
         });
-        console.log("Ride:Arrived Push Notifi...");
+        // console.log("Ride:Arrived Push Notifi...");
         await sendPushNotification(
           booking.userId,
           "Driver Arrived",
@@ -484,7 +469,7 @@ const rideHandler = (socket, io, role) => {
         );
         ack({ success: true });
       } catch (err) {
-        console.error("Arrived error:", err);
+        Logger.error("Arrived error:", err);
         ack({ success: false, error: "Failed to confirm arrival" });
       }
     });
@@ -514,7 +499,7 @@ const rideHandler = (socket, io, role) => {
           bookingId: data.bookingId,
           success: isOtpValid,
         });
-        console.log("ride:verifyOTP Push Notifi...");
+        // console.log("ride:verifyOTP Push Notifi...");
         await sendPushNotification(
           booking.userId,
           "Ride Started",
@@ -524,7 +509,7 @@ const rideHandler = (socket, io, role) => {
 
         ack({ success: isOtpValid, error: isOtpValid ? null : "Invalid OTP" });
       } catch (err) {
-        console.error("OTP verification error:", err);
+        logger.error("OTP verification error:", err);
         ack({ success: false, error: "Failed to verify OTP" });
       }
     });
@@ -549,7 +534,7 @@ const rideHandler = (socket, io, role) => {
         });
         ack({ success: true });
       } catch (err) {
-        console.error("Start ride error:", err);
+        logger.error("Start ride error:", err);
         ack({ success: false, error: "Failed to start ride" });
       }
     });
@@ -571,7 +556,7 @@ const rideHandler = (socket, io, role) => {
           bookingId: data.bookingId,
           fare: booking.fare,
         });
-        console.log("ride:complete Push Notifi...");
+        // console.log("ride:complete Push Notifi...");
         await sendPushNotification(
           booking.userId,
           "Ride Completed",
@@ -580,7 +565,7 @@ const rideHandler = (socket, io, role) => {
         );
         ack({ success: true });
       } catch (err) {
-        console.error("Complete ride error:", err);
+        logger.error("Complete ride error:", err);
         ack({ success: false, error: "Failed to complete ride" });
       }
     });
@@ -614,7 +599,7 @@ const rideHandler = (socket, io, role) => {
           ack({ success: false, error: "Booking not found" });
         }
       } catch (err) {
-        console.error("Cancel ride error:", err);
+        logger.error("Cancel ride error:", err);
         ack({ success: false, error: "Failed to cancel ride" });
       }
     });
