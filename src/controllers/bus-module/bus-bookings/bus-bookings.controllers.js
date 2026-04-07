@@ -166,15 +166,31 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     "termAndConditions",
   ];
   validateRequestBody(reqField, req.body);
-  console.log("noOfPassengers:", noOfPassengers);
-  console.log(" passengers.length:", passengers.length);
 
   // Validate passenger and seat count match
+
+  if (!Array.isArray(passengers) || passengers.length === 0) {
+    throw new ApiError(400, "Passengers must be a non-empty array");
+  }
   if (noOfPassengers !== passengers.length) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
       "Passenger count does not match the number of selected seats"
     );
+  }
+
+  passengers.forEach((p) => {
+    if (!p.name || !p.age || !p.gender) {
+      throw new ApiError(400, "Passenger details incomplete");
+    }
+
+    if (p.age <= 0) {
+      throw new ApiError(400, "Invalid passenger age");
+    }
+  });
+
+  if (!price || price <= 0) {
+    throw new ApiError(400, "Invalid price");
   }
 
   isValidFutureDate(journeyDate);
@@ -190,7 +206,11 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
   if (!findBus?.noOfSeats || findBus?.noOfSeats === 0)
     throw new ApiError(statusCode.NOT_FOUND, "Please add bus seats first");
 
-  const journeyDateNormalized = normalizeDate(journeyDate);
+  const inputDate = new Date(journeyDate);
+
+  const journeyDateNormalized = new Date(
+    Date.UTC(inputDate.getFullYear(), inputDate.getMonth(), inputDate.getDate())
+  );
 
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -229,21 +249,22 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     }
 
     // Get available seats
-    const availableSeats = seatAvailability.seats.filter(
-      (seat) => seat.isAvailable
-    );
-
-    if (availableSeats.length < noOfPassengers) {
-      throw new ApiError(
-        statusCode.CONFLICT,
-        `Not enough available seats, available seats: ${availableSeats.length}`
-      );
-    }
 
     // Assign next available seats
-    const assignedSeats = availableSeats
-      .slice(0, noOfPassengers)
-      .map((seat) => seat.seatNumber);
+    const assignedSeats = [];
+
+    for (let i = 0; i < noOfPassengers; i++) {
+      const seat = seatAvailability.seats.find((s) => s.isAvailable);
+
+      if (!seat) {
+        throw new ApiError(statusCode.CONFLICT, "Seats not available");
+      }
+
+      seat.isAvailable = false;
+      seat.status = "booked";
+
+      assignedSeats.push(seat.seatNumber);
+    }
 
     // Assign seats to passengers
     const assignSeatToPassenger = passengers.map((passenger, index) => ({
@@ -286,8 +307,12 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
       return seat;
     });
 
-    seatAvailability.availableSeats -= noOfPassengers;
-    seatAvailability.bookedSeats += noOfPassengers;
+    seatAvailability.bookedSeats = seatAvailability.seats.filter(
+      (s) => !s.isAvailable
+    ).length;
+
+    seatAvailability.availableSeats =
+      seatAvailability.seats.length - seatAvailability.bookedSeats;
     await seatAvailability.save({ session });
 
     await session.commitTransaction();
@@ -483,8 +508,86 @@ const updateBooking = catchAsyncError(async (req, res, next) => {
 });
 
 // =================|| SEARCHES BUS BY USERS||==================
+// const searchBuses = catchAsyncError(async (req, res, next) => {
+//   const { from, to, dateOfJourney } = req.query;
+//   const page = parseInt(req.query.page, 10) || 1;
+//   const limit = parseInt(req.query.limit, 10) || 10;
+//   const startIndex = (page - 1) * limit;
+
+//   const reqField = ["from", "to", "dateOfJourney"];
+//   validateRequestBody(reqField, req.query);
+
+//   const getDay = getDayOfDate(dateOfJourney);
+
+//   const query = {
+//     $and: [
+//       {
+//         $or: [
+//           { from: { $regex: from, $options: "i" } },
+//           { "pickups.name": { $regex: from, $options: "i" } },
+//         ],
+//       },
+//       {
+//         $or: [
+//           { to: { $regex: to, $options: "i" } },
+//           { "drops.name": { $regex: to, $options: "i" } },
+//         ],
+//       },
+//       {
+//         runningDays: {
+//           $in: [getDay],
+//         },
+//       },
+//       {
+//         status: "active",
+//       },
+//       {
+//         createdBy: req.user._id,
+//       },
+//     ],
+//   };
+
+//   const findRoutes = await BusRouteModel.find(query)
+//     .sort({ createdAt: -1 })
+//     .skip(startIndex)
+//     .limit(limit)
+//     .populate("seats", "bookedSeats availableSeats noOfSeats");
+
+//   if (!findRoutes.length) {
+//     return next(
+//       new ApiError(statusCode.NOT_FOUND, "No matching bus routes found")
+//     );
+//   }
+
+//   // ✅ Use Promise.all() to resolve all async operations before proceeding
+//   const updatedRoutes = await Promise.all(
+//     findRoutes.map(async (route) => {
+//       const pricePerSeat = await getFinalPrice(
+//         "bus",
+//         route.pricePerSeat,
+//         new Date()
+//       );
+//       return {
+//         ...route.toObject(),
+//         pricePerSeat,
+//       };
+//     })
+//   );
+
+//   return res
+//     .status(statusCode.OK)
+//     .json(
+//       new ApiResponse(
+//         statusCode.OK,
+//         updatedRoutes,
+//         "Bus routes found successfully"
+//       )
+//     );
+// });
+
 const searchBuses = catchAsyncError(async (req, res, next) => {
   const { from, to, dateOfJourney } = req.query;
+
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const startIndex = (page - 1) * limit;
@@ -494,17 +597,29 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
 
   const getDay = getDayOfDate(dateOfJourney);
 
+  // ✅ UTC SAFE DATE HANDLING (FINAL FIX)
+  const inputDate = new Date(dateOfJourney);
+
+  const startOfDay = new Date(
+    Date.UTC(inputDate.getFullYear(), inputDate.getMonth(), inputDate.getDate())
+  );
+
+  const endOfDay = new Date(startOfDay);
+  endOfDay.setUTCDate(endOfDay.getUTCDate() + 1);
+
+  console.log("SEARCH RANGE:", startOfDay, endOfDay);
+
   const query = {
     $and: [
       {
         $or: [
-          { from: { $regex: from, $options: "i" } },
+          { startLocation: { $regex: from, $options: "i" } },
           { "pickups.name": { $regex: from, $options: "i" } },
         ],
       },
       {
         $or: [
-          { to: { $regex: to, $options: "i" } },
+          { endLocation: { $regex: to, $options: "i" } },
           { "drops.name": { $regex: to, $options: "i" } },
         ],
       },
@@ -522,11 +637,12 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
     ],
   };
 
+  // ✅ Fetch routes + bus seats
   const findRoutes = await BusRouteModel.find(query)
+    .populate("busId", "noOfSeats")
     .sort({ createdAt: -1 })
     .skip(startIndex)
-    .limit(limit)
-    .populate("seats", "bookedSeats availableSeats noOfSeats");
+    .limit(limit);
 
   if (!findRoutes.length) {
     return next(
@@ -534,16 +650,48 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
     );
   }
 
-  // ✅ Use Promise.all() to resolve all async operations before proceeding
+  // ✅ Extract IDs safely
+  const routeIds = findRoutes.map((r) => r._id);
+  const busIds = findRoutes.map((r) => r.busId?._id).filter(Boolean);
+
+  // ✅ DATE RANGE QUERY (IMPORTANT 🔥)
+  const seatLayouts = await BusSeatsLayoutModel.find({
+    routeId: { $in: routeIds },
+    busId: { $in: busIds },
+    journeyDate: {
+      $gte: startOfDay,
+      $lt: endOfDay,
+    },
+  });
+
+  // ✅ Map for fast lookup
+  const seatMap = new Map();
+
+  seatLayouts.forEach((seat) => {
+    const key = `${seat.busId.toString()}_${seat.routeId.toString()}`;
+    seatMap.set(key, seat);
+  });
+
+  // ✅ Build response
   const updatedRoutes = await Promise.all(
     findRoutes.map(async (route) => {
+      const key = `${route.busId._id.toString()}_${route._id.toString()}`;
+      const seatData = seatMap.get(key);
+
+      const totalSeats = route.busId?.noOfSeats || 0;
+
+      const availableSeats = seatData ? seatData.availableSeats : totalSeats;
+
       const pricePerSeat = await getFinalPrice(
         "bus",
         route.pricePerSeat,
         new Date()
       );
+
       return {
         ...route.toObject(),
+        totalSeats,
+        availableSeats,
         pricePerSeat,
       };
     })
