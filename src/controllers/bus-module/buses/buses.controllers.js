@@ -245,7 +245,6 @@ const getAllBuses = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.NOT_FOUND, "No buses found");
   }
 
-  // ✅ Post-filter driver.fullName search (because it's populated)
   let filteredBuses = buses;
   if (search && search.trim() !== "") {
     const regex = new RegExp(search, "i");
@@ -338,6 +337,8 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
   const _id = req.user._id;
   const ln = await fetchLn(_id);
 
+  console.log("serach: busFrom user-searchbooking");
+
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const startIndex = (page - 1) * limit;
@@ -406,7 +407,6 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
     .populate("busId", "busRegNumber busName busModelNumber rating noOfSeats")
     .lean();
 
-  // 🟢 Add proper seat layout details for each bus route
   const BusSeatsLayoutModel = require("../../../models/bus-module/bus-seats-management/buses-seats.model");
 
   const startOfDay = new Date(dateOfJourney);
@@ -431,7 +431,7 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
         route.seats = {
           bookedSeats: seatLayout.bookedSeats,
           availableSeats: seatLayout.availableSeats,
-          noOfSeats: seatLayout.noOfSeats,
+          noOfSeats: Number(seatLayout.noOfSeats || 0),
         };
 
         route.seatLayout = seatLayout.seats;

@@ -43,9 +43,9 @@ const busSeatsSchema = new Schema(
       ref: "BusOperator",
     },
     journeyComplete: {
-      type:Boolean,
-      default: false
-    }
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );
