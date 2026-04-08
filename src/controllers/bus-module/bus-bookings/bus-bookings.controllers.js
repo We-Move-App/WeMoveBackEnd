@@ -507,84 +507,6 @@ const updateBooking = catchAsyncError(async (req, res, next) => {
   }
 });
 
-// =================|| SEARCHES BUS BY USERS||==================
-// const searchBuses = catchAsyncError(async (req, res, next) => {
-//   const { from, to, dateOfJourney } = req.query;
-//   const page = parseInt(req.query.page, 10) || 1;
-//   const limit = parseInt(req.query.limit, 10) || 10;
-//   const startIndex = (page - 1) * limit;
-
-//   const reqField = ["from", "to", "dateOfJourney"];
-//   validateRequestBody(reqField, req.query);
-
-//   const getDay = getDayOfDate(dateOfJourney);
-
-//   const query = {
-//     $and: [
-//       {
-//         $or: [
-//           { from: { $regex: from, $options: "i" } },
-//           { "pickups.name": { $regex: from, $options: "i" } },
-//         ],
-//       },
-//       {
-//         $or: [
-//           { to: { $regex: to, $options: "i" } },
-//           { "drops.name": { $regex: to, $options: "i" } },
-//         ],
-//       },
-//       {
-//         runningDays: {
-//           $in: [getDay],
-//         },
-//       },
-//       {
-//         status: "active",
-//       },
-//       {
-//         createdBy: req.user._id,
-//       },
-//     ],
-//   };
-
-//   const findRoutes = await BusRouteModel.find(query)
-//     .sort({ createdAt: -1 })
-//     .skip(startIndex)
-//     .limit(limit)
-//     .populate("seats", "bookedSeats availableSeats noOfSeats");
-
-//   if (!findRoutes.length) {
-//     return next(
-//       new ApiError(statusCode.NOT_FOUND, "No matching bus routes found")
-//     );
-//   }
-
-//   // ✅ Use Promise.all() to resolve all async operations before proceeding
-//   const updatedRoutes = await Promise.all(
-//     findRoutes.map(async (route) => {
-//       const pricePerSeat = await getFinalPrice(
-//         "bus",
-//         route.pricePerSeat,
-//         new Date()
-//       );
-//       return {
-//         ...route.toObject(),
-//         pricePerSeat,
-//       };
-//     })
-//   );
-
-//   return res
-//     .status(statusCode.OK)
-//     .json(
-//       new ApiResponse(
-//         statusCode.OK,
-//         updatedRoutes,
-//         "Bus routes found successfully"
-//       )
-//     );
-// });
-
 const searchBuses = catchAsyncError(async (req, res, next) => {
   const { from, to, dateOfJourney } = req.query;
 
@@ -597,7 +519,6 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
 
   const getDay = getDayOfDate(dateOfJourney);
 
-  // ✅ UTC SAFE DATE HANDLING (FINAL FIX)
   const inputDate = new Date(dateOfJourney);
 
   const startOfDay = new Date(
