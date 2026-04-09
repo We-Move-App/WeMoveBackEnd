@@ -1279,11 +1279,11 @@ const getHotelById = catchAsyncError(async (req, res) => {
 
       const totalRoomsForType = individualRooms.length;
 
-      const bookedByStatus = new Set(
-        individualRooms
-          .filter((r) => r.status === "booked")
-          .map((r) => r._id.toString())
-      );
+      // const bookedByStatus = new Set(
+      //   individualRooms
+      //     .filter((r) => r.status === "booked")
+      //     .map((r) => r._id.toString())
+      // );
 
       let dateFilter = {};
       if (checkIn && checkOut) {
@@ -1305,18 +1305,18 @@ const getHotelById = catchAsyncError(async (req, res) => {
         status: "Booked",
         ...dateFilter,
       })
-        .select("assignedRooms")
+        // .select("assignedRooms")
+        .select("noOfRoom")
         .lean();
 
-      const bookedByAssigned = new Set();
-      activeBookingsForType.forEach((b) => {
-        b.assignedRooms?.forEach((rid) => bookedByAssigned.add(rid.toString()));
-      });
-
-      const totalBookedForType = new Set([
-        ...bookedByStatus,
-        ...bookedByAssigned,
-      ]).size;
+      // const bookedByAssigned = new Set();
+      // activeBookingsForType.forEach((b) => {
+      //   b.assignedRooms?.forEach((rid) => bookedByAssigned.add(rid.toString()));
+      // });
+      const totalBookedForType = activeBookingsForType.reduce(
+        (sum, booking) => sum + (booking.noOfRoom || 0),
+        0
+      );
 
       const availableRoomsForType = Math.max(
         totalRoomsForType - totalBookedForType,
