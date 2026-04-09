@@ -113,31 +113,58 @@ const createBookingByHotelManager = catchAsyncError(async (req, res) => {
   });
 
   // Check overlapping bookings
+  // const overlappingBookings = await HotelBooking.find({
+  //   hotelId,
+  //   checkInDate: { $lt: formattedCheckOut },
+  //   checkOutDate: { $gt: formattedCheckIn },
+  //   status: "Booked",
+  //   assignedRooms: { $exists: true, $ne: [] },
+  // });
+
   const overlappingBookings = await HotelBooking.find({
     hotelId,
+    roomTypeId,
+    status: "Booked",
+    paymentStatus: "PAID",
     checkInDate: { $lt: formattedCheckOut },
     checkOutDate: { $gt: formattedCheckIn },
-    status: "Booked",
-    assignedRooms: { $exists: true, $ne: [] },
-  });
+  })
+    .select("noOfRoom")
+    .lean();
 
-  const bookedRoomIds = new Set();
-  overlappingBookings.forEach(booking => {
-    booking.assignedRooms.forEach(roomId => {
-      bookedRoomIds.add(roomId.toString());
-    });
-  });
+  // const bookedRoomIds = new Set();
+  // overlappingBookings.forEach(booking => {
+  //   booking.assignedRooms.forEach(roomId => {
+  //     bookedRoomIds.add(roomId.toString());
+  //   });
+  // });
 
-  const trulyAvailableRooms = allHotelRooms.filter(
-    room => !bookedRoomIds.has(room._id.toString())
+  const totalBookedRooms = overlappingBookings.reduce(
+    (sum, booking) => sum + (booking.noOfRoom || 0),
+    0
   );
 
-  if (trulyAvailableRooms.length < noOfRoom) {
+  const totalRooms = allHotelRooms.length;
+
+  const availableRoomsCount = totalRooms - totalBookedRooms;
+
+  if (availableRoomsCount < noOfRoom) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      `Only ${trulyAvailableRooms.length} rooms are available. Requested: ${noOfRoom}`
+      `Only ${availableRoomsCount} rooms are available. Requested: ${noOfRoom}`
     );
   }
+
+  // const trulyAvailableRooms = allHotelRooms.filter(
+  //   room => !bookedRoomIds.has(room._id.toString())
+  // );
+
+  // if (trulyAvailableRooms.length < noOfRoom) {
+  //   throw new ApiError(
+  //     statusCode.BAD_REQUEST,
+  //     `Only ${trulyAvailableRooms.length} rooms are available. Requested: ${noOfRoom}`
+  //   );
+  // }
 
   // Upload identity card if exists
   let identityCard = null;
