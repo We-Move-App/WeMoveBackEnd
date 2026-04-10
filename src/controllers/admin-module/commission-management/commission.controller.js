@@ -7,6 +7,21 @@ const {
   createCommissionValidation,
   updateCommissionValidation,
 } = require("./commission.validation");
+const { fetchAdminLn } = require("../../../utils/services/user.services");
+const { translateLn } = require("../../../utils/services/translator.service");
+
+const serviceTypeMap = {
+  bike: "BIKE",
+  bus: "BUS",
+  hotel: "HOTEL",
+  taxi: "TAXI",
+  user: "USER",
+};
+
+const statusMap = {
+  active: "ACTIVE",
+  inactive: "INACTIVE",
+};
 
 const createCommission = catchAsyncError(async (req, res) => {
   const { error, value } = createCommissionValidation.validate(req.body, {
@@ -21,7 +36,6 @@ const createCommission = catchAsyncError(async (req, res) => {
     );
   }
 
- 
   const existing = await Commission.findOne({ serviceType: value.serviceType });
   if (existing) {
     throw new ApiError(
@@ -43,20 +57,56 @@ const createCommission = catchAsyncError(async (req, res) => {
     );
 });
 
+// const getAllCommissions = catchAsyncError(async (req, res) => {
+//   const commissions = await Commission.find().sort({ serviceType: 1 }); // sort by serviceType for consistency
+
+//   if (!commissions || commissions.length === 0) {
+//     throw new ApiError(statusCode.NOT_FOUND, "No commissions found");
+//   }
+
+//   return res
+//     .status(statusCode.OK)
+//     .json(
+//       new ApiResponse(
+//         statusCode.OK,
+//         commissions,
+//         "Commissions fetched successfully"
+//       )
+//     );
+// });
+
 const getAllCommissions = catchAsyncError(async (req, res) => {
-  const commissions = await Commission.find().sort({ serviceType: 1 }); // sort by serviceType for consistency
+  const ln = await fetchAdminLn(req.user._id);
+
+  console.log("Language is :", ln);
+
+  const commissions = await Commission.find().sort({ serviceType: 1 });
 
   if (!commissions || commissions.length === 0) {
-    throw new ApiError(statusCode.NOT_FOUND, "No commissions found");
+    throw new ApiError(statusCode.NOT_FOUND, translateLn(ln, "NO_COMMISSIONS"));
   }
+
+  const data = commissions.map((item) => ({
+    ...item._doc,
+
+    serviceType: translateLn(
+      ln,
+      serviceTypeMap[item.serviceType?.toLowerCase()] || item.serviceType
+    ),
+
+    status: translateLn(
+      ln,
+      statusMap[item.status?.toLowerCase()] || item.status
+    ),
+  }));
 
   return res
     .status(statusCode.OK)
     .json(
       new ApiResponse(
         statusCode.OK,
-        commissions,
-        "Commissions fetched successfully"
+        data,
+        translateLn(ln, "COMMISSION_FETCHED")
       )
     );
 });

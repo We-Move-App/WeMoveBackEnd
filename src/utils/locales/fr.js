@@ -105,4 +105,21 @@ module.exports = {
   TRIP_HISTORY_FETCHED: "Historique des trajets récupéré avec succès",
   UNKNOWN_USER: "Utilisateur inconnu",
   UNKNOWN_DRIVER: "Conducteur inconnu",
+
+  //       Admin-section        ///////////
+
+  ADMIN: "Administrateur",
+  SUB_ADMIN: "Sous-administrateur",
+  SUPER_ADMIN: "Super administrateur",
+  BIKE: "Vélo",
+  BUS: "Bus",
+  HOTEL: "Hôtel",
+  TAXI: "Taxi",
+  USER: "Utilisateur",
+
+  ACTIVE: "Actif",
+  INACTIVE: "Inactif",
+
+  COMMISSION_FETCHED: "Commissions récupérées avec succès",
+  NO_COMMISSIONS: "Aucune commission trouvée",
 };
