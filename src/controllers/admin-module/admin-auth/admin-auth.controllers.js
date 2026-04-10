@@ -63,111 +63,14 @@ const {
   decodeAccessToken,
 } = require("../../../utils/jwtToken/customTokenService");
 const TransactionModel = require("../../../models/transaction-module/transaction.model");
+const { fetchAdminLn } = require("../../../utils/services/user.services");
+const { translateLn } = require("../../../utils/services/translator.service");
+const roleMap = {
+  Admin: "ADMIN",
+  SubAdmin: "SUB_ADMIN",
+  SuperAdmin: "SUPER_ADMIN",
+};
 
-// Register Admin
-// const addAdmins = catchAsyncError(async (req, res, next) => {
-
-//   const { email, userName, password, phoneNumber, branch, role, permissions } =
-//     req.body;
-//   const { _id, performedBy, } = req.user;
-//   console.log(_id)
-
-//   const isRoleValid = ["Admin", "SubAdmin"].includes(role);
-
-//   if (!isRoleValid) {
-//     throw new ApiError(statusCode.BAD_REQUEST, `You can add Admin role only`);
-//   }
-//   const reqField = [
-//     "email",
-//     "userName",
-//     "password",
-//     "phoneNumber",
-//     "branch",
-//     "role",
-//     "permissions",
-//   ];
-
-//   validateRequestBody(reqField, req.body);
-
-//   if (!Array.isArray(permissions) || permissions?.length === 0) {
-//     throw new ApiError(statusCode.BAD_REQUEST, "permissions required in array");
-//   }
-
-//   const invalidPermissions = permissions.filter(
-//     (permission) => !adminAuthorities.includes(permission)
-//   );
-
-//   if (invalidPermissions.length > 0) {
-//     throw new ApiError(
-//       statusCode.BAD_REQUEST,
-//       `Invalid permissions: ${invalidPermissions.join(", ")}. Allowed values: ${busOperatorAuthorities.join(", ")}`
-//     );
-//   }
-
-//   const existingUser = await AdminModel.findOne({
-//     $or: [
-//       { email: email },
-//       { phoneNumber: phoneNumber },
-//       { userName: userName },
-//     ],
-//   });
-
-//   if (existingUser) {
-//     throw new ApiError(statusCode.BAD_REQUEST, "Admin already exist");
-//   }
-
-//   // Map permissions array to object
-//   const mappedPermissions = {
-//     userManagement: permissions.includes("userManagement"),
-//     busManagement: permissions.includes("busManagement"),
-//     driverManagement: permissions.includes("driverManagement"),
-//     hotelManagement: permissions.includes("hotelManagement"),
-//     walletManagement: permissions.includes("walletManagement"),
-//     reportsAnalytics: permissions.includes("reportsAnalytics"),
-//     notifications: permissions.includes("notifications"),
-//     roleManagement: permissions.includes("roleManagement"),
-//   };
-
-//   const newUser = new AdminModel({
-//     email,
-//     userName,
-//     password,
-//     phoneNumber,
-//     role,
-//     branch,
-//     permissions: mappedPermissions,
-//     parentUserId: _id,
-//     createdBy: performedBy,
-//   updatedBy: performedBy
-//   });
-
-//   await newUser.save();
-//   const logs = await logActivity({
-//   userId: newUser._id,
-//   activity: `Created a new ${role} with username: ${userName}`,
-//   performedBy: _id,   // use logged-in user’s id
-// });
-
-//   const userObject = newUser.toObject();
-//   delete userObject.password;
-
-//   const { accessToken, refreshToken } = await generateTokens(
-//     newUser,
-//     TypeOfUser.ADMIN
-//   );
-//   setTokenCookies(res, accessToken, refreshToken);
-
-//   const data = {
-//     accessToken,
-//     refreshToken,
-//     user: userObject,
-//     logs
-//   };
-
-//   return res
-//     .status(statusCode.OK)
-//     .json(new ApiResponse(statusCode.OK, data, `created successfully`));
-// });
 const addAdmins = catchAsyncError(async (req, res, next) => {
   const {
     email,
@@ -370,7 +273,7 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
       )
     );
 });
-// ======================|| LOGIN USER ||========================
+
 const loginAdmin = catchAsyncError(async (req, res, next) => {
   const { username, password } = req.body;
   console.log(req.body);
@@ -512,10 +415,12 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
   const { role, search } = req.query;
 
   // Logged in user details (from token middleware)
-  const loggedInUser = req.user; // ✅ must be set in auth middleware
+  const loggedInUser = req.user;
   if (!loggedInUser) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Unauthorized");
   }
+
+  const ln = await fetchAdminLn(loggedInUser._id);
 
   // Base filter
   let matchQuery = {};
@@ -603,7 +508,7 @@ const getAllAdmins = catchAsyncError(async (req, res, next) => {
       phoneNumber: user.phoneNumber,
       reportingManager: user.reportingManager,
       email: user.email,
-      role: user.role,
+      role: translateLn(ln, roleMap[user.role] || user.role),
       permissionsCount: truePermissionCount,
       createdAt: user.createdAt,
       branch: user.branchData

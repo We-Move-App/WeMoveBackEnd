@@ -184,7 +184,6 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
     search = "",
     paymentStatus = "",
   } = req.query;
-  console.log("Query Params:", req.query);
 
   const pageNum = Math.max(parseInt(page, 10), 1);
   const limitNum = Math.max(parseInt(limit, 10), 1);

@@ -103,8 +103,21 @@ module.exports = {
   UNKNOWN_USER: "Unknown User",
   UNKNOWN_DRIVER: "Unknown Driver",
 
+  ////Admin-section
 
-  /// -----------------/
+  ADMIN: "Admin",
+  SUB_ADMIN: "Sub Admin",
+  SUPER_ADMIN: "Super Admin",
 
-  
+  BIKE: "Bike",
+  BUS: "Bus",
+  HOTEL: "Hotel",
+  TAXI: "Taxi",
+  USER: "User",
+
+  ACTIVE: "Active",
+  INACTIVE: "Inactive",
+
+  COMMISSION_FETCHED: "Commissions fetched successfully",
+  NO_COMMISSIONS: "No commissions found",
 };
