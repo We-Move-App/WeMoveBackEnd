@@ -492,10 +492,13 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
   }
 
   // ---------------- RESPONSE ----------------
+  const isCouponUsed = couponMessage === "You have already used this coupon.";
 
-  return res.status(statusCode.OK).json(
+  const responseStatus = isCouponUsed ? 801 : statusCode.OK;
+
+  return res.status(responseStatus).json(
     new ApiResponse(
-      statusCode.OK,
+      responseStatus,
       {
         baseAmount,
         commission: commissionAmount,
