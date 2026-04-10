@@ -122,4 +122,20 @@ module.exports = {
 
   COMMISSION_FETCHED: "Commissions récupérées avec succès",
   NO_COMMISSIONS: "Aucune commission trouvée",
+
+  USER_MANAGEMENT: "Gestion des utilisateurs",
+  BUS_MANAGEMENT: "Gestion des bus",
+  TAXI_MANAGEMENT: "Gestion des taxis",
+  BIKE_MANAGEMENT: "Gestion des vélos",
+  HOTEL_MANAGEMENT: "Gestion des hôtels",
+  WALLET_MANAGEMENT: "Gestion du portefeuille",
+  REPORTS_ANALYTICS: "Rapports et analyses",
+  NOTIFICATIONS: "Notifications",
+  ROLE_MANAGEMENT: "Gestion des rôles",
+  COMMISSION_MANAGEMENT: "Gestion des commissions",
+  COUPON_MANAGEMENT: "Gestion des coupons",
+  REFERRAL_MANAGEMENT: "Gestion des parrainages",
+
+  DATA_FOUND: "Données récupérées avec succès",
+  LOGIN_SUCCESS: "Connexion réussie",
 };

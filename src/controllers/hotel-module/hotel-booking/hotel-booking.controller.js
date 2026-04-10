@@ -492,9 +492,9 @@ const getTotalAmount = catchAsyncError(async (req, res) => {
   }
 
   // ---------------- RESPONSE ----------------
-  const isCouponUsed = couponMessage === "You have already used this coupon.";
+  const isCouponApplied = appliedCoupon !== null;
 
-  const responseStatus = isCouponUsed ? 801 : statusCode.OK;
+  const responseStatus = !couponCode || isCouponApplied ? 200 : 801;
 
   return res.status(responseStatus).json(
     new ApiResponse(

@@ -466,9 +466,6 @@ const getTransactions = catchAsyncError(async (req, res) => {
   const userId = decoded?._id;
   const driverIdFromToken = decoded?.driverId;
 
-  console.log("User ID from Token:", userId);
-  console.log("Driver ID from Token:", driverIdFromToken);
-
   if (entity === "driver" && !driverIdFromToken) {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid driver token");
   }

@@ -120,4 +120,20 @@ module.exports = {
 
   COMMISSION_FETCHED: "Commissions fetched successfully",
   NO_COMMISSIONS: "No commissions found",
+
+  USER_MANAGEMENT: "User Management",
+  BUS_MANAGEMENT: "Bus Management",
+  TAXI_MANAGEMENT: "Taxi Management",
+  BIKE_MANAGEMENT: "Bike Management",
+  HOTEL_MANAGEMENT: "Hotel Management",
+  WALLET_MANAGEMENT: "Wallet Management",
+  REPORTS_ANALYTICS: "Reports & Analytics",
+  NOTIFICATIONS: "Notifications",
+  ROLE_MANAGEMENT: "Role Management",
+  COMMISSION_MANAGEMENT: "Commission Management",
+  COUPON_MANAGEMENT: "Coupon Management",
+  REFERRAL_MANAGEMENT: "Referral Management",
+
+  DATA_FOUND: "Data found successfully",
+  LOGIN_SUCCESS: "Logged in successfully",
 };

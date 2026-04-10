@@ -71,6 +71,21 @@ const roleMap = {
   SuperAdmin: "SUPER_ADMIN",
 };
 
+const permissionMap = {
+  userManagement: "USER_MANAGEMENT",
+  busManagement: "BUS_MANAGEMENT",
+  taxiManagement: "TAXI_MANAGEMENT",
+  bikeManagement: "BIKE_MANAGEMENT",
+  hotelManagement: "HOTEL_MANAGEMENT",
+  walletManagement: "WALLET_MANAGEMENT",
+  reportsAnalytics: "REPORTS_ANALYTICS",
+  notifications: "NOTIFICATIONS",
+  roleManagement: "ROLE_MANAGEMENT",
+  commissionManagement: "COMMISSION_MANAGEMENT",
+  couponManagement: "COUPON_MANAGEMENT",
+  referralManagement: "REFERRAL_MANAGEMENT",
+};
+
 const addAdmins = catchAsyncError(async (req, res, next) => {
   const {
     email,
@@ -604,6 +619,7 @@ const getSubAdminsByBranch = catchAsyncError(async (req, res) => {
 
 const getAdminById = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
+  const ln = req.user.ln || "en";
 
   // Find admin and populate branch + reportingManager
   const admin = await AdminModel.findById(id)
@@ -625,8 +641,11 @@ const getAdminById = catchAsyncError(async (req, res, next) => {
     userName: admin.userName,
     email: admin.email,
     phoneNumber: admin.phoneNumber,
-    role: admin.role,
-    permissions: admin.permissions,
+    role: translateLn(ln, roleMap[admin.role] || admin.role),
+    permissions: Object.keys(admin.permissions || {}).reduce((acc, key) => {
+      acc[translateLn(ln, permissionMap[key] || key)] = admin.permissions[key];
+      return acc;
+    }, {}),
     createdAt: admin.createdAt,
     updatedAt: admin.updatedAt,
     branch: admin.branch
@@ -650,7 +669,7 @@ const getAdminById = catchAsyncError(async (req, res, next) => {
       : null,
     UserActivity: lastActivity
       ? {
-          activity: lastActivity.activity,
+          activity: translateLn(ln, "LOGIN_SUCCESS"),
           time: lastActivity.createdAt,
         }
       : null,
@@ -659,7 +678,11 @@ const getAdminById = catchAsyncError(async (req, res, next) => {
   return res
     .status(statusCode.OK)
     .json(
-      new ApiResponse(statusCode.OK, formattedAdmin, "Data found successfully")
+      new ApiResponse(
+        statusCode.OK,
+        formattedAdmin,
+        translateLn(ln, "DATA_FOUND")
+      )
     );
 });
 
