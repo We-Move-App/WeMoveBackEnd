@@ -179,16 +179,6 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
     );
   }
 
-  passengers.forEach((p) => {
-    if (!p.name || !p.age || !p.gender) {
-      throw new ApiError(400, "Passenger details incomplete");
-    }
-
-    if (p.age <= 0) {
-      throw new ApiError(400, "Invalid passenger age");
-    }
-  });
-
   if (!price || price <= 0) {
     throw new ApiError(400, "Invalid price");
   }

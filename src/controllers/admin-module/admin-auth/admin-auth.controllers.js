@@ -619,9 +619,15 @@ const getSubAdminsByBranch = catchAsyncError(async (req, res) => {
 
 const getAdminById = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
-  const ln = req.user.ln || "en";
 
-  // Find admin and populate branch + reportingManager
+  let ln = req.user?.ln;
+
+  if (!ln && req.user?._id) {
+    ln = await fetchAdminLn(req.user._id);
+  }
+
+  ln = ln || "en";
+
   const admin = await AdminModel.findById(id)
     .populate("branch", "name location")
     .populate("reportingManager", "userName phoneNumber email");
@@ -643,9 +649,11 @@ const getAdminById = catchAsyncError(async (req, res, next) => {
     phoneNumber: admin.phoneNumber,
     role: translateLn(ln, roleMap[admin.role] || admin.role),
     permissions: Object.keys(admin.permissions || {}).reduce((acc, key) => {
-      acc[translateLn(ln, permissionMap[key] || key)] = admin.permissions[key];
+      const translatedKey = permissionMap[key] || key;
+      acc[translateLn(ln, translatedKey)] = admin.permissions[key];
       return acc;
     }, {}),
+
     createdAt: admin.createdAt,
     updatedAt: admin.updatedAt,
     branch: admin.branch
@@ -669,7 +677,7 @@ const getAdminById = catchAsyncError(async (req, res, next) => {
       : null,
     UserActivity: lastActivity
       ? {
-          activity: translateLn(ln, "LOGIN_SUCCESS"),
+          activity: translateLn(ln, lastActivity.activity || "LOGIN_SUCCESS"),
           time: lastActivity.createdAt,
         }
       : null,
@@ -1549,7 +1557,6 @@ const getTransactionHistory = async (req, res) => {
       );
     });
 
-    // Pagination after search
     const paginatedResults = filteredResults.slice(skip, skip + limit);
 
     const totalRecords = filteredResults.length;
