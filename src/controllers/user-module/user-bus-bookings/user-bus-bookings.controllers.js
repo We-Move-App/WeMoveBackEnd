@@ -524,9 +524,7 @@ const calculateBusBooking = catchAsyncError(async (req, res) => {
 
 const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
   const { bookingId } = req.params;
-  const uid = req.user._id;
-
-  const ln = await fetchLn(uid);
+  const ln = req.get("ln") || "en";
 
   if (!bookingId) {
     throw new ApiError(
@@ -536,29 +534,50 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
   }
 
   const booking = await BusBookingModel.findById(bookingId)
-    .populate("busId", "busName busRegNumber busModelNumber")
+    .populate(
+      "busId",
+      "busName busRegNumber busModelNumber cancellationWindowInHours"
+    )
     .populate("bookedBy", "fullName email phoneNumber")
     .populate("routeId", "startLocation endLocation departureTime arrivalTime")
     .lean();
-  if (booking?.routeId) {
-    booking.routeId.from = booking.routeId.startLocation;
-    booking.routeId.to = booking.routeId.endLocation;
-    delete booking.routeId.startLocation;
-    delete booking.routeId.endLocation;
-  }
+
   if (!booking) {
     throw new ApiError(
       statusCode.NOT_FOUND,
       translateLn(ln, "BOOKINGS_NOT_FOUND")
     );
   }
+
+  if (booking?.routeId) {
+    booking.routeId.from = booking.routeId.startLocation;
+    booking.routeId.to = booking.routeId.endLocation;
+    delete booking.routeId.startLocation;
+    delete booking.routeId.endLocation;
+  }
+
   const busId = booking?.busId?._id;
   if (busId) {
     const busImagesDoc = await BusImagesModel.findOne(
       { busId },
       { images: 1 }
     ).lean();
+
     booking.busId.busImages = busImagesDoc?.images?.map((img) => img.url) || [];
+  }
+
+  const genderMap = {
+    male: { en: "Male", fr: "Masculin" },
+    female: { en: "Female", fr: "Féminin" },
+    other: { en: "Other", fr: "Autre" },
+  };
+
+  if (Array.isArray(booking.passengers)) {
+    booking.passengers = booking.passengers.map((passenger) => ({
+      ...passenger,
+      gender:
+        genderMap[passenger.gender?.toLowerCase()]?.[ln] || passenger.gender,
+    }));
   }
 
   const journeyDate = new Date(booking.journeyDate);

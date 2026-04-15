@@ -3,8 +3,13 @@ const { google_maps_api_key } = require("../../config/config");
 const ApiError = require("../response/ApiError");
 const statusCode = require("../constants/statusCode");
 const BusRouteModel = require("../../models/bus-module/bus-routes/bus-routes.model");
-const {AddressModel} = require("../../models/global-module/address/address.model");
-const {hotelAddressModel} = require("../../models/hotel-module/hotel-registration/hotel-location.model");
+const {
+  AddressModel,
+} = require("../../models/global-module/address/address.model");
+const {
+  hotelAddressModel,
+} = require("../../models/hotel-module/hotel-registration/hotel-location.model");
+const { translateLn } = require("./translator.service");
 
 const getAddressCoordinate = async (address) => {
   const apiKey = google_maps_api_key;
@@ -60,6 +65,7 @@ const getDistanceTime = async (pickup, drop) => {
 };
 
 const getAutoCompleteSuggestions = async (input) => {
+  const ln = req.get("ln") || "en";
   if (!input) {
     throw new ApiError(statusCode.BAD_REQUEST, "Query is required");
   }
@@ -97,10 +103,7 @@ const getAutoCompleteSuggestions = async (input) => {
               );
 
             // ✅ Keep only results truly in India or Cameroon
-            if (
-              country &&
-              country.long_name.toLowerCase() === name
-            ) {
+            if (country && country.long_name.toLowerCase() === name) {
               // Prefer readable name or locality
               verifiedCities.push(
                 result.name || locality?.long_name || prediction.description
@@ -118,7 +121,7 @@ const getAutoCompleteSuggestions = async (input) => {
     if (!uniqueCities.length) {
       throw new ApiError(
         statusCode.NOT_FOUND,
-        "No services available in this area"
+        translateLn(ln, "NO_SERVICES_AVAILABLE")
       );
     }
 
@@ -126,13 +129,12 @@ const getAutoCompleteSuggestions = async (input) => {
   } catch (error) {
     throw new ApiError(
       statusCode.NOT_FOUND,
-      error.message || "No services available in this area"
+      error.message || translateLn(ln, "NO_SERVICES_AVAILABLE")
     );
   }
 };
 
-
-const getDbAutoComplete = async (input) => {
+const getDbAutoComplete = async (input, ln) => {
   if (!input) {
     throw new ApiError(statusCode.BAD_REQUEST, "Query is required");
   }
@@ -146,21 +148,21 @@ const getDbAutoComplete = async (input) => {
         { startLocation: regex },
         { endLocation: regex },
         { "pickups.name": regex },
-        { "drops.name": regex }
-      ]
+        { "drops.name": regex },
+      ],
     }).select("startLocation endLocation pickups drops");
 
     // Extract unique names
     let busNames = [];
 
-    busLocations.forEach(r => {
+    busLocations.forEach((r) => {
       if (regex.test(r.startLocation)) busNames.push(r.startLocation);
       if (regex.test(r.endLocation)) busNames.push(r.endLocation);
 
-      r.pickups?.forEach(p => {
+      r.pickups?.forEach((p) => {
         if (regex.test(p.name)) busNames.push(p.name);
       });
-      r.drops?.forEach(d => {
+      r.drops?.forEach((d) => {
         if (regex.test(d.name)) busNames.push(d.name);
       });
     });
@@ -171,12 +173,12 @@ const getDbAutoComplete = async (input) => {
         { townCity: regex },
         { area: regex },
         { locality: regex },
-        { address: regex }
-      ]
+        { address: regex },
+      ],
     }).select("townCity area locality address");
 
     let addressNames = [];
-    addressData.forEach(a => {
+    addressData.forEach((a) => {
       if (regex.test(a.townCity)) addressNames.push(a.townCity);
       if (regex.test(a.area)) addressNames.push(a.area);
       if (regex.test(a.locality)) addressNames.push(a.locality);
@@ -187,38 +189,26 @@ const getDbAutoComplete = async (input) => {
     let combined = [...busNames, ...addressNames];
 
     // 4) Remove duplicates
-    combined = [...new Set(combined.map(i => i?.trim()))];
+    combined = [...new Set(combined.map((i) => i?.trim()))];
 
     // 5) If empty throw not found
     if (!combined.length) {
       throw new ApiError(
         statusCode.NOT_FOUND,
-        "No services available in this area"
+        translateLn(ln, "NO_SERVICES_AVAILABLE")
       );
     }
 
     return combined;
-
   } catch (error) {
     throw new ApiError(
       statusCode.NOT_FOUND,
-      error.message || "No services available in this area"
+      error.message || translateLn(ln, "NO_SERVICES_AVAILABLE")
     );
   }
 };
 
-
-module.exports = { getAutoCompleteSuggestions , getDbAutoComplete};
-
-
-
-
-
-
-
-
-
-
+module.exports = { getAutoCompleteSuggestions, getDbAutoComplete };
 
 // const getAutoCompleteSuggestions = async (input) => {
 //   if (!input) {
@@ -264,7 +254,6 @@ module.exports = { getAutoCompleteSuggestions , getDbAutoComplete};
 //     throw new ApiError(statusCode.NOT_FOUND, error.message || error);
 //   }
 // };
-
 
 // Api for cammeroon for searching  places
 // const getAutoCompleteSuggestions = async (input) => {

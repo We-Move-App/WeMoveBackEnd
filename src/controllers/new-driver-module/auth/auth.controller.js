@@ -20,6 +20,7 @@ const ApiResponse = require("../../../utils/response/ApiResponse");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const { AccessTokenModel } = require("../../../models/token/token.model");
 const { getIO } = require("../../../socket");
+const { translateLn } = require("../../../utils/services/translator.service");
 
 const sendOtpToPhoneHandler = catchAsyncError(async (req, res) => {
   const { phoneNo } = req.body;
@@ -49,10 +50,14 @@ const sendOtpToPhoneHandler = catchAsyncError(async (req, res) => {
 });
 
 const sendotpToUpdatephone = catchAsyncError(async (req, res) => {
+  const ln = req.get("ln") || "en";
   const { phoneNo } = req.body;
 
   if (!phoneNo) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Phone number is required");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "PHONE_REQUIRED")
+    );
   }
 
   // ✅ Step 1: Validate token header
@@ -76,7 +81,10 @@ const sendotpToUpdatephone = catchAsyncError(async (req, res) => {
   // ✅ Step 3: Fetch driver by driverId
   const driver = await DriverBasicDetails.findOne({ driverId });
   if (!driver) {
-    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "DRIVER_NOT_FOUND")
+    );
   }
 
   // ✅ Step 4: Prevent sending OTP if phone is already registered with another driver
@@ -84,7 +92,7 @@ const sendotpToUpdatephone = catchAsyncError(async (req, res) => {
   if (existingDriver && existingDriver.driverId !== driverId) {
     throw new ApiError(
       statusCode.CONFLICT,
-      "This phone number is already registered with another driver"
+      translateLn(ln, "SAME_PHONE_NUMBER")
     );
   }
   // ✅ Step 5: Send OTP
@@ -97,6 +105,7 @@ const sendotpToUpdatephone = catchAsyncError(async (req, res) => {
 
 const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
   const { phoneNo, otp } = req.body;
+  const ln = req.get("ln") || "en";
 
   if (!phoneNo || !otp) {
     throw new ApiError(
@@ -105,12 +114,15 @@ const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
     );
   }
 
-  await verifyPhoneOtp(phoneNo, otp);
+  await verifyPhoneOtp(phoneNo, otp, ln);
 
   const driver = await DriverBasicDetails.findOne({ phoneNo });
 
   if (!driver) {
-    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "DRIVER_NOT_FOUND")
+    );
   }
 
   const { accessToken, refreshToken } = generateTokens(driver);

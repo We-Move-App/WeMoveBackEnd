@@ -1,6 +1,7 @@
 const OtpModel = require("../../models/otp-module/otp.model");
 const sgMail = require("@sendgrid/mail");
 const sendEmail = require("../emailService/sendEmail");
+const { translateLn } = require("../../utils/services/translator.service");
 
 // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
@@ -47,9 +48,9 @@ const sendOtpToEmail = async (email) => {
   };
 };
 
-const verifyPhoneOtp = async (phoneNumber, otp) => {
+const verifyPhoneOtp = async (phoneNumber, otp, ln = "en") => {
   if (!phoneNumber || !otp) {
-    throw new Error("Phone number and OTP are required");
+    throw new Error(translateLn(ln, "PHONE_AND_OTP_REQUIRED"));
   }
 
   const record = await OtpModel.findOne({
@@ -58,19 +59,19 @@ const verifyPhoneOtp = async (phoneNumber, otp) => {
   });
 
   if (!record) {
-    throw new Error("OTP not found. Please request a new one.");
+    throw new Error(translateLn(ln, "OTP_NOT_FOUND"));
   }
 
   if (record.isUsed) {
-    throw new Error("OTP has already been used.");
+    throw new Error(translateLn(ln, "OTP_ALREADY_USED"));
   }
 
   if (record.otp !== otp) {
-    throw new Error("Invalid OTP.");
+    throw new Error(translateLn(ln, "INVALID_OTP"));
   }
 
   if (record.expiresAt < new Date()) {
-    throw new Error("OTP has expired.");
+    throw new Error(translateLn(ln, "OTP_EXPIRED"));
   }
 
   record.isUsed = true;
@@ -79,7 +80,7 @@ const verifyPhoneOtp = async (phoneNumber, otp) => {
   return { verified: true, message: "Phone OTP verified successfully." };
 };
 
-const verifyEmailOtp = async (email, otp) => {
+const verifyEmailOtp = async (email, otp, ln = "en") => {
   if (!email || !otp) {
     throw new Error("Email and OTP are required");
   }
@@ -87,19 +88,19 @@ const verifyEmailOtp = async (email, otp) => {
   const record = await OtpModel.findOne({ contact: email, type: "email" });
 
   if (!record) {
-    throw new Error("OTP not found. Please request a new one.");
+    throw new Error(translateLn(ln, "OTP_NOT_FOUND"));
   }
 
   if (record.isUsed) {
-    throw new Error("OTP has already been used.");
+    throw new Error(translateLn(ln, "OTP_ALREADY_USED"));
   }
 
   if (record.otp !== otp) {
-    throw new Error("Invalid OTP.");
+    throw new Error(translateLn(ln, "INVALID_OTP"));
   }
 
   if (record.expiresAt < new Date()) {
-    throw new Error("OTP has expired.");
+    throw new Error(translateLn(ln, "OTP_EXPIRED"));
   }
 
   record.isUsed = true;

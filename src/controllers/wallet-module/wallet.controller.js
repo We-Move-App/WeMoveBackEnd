@@ -26,7 +26,11 @@ const {
 } = require("../../utils/services/invoice.service");
 const Commission = require("../../models/admin-module/commission-management/commission.model");
 const TransactionModel = require("../../models/transaction-module/transaction.model");
-const { fetchBusOperatorLn } = require("../../utils/services/user.services");
+const {
+  fetchBusOperatorLn,
+  fetchLn,
+  fetchDriverLn,
+} = require("../../utils/services/user.services");
 const { translateLn } = require("../../utils/services/translator.service");
 
 const filterKeyMap = {
@@ -451,6 +455,7 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
 });
 
 const getTransactions = catchAsyncError(async (req, res) => {
+  const ln = req.get("ln") || "fr";
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
     throw new ApiError(
@@ -550,7 +555,10 @@ const getTransactions = catchAsyncError(async (req, res) => {
   if (transactionId) {
     const tx = await TransactionModel.findOne({ transactionId });
     if (!tx) {
-      throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
+      throw new ApiError(
+        statusCode.NOT_FOUND,
+        translateLn(ln, "TRANSACTION_NOT_FOUND")
+      );
     }
 
     // decide which entity is asking (same rules as list)
@@ -562,24 +570,37 @@ const getTransactions = catchAsyncError(async (req, res) => {
         driverId: driverIdFromToken,
       });
       if (!driverExists)
-        throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+        throw new ApiError(
+          statusCode.NOT_FOUND,
+          translateLn(ln, "DRIVER_NOT_FOUND")
+        );
       entityType = "DRIVER";
       entityId = driverIdFromToken;
     } else if (entity === "busoperator") {
       const bo = await BusOperatorModel.findById(userId);
       if (!bo)
-        throw new ApiError(statusCode.NOT_FOUND, "Bus Operator not found");
+        throw new ApiError(
+          statusCode.NOT_FOUND,
+          translateLn(ln, "BUS_OPERATOR_NOT_FOUND")
+        );
       entityType = "BUS_OPERATOR";
       entityId = bo._id.toString();
     } else if (entity === "hotelManager") {
       const hm = await HotelManagerModel.findById(userId);
       if (!hm)
-        throw new ApiError(statusCode.NOT_FOUND, "Hotel Manager not found");
+        throw new ApiError(
+          statusCode.NOT_FOUND,
+          translateLn(ln, "HOTEL_MANAGER_NOT_FOUND")
+        );
       entityType = "HOTEL";
       entityId = hm._id.toString();
     } else {
       const u = await UserModel.findById(userId);
-      if (!u) throw new ApiError(statusCode.NOT_FOUND, "User not found");
+      if (!u)
+        throw new ApiError(
+          statusCode.NOT_FOUND,
+          translateLn(ln, "USER_NOT_FOUND")
+        );
       entityType = "USER";
       entityId = u._id.toString();
     }
@@ -592,7 +613,7 @@ const getTransactions = catchAsyncError(async (req, res) => {
         new ApiResponse(
           statusCode.OK,
           legacy,
-          "Transaction details fetched successfully"
+          translateLn(ln, "TRANSACTION_DETAILS_FETCHED_SUCCESSFULLY")
         )
       );
   }
@@ -1044,29 +1065,41 @@ const validatePin = catchAsyncError(async (req, res) => {
     );
   }
 
+  const _id = req.user._id;
+  const role = req.user.role;
+
+  let ln = await fetchLn(_id);
+
+  if (role === "driver") {
+    ln = await fetchDriverLn(_id);
+  }
+
   const jwtToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(jwtToken);
   const userId = decoded?._id;
 
   if (!userId) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      translateLn(ln, "INVALID_TOKEN")
+    );
   }
 
   const userExists = await UserModel.findById(userId);
   if (!userExists) {
-    throw new ApiError(statusCode.NOT_FOUND, "User not found");
+    throw new ApiError(statusCode.NOT_FOUND, translateLn(ln, "USER_NOT_FOUND"));
   }
 
   const { pin } = req.body;
   if (!pin) {
-    throw new ApiError(statusCode.BAD_REQUEST, "PIN is required");
+    throw new ApiError(statusCode.BAD_REQUEST, translateLn(ln, "PIN_REQUIRED"));
   }
 
   const securePinRecord = await SecurePinModel.findOne({ userId });
   if (!securePinRecord) {
     throw new ApiError(
       statusCode.NOT_FOUND,
-      "Secure PIN not set for this user"
+      translateLn(ln, "SECURE_PIN_NOT_SET")
     );
   }
 
@@ -1094,7 +1127,7 @@ const validatePin = catchAsyncError(async (req, res) => {
         new ApiResponse(
           statusCode.OK,
           { isValid: true },
-          "PIN verified successfully"
+          translateLn(ln, "PIN_VERIFIED_SUCCESSFULLY")
         )
       );
   }
@@ -1129,7 +1162,7 @@ const validatePin = catchAsyncError(async (req, res) => {
 
   await securePinRecord.save();
 
-  throw new ApiError(statusCode.BAD_REQUEST, "Invalid PIN");
+  throw new ApiError(statusCode.BAD_REQUEST, translateLn(ln, "INVALID_PIN"));
 });
 
 module.exports = {

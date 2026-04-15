@@ -158,4 +158,61 @@ module.exports = {
   OCTOBER: "Octobre",
   NOVEMBER: "Novembre",
   DECEMBER: "Décembre",
+
+  INVALID_TOKEN: "Jeton invalide",
+  PIN_REQUIRED: "Le code PIN est requis",
+  SECURE_PIN_NOT_SET: "Code PIN sécurisé non défini pour cet utilisateur",
+  PIN_VERIFIED_SUCCESSFULLY: "Code PIN vérifié avec succès",
+  INVALID_PIN: "Code PIN invalide",
+  NO_SERVICES_AVAILABLE: "Aucun service disponible dans cette zone",
+  INPUT_REQUIRED_FOR_AUTOCOMPLETE:
+    "Une saisie est requise pour la saisie semi-automatique",
+  FAILED_TO_FETCH_AUTOCOMPLETE_SUGGESTIONS:
+    "Échec de la récupération des suggestions d’autocomplétion",
+  ADDRESS_REQUIRED: "L'adresse doit être fournie",
+  NO_SEARCHES_FOUND: "Aucune recherche trouvée",
+  LOCATION_FOUND: "Emplacement trouvé",
+  ORIGIN_AND_DESTINATION_REQUIRED: "L’origine et la destination sont requises",
+  ADDRESS_FETCHED_SUCCESSFULLY: "Adresse récupérée avec succès",
+  CANCELLATION_REASON_REQUIRED: "Le motif d'annulation est requis",
+  BOOKING_NOT_FOUND: "Réservation introuvable",
+  RIDE_CANNOT_BE_CANCELLED_AT_THIS_STAGE:
+    "La course ne peut pas être annulée à ce stade",
+  INVALID_QR: "QR invalide",
+  BENEFICIARY_FOUND_SUCCESSFULLY: "Bénéficiaire trouvé avec succès",
+  ENTER_OLD_NEW_CONFIRM_SECURE_PIN:
+    "Veuillez saisir l'ancien code PIN sécurisé, le nouveau et la confirmation",
+  SECURE_PIN_LENGTH_INVALID:
+    "Tous les codes PIN sécurisés doivent comporter exactement 4 chiffres",
+  SECURE_PIN_MISMATCH:
+    "Le nouveau code PIN sécurisé et la confirmation ne correspondent pas",
+  SECURE_PIN_SAME_AS_OLD:
+    "Le nouveau code PIN sécurisé ne peut pas être identique à l'ancien",
+  INVALID_SECURE_PIN_FORMAT:
+    "Veuillez saisir un code PIN sécurisé valide (chiffres uniquement)",
+  SECURE_PIN_NOT_FOUND: "Code PIN sécurisé introuvable pour cet utilisateur",
+  OLD_SECURE_PIN_INCORRECT: "L'ancien code PIN sécurisé est incorrect.",
+  SECURE_PIN_UPDATED_SUCCESSFULLY: "Code PIN sécurisé mis à jour avec succès",
+  ENTER_NEW_AND_CONFIRM_PIN:
+    "Veuillez saisir votre nouveau code PIN et confirmer le code PIN",
+  NEW_AND_CONFIRM_PIN_LENGTH_INVALID:
+    "Les nouveaux codes PIN et de confirmation doivent comporter exactement 4 chiffres",
+  INVALID_OTP: "OTP invalide",
+  OTP_VERIFIED_SUCCESSFULLY: "OTP vérifié avec succès",
+  RIDE_ALREADY_COMPLETED: "La course est déjà terminée",
+  RIDE_CANNOT_BE_CANCELLED_AT_THIS_STAGE:
+    "La course ne peut pas être annulée à ce stade",
+  NO_ACTIVE_RIDES_FOUND: "Aucune course active trouvée",
+  BUS_OPERATOR_NOT_FOUND: "Opérateur de bus introuvable",
+  HOTEL_MANAGER_NOT_FOUND: "Responsable de l'hôtel introuvable",
+  TRANSACTION_DETAILS_FETCHED_SUCCESSFULLY:
+    "Détails de la transaction récupérés avec succès",
+  PHONE_NUMBER_ALREADY_REGISTERED:
+    "Ce numéro de téléphone est déjà enregistré avec un autre chauffeur",
+  SAME_PHONE_NUMBER:
+    "Le nouveau numéro de téléphone est identique à votre numéro actuel",
+  OTP_NOT_FOUND: "OTP introuvable. Veuillez en demander un nouveau.",
+  PHONE_AND_OTP_REQUIRED: "Le numéro de téléphone et l'OTP sont requis",
+  OTP_ALREADY_USED: "L'OTP a déjà été utilisé",
+  OTP_EXPIRED: "L'OTP a expiré.",
 };

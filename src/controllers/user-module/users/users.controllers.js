@@ -52,27 +52,37 @@ const getProfile = catchAsyncError(async (req, res, next) => {
     bankModel: UserBankModel,
   });
 
-  const userId = result?.data?.user?._id;
-  if (!userId) {
+  const user = result?.data?.user;
+  if (!user?._id) {
     throw new ApiError(statusCode.NOT_FOUND, "User not found");
   }
 
-  // ✅ fetch address and populate it
-  const userAddress = await UserAddressModel.findOne({ userId })
+  const userAddress = await UserAddressModel.findOne({ userId: user._id })
     .populate("address")
     .lean();
 
-  // ✅ attach address inside user
+  const genderTranslations = {
+    male: { en: "Male", fr: "Masculin" },
+    female: { en: "Female", fr: "Féminin" },
+    other: { en: "Other", fr: "Autre" },
+  };
+
+  const language = user.ln || "en";
+  const translatedGender =
+    genderTranslations[user.gender]?.[language] || user.gender;
+
   return res.status(statusCode.OK).json({
     ...result,
     data: {
       user: {
-        ...result.data.user,
+        ...user,
+        gender: translatedGender,
         address: userAddress?.address || null,
       },
     },
   });
 });
+
 const getAvatar = catchAsyncError(async (req, res, next) => {
   const result = await getAvatarFunc({
     req,
@@ -360,12 +370,13 @@ const { fetchLn } = require("../../../utils/services/user.services");
 const { translateLn } = require("../../../utils/services/translator.service");
 
 const getBeneficiary = catchAsyncError(async (req, res, next) => {
+  const ln = req.get("ln") || "en";
   const { userId } = req.body;
 
   const user = await UserModel.findOne({ userId: userId });
 
   if (!user || user.verificationStatus === "blocked") {
-    throw new ApiError(statusCode.BAD_REQUEST, "Invalid QR");
+    throw new ApiError(statusCode.BAD_REQUEST, translateLn(ln, "INVALID_QR"));
   }
 
   return res
@@ -374,7 +385,7 @@ const getBeneficiary = catchAsyncError(async (req, res, next) => {
       new ApiResponse(
         statusCode.OK,
         { beneficiary: user.fullName },
-        "Beneficiary found successfully"
+        translateLn(ln, "BENEFICIARY_FOUND_SUCCESSFULLY")
       )
     );
 });
