@@ -29,6 +29,9 @@ const {
 } = require("../../../utils/constants/ENUM");
 const generateCustomId = require("../../../utils/customId/generateCustomId");
 
+const { fetchBusOperatorLn } = require("../../../utils/services/user.services");
+const { translateLn } = require("../../../utils/services/translator.service");
+
 const getAllBusBookings = catchAsyncError(async (req, res, next) => {
   const {
     date,
@@ -44,12 +47,20 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     drop,
   } = req.query;
 
-  console.log("Query Parameters:");
-  const busOperator = req.user._id;
-  // Initialize query object
+  const loggedInUser = req.user;
+
+  if (!loggedInUser) {
+    throw new ApiError(statusCode.UNAUTHORIZED, "Unauthorized");
+  }
+
+  const busOperator = loggedInUser._id;
+
+  // const ln = await fetchBusOperatorLn(loggedInUser._id);
+
+  const ln = (req.headers["x-language"] || "en").toLowerCase();
+
   const query = {};
 
-  // If busId is provided, filter by it; otherwise, filter by busOperator
   if (busId) {
     query.busId = busId;
   } else {
@@ -125,16 +136,22 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
   }
   const totalBookings = await BusBookingModel.countDocuments(query);
 
+  const translatedBookings = bookings.map((b) => ({
+    ...b.toObject(),
+    status:
+      translateLn(ln, `BOOKING_STATUS_${b.status?.toUpperCase()}`) || b.status,
+  }));
+
   return res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
       {
-        bookings,
+        bookings: translatedBookings,
         totalBookings,
         totalPages: Math.ceil(totalBookings / pageSize),
         currentPage: pageNumber,
       },
-      "Bus bookings retrieved successfully"
+      translateLn(ln, "BUS_BOOKINGS_FETCHED")
     )
   );
 });

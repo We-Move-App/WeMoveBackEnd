@@ -730,6 +730,8 @@ const getAnalytics = catchAsyncError(async (req, res) => {
     ln = await fetchBusOperatorLn(userId);
   } else if (entity === "hotelManager") {
     ln = await fetchHotelManagerLn(userId);
+  } else if (entity === "admin") {
+    ln = await fetchAdminLn(userId);
   } else {
     ln = await fetchLn(userId);
   }
@@ -892,7 +894,7 @@ const getAnalytics = catchAsyncError(async (req, res) => {
       const week = i + 1;
       const weekData = results.find((a) => a._id.week === week);
       return {
-        week: `Week ${week}`,
+        week: `${translateLn(ln, "WEEK")} ${week}`,
         incoming: weekData ? weekData.incoming : 0,
         refunded: weekData ? weekData.refunded : 0,
         withdraw: weekData ? weekData.withdraw : 0,

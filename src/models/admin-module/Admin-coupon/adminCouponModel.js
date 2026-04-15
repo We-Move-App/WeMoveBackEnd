@@ -24,7 +24,7 @@ const CouponSchema = new Schema(
       required: [true, "Service Type is required"],
       default: "All Services",
     },
-    minOrderAmount: { type: Number, default: 0 },
+    // minOrderAmount: { type: Number, default: 0 },
     // maxDiscountAmount: { type: Number, default: null },
     discountType: {
       type: String,

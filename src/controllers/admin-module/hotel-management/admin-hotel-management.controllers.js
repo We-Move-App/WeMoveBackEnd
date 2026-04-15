@@ -52,6 +52,8 @@ const walletsModel = require("../../../models/wallet-module/wallets.model");
 const getAllHotelManagers = catchAsyncError(async (req, res, next) => {
   const { filter } = req.query;
 
+  const { translateLn } = require("../../../utils/services/translator.service");
+
   const allowedStatuses = [
     "approved",
     "processing",
@@ -61,6 +63,7 @@ const getAllHotelManagers = catchAsyncError(async (req, res, next) => {
     "blocked",
     "p",
   ];
+  
 
   if (filter && !allowedStatuses.includes(filter)) {
     throw new ApiError(

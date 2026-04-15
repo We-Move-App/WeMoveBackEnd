@@ -143,6 +143,7 @@ module.exports = {
   ANALYTICS_MONTHLY: "Monthly",
   ANALYTICS_YEARLY: "Yearly",
   ANALYTICS_FETCHED: "Analytics fetched successfully",
+  WEEK: "Week",
 
   JANUARY: "January",
   FEBRUARY: "February",
@@ -156,4 +157,27 @@ module.exports = {
   OCTOBER: "October",
   NOVEMBER: "November",
   DECEMBER: "December",
+  BOOKING_STATUS_BOOKED: "Booked",
+  BOOKING_STATUS_CANCELLED: "Cancelled",
+  BOOKING_STATUS_COMPLETED: "Completed",
+
+  BUS_BOOKINGS_FETCHED: "Bus bookings retrieved successfully",
+
+  FEEDBACK_FETCHED: "Feedback fetched successfully",
+  NO_FEEDBACK_FOUND: "Data not found",
+
+  AMENITY_FREE_WIFI: "Free Wi-Fi",
+  AMENITY_TV: "TV",
+  AMENITY_SWIMMING_POOL: "Swimming Pool",
+  AMENITY_LAUNDRY_SERVICE: "Laundry Service",
+
+  HOTEL_FETCHED: "Hotel details fetched successfully",
+  HOTEL_NOT_FOUND: "Hotel not found",
+
+  ROOM_TYPE_LUXURY: "Luxury",
+  ROOM_TYPE_STANDARD: "Standard",
+
+  ROOM_FETCHED: "Room data fetched successfully",
+  ROOM_NOT_FOUND: "Room not found",
+  ROOM_REQUIRED: "hotelId and roomType are required",
 };

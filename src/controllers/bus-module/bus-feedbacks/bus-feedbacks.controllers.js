@@ -4,6 +4,8 @@ const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const BusModel = require("../../../models/bus-module/buses/buses.model");
 const BusFeedbackModel = require("../../../models/bus-module/bus-feedbacks/bus-feedbacks.model");
+const { fetchBusOperatorLn } = require("../../../utils/services/user.services");
+const { translateLn } = require("../../../utils/services/translator.service");
 
 const addFeedbackToBus = catchAsyncError(async (req, res, next) => {
   const { busId, rating, comment, bookingId } = req.body;
@@ -52,7 +54,6 @@ const addFeedbackToBus = catchAsyncError(async (req, res, next) => {
     .status(statusCode.OK)
     .json(new ApiResponse(statusCode.OK, feedback, message));
 });
-
 
 const getBusFeedback = catchAsyncError(async (req, res, next) => {
   const { busId, bookingId } = req.params;
@@ -103,6 +104,7 @@ const deleteFeedback = catchAsyncError(async (req, res, next) => {
 
 const getAllFeedback = catchAsyncError(async (req, res, next) => {
   const { _id: ownerId } = req.user;
+  const ln = (req.headers["x-language"] || "en").toLowerCase();
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
@@ -126,13 +128,20 @@ const getAllFeedback = catchAsyncError(async (req, res, next) => {
     .populate("busId", "busName busRegNumber");
 
   if (!feedbacks || feedbacks.length === 0) {
-    throw new ApiError(statusCode.NOT_FOUND, "Data not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "NO_FEEDBACK_FOUND")
+    );
   }
 
   return res
     .status(statusCode.OK)
     .json(
-      new ApiResponse(statusCode.OK, feedbacks, "Feedback fetched successfully")
+      new ApiResponse(
+        statusCode.OK,
+        feedbacks,
+        translateLn(ln, "FEEDBACK_FETCHED")
+      )
     );
 });
 
