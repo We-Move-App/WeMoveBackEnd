@@ -7,6 +7,7 @@ const {
   ImageSchema,
 } = require("../../../utils/validation/forSchema");
 const { hash_rounds } = require("../../../config/config");
+const { LnEnum } = require("../../../utils/constants/ENUM");
 const { Schema } = mongoose;
 
 const hotelManagerSchema = new mongoose.Schema(
@@ -97,7 +98,6 @@ const hotelManagerSchema = new mongoose.Schema(
       },
     },
 
-
     authorities: { type: Schema.Types.Mixed, default: {} },
     parentUserId: {
       type: Schema.Types.ObjectId,
@@ -129,6 +129,12 @@ const hotelManagerSchema = new mongoose.Schema(
     gender: {
       type: String,
       enum: ["male", "female", "prefer not to say"],
+    },
+
+    ln: {
+      type: String,
+      enum: Object.values(LnEnum),
+      default: LnEnum.EN,
     },
     emailVerified: { type: Boolean, default: false },
     phoneNumberVerified: { type: Boolean, default: false },

@@ -1,6 +1,12 @@
 const UserModel = require("../../models/user-module/users/user.model");
 const DriverBasicDetails = require("../../models/new-driver-module/basic-details/basic-details.model");
 const { AdminModel } = require("../../models/admin-module/admin/admin.model");
+const {
+  BusOperatorModel,
+} = require("../../models/bus-module/bus-operator/bus-operator.model");
+const {
+  HotelManagerModel,
+} = require("../../models/hotel-module/hotel-manager/hotel-manager.model");
 
 const fetchLn = async (userId) => {
   try {
@@ -38,4 +44,35 @@ const fetchAdminLn = async (adminId) => {
   }
 };
 
-module.exports = { fetchLn, fetchDriverLn, fetchAdminLn };
+const fetchBusOperatorLn = async (operatorId) => {
+  try {
+    if (!operatorId) return "en";
+
+    const operator = await BusOperatorModel.findById(operatorId).select("ln");
+
+    return operator?.ln || "en";
+  } catch (err) {
+    return "en";
+  }
+};
+
+const fetchHotelManagerLn = async (hotelManagerId) => {
+  try {
+    if (!hotelManagerId) return "en";
+
+    const hotelManager =
+      await HotelManagerModel.findById(hotelManagerId).select("ln");
+
+    return hotelManager?.ln || "en";
+  } catch (err) {
+    return "en";
+  }
+};
+
+module.exports = {
+  fetchLn,
+  fetchDriverLn,
+  fetchAdminLn,
+  fetchBusOperatorLn,
+  fetchHotelManagerLn,
+};

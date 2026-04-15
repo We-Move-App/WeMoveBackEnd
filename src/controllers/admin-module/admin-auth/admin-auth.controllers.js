@@ -65,6 +65,7 @@ const {
 const TransactionModel = require("../../../models/transaction-module/transaction.model");
 const { fetchAdminLn } = require("../../../utils/services/user.services");
 const { translateLn } = require("../../../utils/services/translator.service");
+
 const roleMap = {
   Admin: "ADMIN",
   SubAdmin: "SUB_ADMIN",

@@ -7,6 +7,7 @@ const {
   ImageSchema,
 } = require("../../../utils/validation/forSchema");
 const { hash_rounds } = require("../../../config/config");
+const { LnEnum } = require("../../../utils/constants/ENUM");
 const { Schema } = mongoose;
 
 // Define default permissions
@@ -102,8 +103,6 @@ const busOperatorSchema = new mongoose.Schema(
       required: function () {
         return this.role === "bus-operator-member";
       },
-
-
     },
     dob: {
       type: Date,
@@ -131,13 +130,18 @@ const busOperatorSchema = new mongoose.Schema(
       // },
     },
 
-
     idNumber: { type: String },
     nationality: { type: String },
     termAndCondition: {
       type: Boolean,
       default: false,
     },
+    ln: {
+      type: String,
+      enum: Object.values(LnEnum),
+      default: LnEnum.EN,
+    },
+
     branch: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Branch",
@@ -149,7 +153,7 @@ const busOperatorSchema = new mongoose.Schema(
     verifiedBy: {
       // createdAt: { type: Date },
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Admin"
+      ref: "Admin",
     },
     gender: {
       type: String,
@@ -212,8 +216,6 @@ busOperatorSchema.pre("save", function (next) {
   }
   next();
 });
-
-
 
 // Create the user model
 const BusOperatorModel = mongoose.model("BusOperator", busOperatorSchema);

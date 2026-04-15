@@ -136,4 +136,24 @@ module.exports = {
 
   DATA_FOUND: "Data found successfully",
   LOGIN_SUCCESS: "Logged in successfully",
+
+  //--BusOperator----
+  ANALYTICS_DAILY: "Daily",
+  ANALYTICS_WEEKLY: "Weekly",
+  ANALYTICS_MONTHLY: "Monthly",
+  ANALYTICS_YEARLY: "Yearly",
+  ANALYTICS_FETCHED: "Analytics fetched successfully",
+
+  JANUARY: "January",
+  FEBRUARY: "February",
+  MARCH: "March",
+  APRIL: "April",
+  MAY: "May",
+  JUNE: "June",
+  JULY: "July",
+  AUGUST: "August",
+  SEPTEMBER: "September",
+  OCTOBER: "October",
+  NOVEMBER: "November",
+  DECEMBER: "December",
 };

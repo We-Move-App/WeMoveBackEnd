@@ -26,6 +26,15 @@ const {
 } = require("../../utils/services/invoice.service");
 const Commission = require("../../models/admin-module/commission-management/commission.model");
 const TransactionModel = require("../../models/transaction-module/transaction.model");
+const { fetchBusOperatorLn } = require("../../utils/services/user.services");
+const { translateLn } = require("../../utils/services/translator.service");
+
+const filterKeyMap = {
+  daily: "ANALYTICS_DAILY",
+  weekly: "ANALYTICS_WEEKLY",
+  monthly: "ANALYTICS_MONTHLY",
+  yearly: "ANALYTICS_YEARLY",
+};
 
 const deductfromUserWallet = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
@@ -714,6 +723,16 @@ const getAnalytics = catchAsyncError(async (req, res) => {
   }
 
   const { entity, filter = "monthly" } = req.query;
+
+  let ln = "en";
+
+  if (entity === "busoperator") {
+    ln = await fetchBusOperatorLn(userId);
+  } else if (entity === "hotelManager") {
+    ln = await fetchHotelManagerLn(userId);
+  } else {
+    ln = await fetchLn(userId);
+  }
   let Model;
 
   switch (entity) {
@@ -896,18 +915,18 @@ const getAnalytics = catchAsyncError(async (req, res) => {
     ]);
 
     const months = [
-      "January",
-      "February",
-      "March",
-      "April",
-      "May",
-      "June",
-      "July",
-      "August",
-      "September",
-      "October",
-      "November",
-      "December",
+      translateLn(ln, "JANUARY"),
+      translateLn(ln, "FEBRUARY"),
+      translateLn(ln, "MARCH"),
+      translateLn(ln, "APRIL"),
+      translateLn(ln, "MAY"),
+      translateLn(ln, "JUNE"),
+      translateLn(ln, "JULY"),
+      translateLn(ln, "AUGUST"),
+      translateLn(ln, "SEPTEMBER"),
+      translateLn(ln, "OCTOBER"),
+      translateLn(ln, "NOVEMBER"),
+      translateLn(ln, "DECEMBER"),
     ];
 
     analytics = months.map((m, i) => {
@@ -953,7 +972,7 @@ const getAnalytics = catchAsyncError(async (req, res) => {
       new ApiResponse(
         statusCode.OK,
         { entity, filter, analytics },
-        `${filter.charAt(0).toUpperCase() + filter.slice(1)} analytics fetched successfully`
+        `${translateLn(ln, `ANALYTICS_${filter.toUpperCase()}`)} ${translateLn(ln, "ANALYTICS_FETCHED")}`
       )
     );
 });
