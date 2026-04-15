@@ -161,7 +161,6 @@ module.exports = {
   NOVEMBER: "Novembre",
   DECEMBER: "Décembre",
 
-<<<<<<< HEAD
   BOOKING_STATUS_BOOKED: "Réservé",
   BOOKING_STATUS_CANCELLED: "Annulé",
   BOOKING_STATUS_COMPLETED: "Terminé",
@@ -185,8 +184,6 @@ module.exports = {
   ROOM_NOT_FOUND: "Chambre non trouvée",
   ROOM_REQUIRED: "hotelId et roomType sont requis",
 
-  
-=======
   INVALID_TOKEN: "Jeton invalide",
   PIN_REQUIRED: "Le code PIN est requis",
   SECURE_PIN_NOT_SET: "Code PIN sécurisé non défini pour cet utilisateur",
@@ -243,5 +240,4 @@ module.exports = {
   PHONE_AND_OTP_REQUIRED: "Le numéro de téléphone et l'OTP sont requis",
   OTP_ALREADY_USED: "L'OTP a déjà été utilisé",
   OTP_EXPIRED: "L'OTP a expiré.",
->>>>>>> 4f29d805ef575112f690e454f03c6db4d88d99e4
 };

@@ -157,7 +157,6 @@ module.exports = {
   OCTOBER: "October",
   NOVEMBER: "November",
   DECEMBER: "December",
-<<<<<<< HEAD
   BOOKING_STATUS_BOOKED: "Booked",
   BOOKING_STATUS_CANCELLED: "Cancelled",
   BOOKING_STATUS_COMPLETED: "Completed",
@@ -181,7 +180,6 @@ module.exports = {
   ROOM_FETCHED: "Room data fetched successfully",
   ROOM_NOT_FOUND: "Room not found",
   ROOM_REQUIRED: "hotelId and roomType are required",
-=======
 
   INVALID_TOKEN: "Invalid Token",
   PIN_REQUIRED: "Pin is required",
@@ -233,5 +231,4 @@ module.exports = {
   PHONE_AND_OTP_REQUIRED: "Phone number and OTP are required",
   OTP_ALREADY_USED: "OTP has already been used",
   OTP_EXPIRED: "OTP has expired.",
->>>>>>> 4f29d805ef575112f690e454f03c6db4d88d99e4
 };
