@@ -1018,6 +1018,7 @@ const getUserActiveRide = catchAsyncError(async (req, res, next) => {
 
 const getDriverActiveRide = catchAsyncError(async (req, res, next) => {
   const authHeader = req.headers.authorization;
+  const ln = req.get("ln") || "en";
 
   if (!authHeader?.startsWith("Bearer ")) {
     throw new ApiError(
@@ -1130,65 +1131,95 @@ const getDriverAnalytics = catchAsyncError(async (req, res, next) => {
     );
   }
 
-  let matchQuery = { driverId, createdAt: { $gte: startDate, $lte: endDate } };
+  // Base match query
+  let matchQuery = {
+    createdAt: { $gte: startDate, $lte: endDate },
+    "entries.entityType": "DRIVER",
+    "entries.entityId": driverId,
+  };
 
   if (entity === "completed") {
-    matchQuery.type = TransactionTypeEnum.CREDIT; // driver gets credit when ride is completed
     matchQuery.status = PaymentStatusEnum.SUCCESS;
+    matchQuery["entries.type"] = TransactionTypeEnum.CREDIT;
   } else if (entity === "cancelled") {
-    matchQuery.refund = true; // or DEBIT transactions if you deduct from driver
+    matchQuery.refund = true;
   }
 
   // Fetch transactions
-  console.log("matchQuery", matchQuery);
-
-  const transactions = await Transaction.find(matchQuery).sort({
-    createdAt: -1,
-  });
+  const transactions = await TransactionModel.find(matchQuery)
+    .sort({ createdAt: -1 })
+    .lean();
 
   if (!transactions.length) {
     return res.status(statusCode.OK).json({
       success: true,
       message: `No ${entity} rides found for this ${filter} period`,
-      data: null,
+      data: {
+        driverId,
+        [entity === "completed" ? "totalEarnings" : "totalLoss"]: 0,
+        rides: [],
+      },
     });
   }
 
-  // Calculate driver earnings/loss
-  const totalAmount =
-    Math.floor(transactions.reduce((sum, tx) => sum + tx.amount, 0) * 100) /
-    100;
+  /**
+   * Extract driver-specific ledger entry
+   */
+  const getDriverEntry = (tx) =>
+    tx.entries.find(
+      (entry) =>
+        entry.entityType === "DRIVER" &&
+        entry.entityId === driverId &&
+        (entity === "completed"
+          ? entry.type === "CREDIT"
+          : entry.type === "DEBIT" || tx.refund)
+    );
 
-  // Fetch ride details for response
-  const bookingIds = transactions.map((tx) => tx.bookingId);
+  // Calculate total earnings/loss
+  const totalAmount =
+    Math.floor(
+      transactions.reduce((sum, tx) => {
+        const entry = getDriverEntry(tx);
+        return sum + (entry?.amount || 0);
+      }, 0) * 100
+    ) / 100;
+
+  // Fetch ride details
+  const bookingIds = transactions.map((tx) => tx.bookingId).filter(Boolean);
+
   const rides = await RideBookingDetail.find({
     bookingId: { $in: bookingIds },
-  });
+  }).lean();
 
-  const formattedRides = rides.map((r) => ({
-    bookingId: r.bookingId,
-    pickupLocation: {
-      address: r.pickupLocation.address,
-      coordinates: [
-        r.pickupLocation.location.coordinates[1],
-        r.pickupLocation.location.coordinates[0],
-      ],
-    },
-    dropLocation: {
-      address: r.dropLocation.address,
-      coordinates: [
-        r.dropLocation.location.coordinates[1],
-        r.dropLocation.location.coordinates[0],
-      ],
-    },
-    distanceInKm: r.distanceInKm,
-    durationInMin: r.durationInMin,
-    fare: r.fare,
-    driverShare: transactions.find((t) => t.bookingId === r.bookingId)?.amount,
-    rideStatus: r.rideStatus,
-    completedAt: r.timestamps.completedAt,
-    cancelledAt: r.timestamps.cancelledAt,
-  }));
+  const formattedRides = rides.map((r) => {
+    const tx = transactions.find((t) => t.bookingId === r.bookingId);
+    const driverEntry = getDriverEntry(tx);
+
+    return {
+      bookingId: r.bookingId,
+      pickupLocation: {
+        address: r.pickupLocation.address,
+        coordinates: [
+          r.pickupLocation.location.coordinates[1],
+          r.pickupLocation.location.coordinates[0],
+        ],
+      },
+      dropLocation: {
+        address: r.dropLocation.address,
+        coordinates: [
+          r.dropLocation.location.coordinates[1],
+          r.dropLocation.location.coordinates[0],
+        ],
+      },
+      distanceInKm: r.distanceInKm,
+      durationInMin: r.durationInMin,
+      fare: r.fare,
+      driverShare: driverEntry?.amount || 0,
+      rideStatus: r.rideStatus,
+      completedAt: r.timestamps?.completedAt,
+      cancelledAt: r.timestamps?.cancelledAt,
+    };
+  });
 
   const response = {
     driverId,
