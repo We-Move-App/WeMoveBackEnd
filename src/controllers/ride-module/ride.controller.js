@@ -470,11 +470,15 @@ const getDriverDetailsByRideId = catchAsyncError(async (req, res, next) => {
 const verifyOtp = catchAsyncError(async (req, res, next) => {
   const rideId = req.params.rideId;
   const { otp } = req.body;
+  const ln = req.get("ln") || "en";
 
   const booking = await RideBookingDetail.findOne({ bookingId: rideId });
 
   if (!booking) {
-    throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "BOOKING_NOT_FOUND")
+    );
   }
 
   if (booking.expectedOtp === otp) {
@@ -498,24 +502,37 @@ const verifyOtp = catchAsyncError(async (req, res, next) => {
       rideStatus: RideBookStatusEnum.ONGOING,
     });
   } else {
-    throw new ApiError(statusCode.BAD_REQUEST, "Invalid OTP");
+    throw new ApiError(statusCode.BAD_REQUEST, translateLn(ln, "INVALID_OTP"));
   }
 
   return res
     .status(statusCode.OK)
-    .json(new ApiResponse(statusCode.OK, true, "OTP verified successfully"));
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        true,
+        translateLn(ln, "OTP_VERIFIED_SUCCESSFULLY")
+      )
+    );
 });
 
 const completeRide = catchAsyncError(async (req, res, next) => {
   const rideId = req.params.rideId;
+  const ln = req.get("ln") || "en";
 
   const booking = await RideBookingDetail.findOne({ bookingId: rideId });
   if (!booking) {
-    throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "BOOKING_NOT_FOUND")
+    );
   }
 
   if (booking.rideStatus === RideBookStatusEnum.COMPLETED) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Ride already completed");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "RIDE_ALREADY_COMPLETED")
+    );
   }
 
   const userExists = await UserModel.findById(booking.userId);
@@ -533,7 +550,10 @@ const completeRide = catchAsyncError(async (req, res, next) => {
     }).session(session);
 
     if (!userWallet || userWallet.balance < booking.fare) {
-      throw new ApiError(statusCode.BAD_REQUEST, "Insufficient wallet balance");
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        translateLn(ln, "INSUFFICIENT_BALANCEs")
+      );
     }
 
     userWallet.balance -= booking.fare;
@@ -560,9 +580,6 @@ const completeRide = catchAsyncError(async (req, res, next) => {
       }
       driverShare = parseFloat((booking.fare - platformFee).toFixed(2));
     }
-
-    console.log("platformFee", platformFee);
-    console.log("driverShare", driverShare);
 
     await WalletModel.findOneAndUpdate(
       { userId: booking.driverId },
@@ -698,7 +715,11 @@ const completeRide = catchAsyncError(async (req, res, next) => {
     return res
       .status(statusCode.OK)
       .json(
-        new ApiResponse(statusCode.OK, true, "Ride completed successfully")
+        new ApiResponse(
+          statusCode.OK,
+          true,
+          translateLn(ln, "RIDE_ALREADY_COMPLETED")
+        )
       );
   } catch (error) {
     await session.abortTransaction();
@@ -708,19 +729,23 @@ const completeRide = catchAsyncError(async (req, res, next) => {
 });
 
 const rideCancelledByUser = catchAsyncError(async (req, res, next) => {
+  const ln = req.get("ln") || "en";
   const rideId = req.params.rideId;
   const { reason } = req.body || {};
 
   if (!reason) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Cancellation reason is required"
+      translateLn(ln, "CANCELLATION_REASON_REQUIRED")
     );
   }
 
   const booking = await RideBookingDetail.findOne({ bookingId: rideId });
   if (!booking) {
-    throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "BOOKING_NOT_FOUND")
+    );
   }
 
   if (
@@ -730,7 +755,7 @@ const rideCancelledByUser = catchAsyncError(async (req, res, next) => {
   ) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Ride cannot be cancelled at this stage"
+      translateLn(ln, "RIDE_CANNOT_BE_CANCELLED_AT_THIS_STAGE")
     );
   }
 
@@ -794,6 +819,7 @@ const getNearbyDriversExcluding = async (
 };
 
 const rideCancelledByDriver = catchAsyncError(async (req, res, next) => {
+  const ln = req.get("ln") || "fr";
   const rideId = req.params.rideId;
   const { reason } = req.body || {};
 
@@ -801,14 +827,17 @@ const rideCancelledByDriver = catchAsyncError(async (req, res, next) => {
   if (!reason) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Cancellation reason is required"
+      translateLn(ln, "CANCELLATION_REASON_REQUIRED")
     );
   }
 
   // 🔹 Find booking
   const booking = await RideBookingDetail.findOne({ bookingId: rideId });
   if (!booking) {
-    throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "BOOKING_NOT_FOUND")
+    );
   }
 
   // 🔹 Prevent cancelling if already completed/cancelled
@@ -819,7 +848,7 @@ const rideCancelledByDriver = catchAsyncError(async (req, res, next) => {
   ) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Ride cannot be cancelled at this stage"
+      translateLn(ln, "RIDE_CANNOT_BE_CANCELLED_AT_THIS_STAGE")
     );
   }
 
@@ -912,6 +941,7 @@ const rideCancelledByDriver = catchAsyncError(async (req, res, next) => {
 });
 
 const getUserActiveRide = catchAsyncError(async (req, res, next) => {
+  const ln = req.get("ln") || "en";
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith("Bearer ")) {
@@ -988,6 +1018,7 @@ const getUserActiveRide = catchAsyncError(async (req, res, next) => {
 
 const getDriverActiveRide = catchAsyncError(async (req, res, next) => {
   const authHeader = req.headers.authorization;
+  const ln = req.get("ln") || "en";
 
   if (!authHeader?.startsWith("Bearer ")) {
     throw new ApiError(
@@ -1017,7 +1048,7 @@ const getDriverActiveRide = catchAsyncError(async (req, res, next) => {
   if (!activeRide) {
     return res.status(statusCode.OK).json({
       success: true,
-      message: "No active rides found",
+      message: translateLn(ln, "NO_ACTIVE_RIDES_FOUND"),
       data: null,
     });
   }
@@ -1100,65 +1131,95 @@ const getDriverAnalytics = catchAsyncError(async (req, res, next) => {
     );
   }
 
-  let matchQuery = { driverId, createdAt: { $gte: startDate, $lte: endDate } };
+  // Base match query
+  let matchQuery = {
+    createdAt: { $gte: startDate, $lte: endDate },
+    "entries.entityType": "DRIVER",
+    "entries.entityId": driverId,
+  };
 
   if (entity === "completed") {
-    matchQuery.type = TransactionTypeEnum.CREDIT; // driver gets credit when ride is completed
     matchQuery.status = PaymentStatusEnum.SUCCESS;
+    matchQuery["entries.type"] = TransactionTypeEnum.CREDIT;
   } else if (entity === "cancelled") {
-    matchQuery.refund = true; // or DEBIT transactions if you deduct from driver
+    matchQuery.refund = true;
   }
 
   // Fetch transactions
-  console.log("matchQuery", matchQuery);
-
-  const transactions = await Transaction.find(matchQuery).sort({
-    createdAt: -1,
-  });
+  const transactions = await TransactionModel.find(matchQuery)
+    .sort({ createdAt: -1 })
+    .lean();
 
   if (!transactions.length) {
     return res.status(statusCode.OK).json({
       success: true,
       message: `No ${entity} rides found for this ${filter} period`,
-      data: null,
+      data: {
+        driverId,
+        [entity === "completed" ? "totalEarnings" : "totalLoss"]: 0,
+        rides: [],
+      },
     });
   }
 
-  // Calculate driver earnings/loss
-  const totalAmount =
-    Math.floor(transactions.reduce((sum, tx) => sum + tx.amount, 0) * 100) /
-    100;
+  /**
+   * Extract driver-specific ledger entry
+   */
+  const getDriverEntry = (tx) =>
+    tx.entries.find(
+      (entry) =>
+        entry.entityType === "DRIVER" &&
+        entry.entityId === driverId &&
+        (entity === "completed"
+          ? entry.type === "CREDIT"
+          : entry.type === "DEBIT" || tx.refund)
+    );
 
-  // Fetch ride details for response
-  const bookingIds = transactions.map((tx) => tx.bookingId);
+  // Calculate total earnings/loss
+  const totalAmount =
+    Math.floor(
+      transactions.reduce((sum, tx) => {
+        const entry = getDriverEntry(tx);
+        return sum + (entry?.amount || 0);
+      }, 0) * 100
+    ) / 100;
+
+  // Fetch ride details
+  const bookingIds = transactions.map((tx) => tx.bookingId).filter(Boolean);
+
   const rides = await RideBookingDetail.find({
     bookingId: { $in: bookingIds },
-  });
+  }).lean();
 
-  const formattedRides = rides.map((r) => ({
-    bookingId: r.bookingId,
-    pickupLocation: {
-      address: r.pickupLocation.address,
-      coordinates: [
-        r.pickupLocation.location.coordinates[1],
-        r.pickupLocation.location.coordinates[0],
-      ],
-    },
-    dropLocation: {
-      address: r.dropLocation.address,
-      coordinates: [
-        r.dropLocation.location.coordinates[1],
-        r.dropLocation.location.coordinates[0],
-      ],
-    },
-    distanceInKm: r.distanceInKm,
-    durationInMin: r.durationInMin,
-    fare: r.fare,
-    driverShare: transactions.find((t) => t.bookingId === r.bookingId)?.amount,
-    rideStatus: r.rideStatus,
-    completedAt: r.timestamps.completedAt,
-    cancelledAt: r.timestamps.cancelledAt,
-  }));
+  const formattedRides = rides.map((r) => {
+    const tx = transactions.find((t) => t.bookingId === r.bookingId);
+    const driverEntry = getDriverEntry(tx);
+
+    return {
+      bookingId: r.bookingId,
+      pickupLocation: {
+        address: r.pickupLocation.address,
+        coordinates: [
+          r.pickupLocation.location.coordinates[1],
+          r.pickupLocation.location.coordinates[0],
+        ],
+      },
+      dropLocation: {
+        address: r.dropLocation.address,
+        coordinates: [
+          r.dropLocation.location.coordinates[1],
+          r.dropLocation.location.coordinates[0],
+        ],
+      },
+      distanceInKm: r.distanceInKm,
+      durationInMin: r.durationInMin,
+      fare: r.fare,
+      driverShare: driverEntry?.amount || 0,
+      rideStatus: r.rideStatus,
+      completedAt: r.timestamps?.completedAt,
+      cancelledAt: r.timestamps?.cancelledAt,
+    };
+  });
 
   const response = {
     driverId,
@@ -1179,6 +1240,7 @@ const getDriverAnalytics = catchAsyncError(async (req, res, next) => {
 
 const getTripHistory = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
+  const ln = req.get("ln") || "en";
 
   if (!authHeader?.startsWith("Bearer ")) {
     throw new ApiError(
@@ -1189,8 +1251,6 @@ const getTripHistory = catchAsyncError(async (req, res) => {
 
   const accessToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(accessToken);
-  const _id = decoded._id;
-  const ln = await fetchLn(_id);
 
   const entity = req.query.entity;
   if (!entity || !["driver", "user"].includes(entity)) {

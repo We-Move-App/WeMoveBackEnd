@@ -13,6 +13,7 @@ const {
 const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
+const { translateLn } = require("../../../utils/services/translator.service");
 
 const updateDriverStatus = catchAsyncError(async (req, res) => {
   const { status, coordinates } = req.body;
@@ -64,25 +65,25 @@ const updateDriverStatus = catchAsyncError(async (req, res) => {
 
 const getPlaceAutocomplete = catchAsyncError(async (req, res) => {
   const { input, lat, lng } = req.query;
+  const ln = req.get("ln") || "en";
 
   if (!input || input.trim() === "") {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Input is required for autocomplete"
+      translateLn(ln, "INPUT_REQUIRED_FOR_AUTOCOMPLETE")
     );
   }
 
   try {
     const suggestions = await getAutocomplete(input, lat, lng);
 
-
     if (!suggestions.places || suggestions.places.length === 0) {
       return res.status(404).json({
         success: false,
         statusCode: 404,
-        message: "No services available in this area",
+        message: translateLn(ln, "NO_SERVICES_AVAILABLE"),
         errors: [],
-        data: null
+        data: null,
       });
     }
 
@@ -99,14 +100,13 @@ const getPlaceAutocomplete = catchAsyncError(async (req, res) => {
     console.error("Autocomplete Controller Error:", err.message);
     throw new ApiError(
       statusCode.INTERNAL_SERVER_ERROR,
-      "Failed to fetch autocomplete suggestions"
+      translateLn(ln, "FAILED_TO_FETCH_AUTOCOMPLETE_SUGGESTIONS")
     );
   }
 });
 
 const getFromCoordinates = catchAsyncError(async (req, res) => {
   const { lat, lng } = req.query;
-
 
   if (!lat || !lng) {
     throw new ApiError(
@@ -128,7 +128,11 @@ const getFromCoordinates = catchAsyncError(async (req, res) => {
     return res
       .status(statusCode.OK)
       .json(
-        new ApiResponse(statusCode.OK, address.address, `Address fetched successfully`)
+        new ApiResponse(
+          statusCode.OK,
+          address.address,
+          `Address fetched successfully`
+        )
       );
   } catch (err) {
     console.error("Reverse Geocode Error:", err.message);
@@ -141,11 +145,12 @@ const getFromCoordinates = catchAsyncError(async (req, res) => {
 
 const getDirection = catchAsyncError(async (req, res) => {
   const { origin, destination } = req.query;
+  const ln = req.get("ln") || "en";
 
   if (!origin || !destination) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Both origin and destination are required"
+      translateLn(ln, "ORIGIN_AND_DESTINATION_REQUIRED")
     );
   }
 
@@ -155,12 +160,11 @@ const getDirection = catchAsyncError(async (req, res) => {
     return res.status(404).json({
       success: false,
       statusCode: 404,
-      message: directions.message || "No services available in this area",
+      message: translateLn(ln, "NO_SERVICES_AVAILABLE"),
       errors: [],
       data: null,
     });
   }
-
 
   return res
     .status(statusCode.OK)
@@ -168,7 +172,7 @@ const getDirection = catchAsyncError(async (req, res) => {
       new ApiResponse(
         statusCode.OK,
         { directions: directions },
-        `Address fetched successfully`
+        translateLn(ln, "ADDRESS_FETCHED_SUCCESSFULLY")
       )
     );
 });
@@ -177,10 +181,7 @@ const getPlaceDetail = catchAsyncError(async (req, res) => {
   const { place_id } = req.query;
 
   if (!place_id) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "Place ID is required."
-    );
+    throw new ApiError(statusCode.BAD_REQUEST, "Place ID is required.");
   }
 
   const placeDetails = await getPlaceDetails(place_id);
@@ -201,5 +202,5 @@ module.exports = {
   getPlaceAutocomplete,
   getFromCoordinates,
   getDirection,
-  getPlaceDetail
+  getPlaceDetail,
 };

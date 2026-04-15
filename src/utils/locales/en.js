@@ -157,6 +157,7 @@ module.exports = {
   OCTOBER: "October",
   NOVEMBER: "November",
   DECEMBER: "December",
+<<<<<<< HEAD
   BOOKING_STATUS_BOOKED: "Booked",
   BOOKING_STATUS_CANCELLED: "Cancelled",
   BOOKING_STATUS_COMPLETED: "Completed",
@@ -180,4 +181,57 @@ module.exports = {
   ROOM_FETCHED: "Room data fetched successfully",
   ROOM_NOT_FOUND: "Room not found",
   ROOM_REQUIRED: "hotelId and roomType are required",
+=======
+
+  INVALID_TOKEN: "Invalid Token",
+  PIN_REQUIRED: "Pin is required",
+  SECURE_PIN_NOT_SET: "Secure PIN not set for this user",
+  PIN_VERIFIED_SUCCESSFULLY: "PIN verified successfully",
+  INVALID_PIN: "Invalid PIN",
+  NO_SERVICES_AVAILABLE: "No services available in this area",
+  INPUT_REQUIRED_FOR_AUTOCOMPLETE: "Input is required for autocomplete",
+  FAILED_TO_FETCH_AUTOCOMPLETE_SUGGESTIONS:
+    "Failed to fetch autocomplete suggestions",
+  ADDRESS_REQUIRED: "Address must be provided",
+  NO_SEARCHES_FOUND: "No searches found",
+  LOCATION_FOUND: "Location found",
+  ORIGIN_AND_DESTINATION_REQUIRED: "Both origin and destination are required",
+  ADDRESS_FETCHED_SUCCESSFULLY: "Address fetched successfully",
+  CANCELLATION_REASON_REQUIRED: "Cancellation reason is required",
+  BOOKING_NOT_FOUND: "Booking not found",
+  RIDE_CANNOT_BE_CANCELLED_AT_THIS_STAGE:
+    "Ride cannot be cancelled at this stage",
+  INVALID_QR: "Invalid QR",
+  BENEFICIARY_FOUND_SUCCESSFULLY: "Beneficiary found successfully",
+  ENTER_OLD_NEW_CONFIRM_SECURE_PIN:
+    "Please enter old, new and confirm secure PIN",
+  SECURE_PIN_LENGTH_INVALID: "All secure PINs must be exactly 4 digits long",
+  SECURE_PIN_MISMATCH: "New Secure PIN and Confirm Secure PIN do not match",
+  SECURE_PIN_SAME_AS_OLD: "New Secure PIN cannot be same as Old Secure PIN",
+  INVALID_SECURE_PIN_FORMAT: "Enter valid Secure PIN (only numbers allowed)",
+  SECURE_PIN_NOT_FOUND: "Secure PIN not found for this user",
+  OLD_SECURE_PIN_INCORRECT: "Old Secure PIN is incorrect.",
+  SECURE_PIN_UPDATED_SUCCESSFULLY: "Secure PIN updated successfully",
+  ENTER_NEW_AND_CONFIRM_PIN: "Please enter your new PIN and confirm PIN",
+  NEW_AND_CONFIRM_PIN_LENGTH_INVALID:
+    "Both new and confirm PINs must be exactly 4 digits long",
+  INVALID_OTP: "Invalid OTP",
+  OTP_VERIFIED_SUCCESSFULLY: "OTP verified successfully",
+  RIDE_ALREADY_COMPLETED: "Ride already completed",
+  RIDE_CANNOT_BE_CANCELLED_AT_THIS_STAGE:
+    "Ride cannot be cancelled at this stage",
+  NO_ACTIVE_RIDES_FOUND: "No active rides found",
+  BUS_OPERATOR_NOT_FOUND: "Bus Operator not found",
+  HOTEL_MANAGER_NOT_FOUND: "Hotel Manager not found",
+  TRANSACTION_DETAILS_FETCHED_SUCCESSFULLY:
+    "Transaction details fetched successfully",
+  PHONE_NUMBER_ALREADY_REGISTERED:
+    "This phone number is already registered with another driver",
+  SAME_PHONE_NUMBER:
+    "New phone number is the same as your current phone number",
+  OTP_NOT_FOUND: "OTP not found. Please request a new one.",
+  PHONE_AND_OTP_REQUIRED: "Phone number and OTP are required",
+  OTP_ALREADY_USED: "OTP has already been used",
+  OTP_EXPIRED: "OTP has expired.",
+>>>>>>> 4f29d805ef575112f690e454f03c6db4d88d99e4
 };

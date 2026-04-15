@@ -17,7 +17,6 @@ const getDistanceAndDuration = async (
     throw new Error("Invalid pickup or drop location coordinates.");
   }
 
-  console.log("Requested mode:", "Amit");
   //Testing for India restriction Api
   const allowedCountry = ["IN", "CM"]; // India and Cameroon
 

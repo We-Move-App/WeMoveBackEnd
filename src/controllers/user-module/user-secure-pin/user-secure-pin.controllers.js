@@ -5,6 +5,7 @@ const statusCode = require("../../../utils/constants/statusCode");
 const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
+const { translateLn } = require("../../../utils/services/translator.service");
 const { securePinValidator } = require("../../../utils/validation/forSchema");
 const bcrypt = require("bcrypt");
 
@@ -74,12 +75,13 @@ const CreateSecurePin = catchAsyncError(async (req, res, next) => {
 const ChangeSecurePin = catchAsyncError(async (req, res, next) => {
   const { _id } = req.user;
   const { oldSecurePin, newSecurePin, confirmSecurePin } = req.body;
+  const ln = req.get("ln") || "en";
 
   // Validate required fields
   if (!oldSecurePin || !newSecurePin || !confirmSecurePin) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Please enter old, new and confirm secure pin"
+      translateLn(ln, "ENTER_OLD_NEW_CONFIRM_SECURE_PIN")
     );
   }
 
@@ -91,7 +93,7 @@ const ChangeSecurePin = catchAsyncError(async (req, res, next) => {
   ) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "All secure PINs must be exactly 4 digits long."
+      translateLn(ln, "SECURE_PIN_LENGTH_INVALID")
     );
   }
 
@@ -99,7 +101,7 @@ const ChangeSecurePin = catchAsyncError(async (req, res, next) => {
   if (newSecurePin !== confirmSecurePin) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "New Secure Pin and Confirm Secure Pin do not match"
+      translateLn(ln, "SECURE_PIN_MISMATCH")
     );
   }
 
@@ -107,7 +109,7 @@ const ChangeSecurePin = catchAsyncError(async (req, res, next) => {
   if (oldSecurePin === newSecurePin) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "New Secure Pin cannot be same as Old Secure Pin"
+      translateLn(ln, "SECURE_PIN_SAME_AS_OLD")
     );
   }
 
@@ -119,7 +121,7 @@ const ChangeSecurePin = catchAsyncError(async (req, res, next) => {
   ) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Enter valid Secure Pin (only numbers allowed)"
+      translateLn(ln, "INVALID_SECURE_PIN_FORMAT")
     );
   }
 
@@ -129,7 +131,7 @@ const ChangeSecurePin = catchAsyncError(async (req, res, next) => {
   if (!securePinData) {
     throw new ApiError(
       statusCode.NOT_FOUND,
-      "Secure Pin not found for this user"
+      translateLn(ln, "SECURE_PIN_NOT_FOUND")
     );
   }
 
@@ -140,7 +142,10 @@ const ChangeSecurePin = catchAsyncError(async (req, res, next) => {
   );
 
   if (!isOldPinMatch) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Old Secure Pin is incorrect.");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "OLD_SECURE_PIN_INCORRECT")
+    );
   }
 
   // Save new pin (hashing handled by pre-save hook)
@@ -150,25 +155,30 @@ const ChangeSecurePin = catchAsyncError(async (req, res, next) => {
   return res
     .status(statusCode.OK)
     .json(
-      new ApiResponse(statusCode.OK, {}, `Secure Pin updated successfully`)
+      new ApiResponse(
+        statusCode.OK,
+        {},
+        translateLn(ln, "SECURE_PIN_UPDATED_SUCCESSFULLY")
+      )
     );
 });
 
 const ResetSecurePin = catchAsyncError(async (req, res, next) => {
   const { newSecurePin, confirmSecurePin } = req.body;
   const { _id } = req.user;
+  const ln = req.get("ln") || "en";
 
   if (!newSecurePin || !confirmSecurePin) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Please enter your new PIN, and confirm PIN"
+      translateLn(ln, "ENTER_NEW_AND_CONFIRM_PIN")
     );
   }
 
   if (newSecurePin?.length !== 4 || confirmSecurePin?.length !== 4) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Both new and confirm PINs must be exactly 4 digits long"
+      translateLn(ln, "NEW_AND_CONFIRM_PIN_LENGTH_INVALID")
     );
   }
 
@@ -177,21 +187,21 @@ const ResetSecurePin = catchAsyncError(async (req, res, next) => {
   if (!validatePIN || !validateConfirm) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Enter valid PIN (only numbers)"
+      translateLn(ln, "INVALID_SECURE_PIN_FORMAT")
     );
   }
 
   if (newSecurePin !== confirmSecurePin) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "New PIN and confirm PIN do not match"
+      translateLn(ln, "SECURE_PIN_MISMATCH")
     );
   }
 
   // ✅ Find user
   const user = await UserModel.findById(_id);
   if (!user) {
-    throw new ApiError(statusCode.NOT_FOUND, "User not found");
+    throw new ApiError(statusCode.NOT_FOUND, translateLn(ln, "USER_NOT_FOUND"));
   }
 
   // // ✅ OTP query
@@ -210,7 +220,7 @@ const ResetSecurePin = catchAsyncError(async (req, res, next) => {
   if (!securePinData)
     throw new ApiError(
       statusCode.NOT_FOUND,
-      "Secure PIN not found for this user"
+      translateLn(ln, "SECURE_PIN_NOT_FOUND")
     );
 
   securePinData.securePin = newSecurePin;
@@ -220,7 +230,11 @@ const ResetSecurePin = catchAsyncError(async (req, res, next) => {
   return res
     .status(statusCode.OK)
     .json(
-      new ApiResponse(statusCode.OK, {}, "Secure PIN updated successfully")
+      new ApiResponse(
+        statusCode.OK,
+        {},
+        translateLn(ln, "SECURE_PIN_UPDATED_SUCCESSFULLY")
+      )
     );
 });
 

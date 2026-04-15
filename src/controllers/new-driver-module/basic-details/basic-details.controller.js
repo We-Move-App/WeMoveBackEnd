@@ -31,6 +31,7 @@ const {
   verifyEmailOtp,
 } = require("../../../utils/otpService/otpService");
 const DriverHistory = require("../../../models/new-driver-module/basic-details/driverHistory.model");
+const { translateLn } = require("../../../utils/services/translator.service");
 
 const addDriverBasicDetails = catchAsyncError(async (req, res) => {
   const { error, value } = addBasicDetailsValidation.validate(req.body, {
@@ -590,6 +591,8 @@ const deleteDriverProfile = catchAsyncError(async (req, res, next) => {
 });
 
 const updateDriverPhoneNumber = catchAsyncError(async (req, res) => {
+  const ln = req.get("ln") || "en";
+
   const authHeader = req.headers.authorization;
 
   // ✅ Step 1: Validate token header
@@ -612,17 +615,20 @@ const updateDriverPhoneNumber = catchAsyncError(async (req, res) => {
   if (!newPhoneNumber || !otp) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Driver ID, new phone number, and OTP are required"
+      translateLn(ln, "DRIVER_PHONE_UPDATE_REQUIRED_FIELDS")
     );
   }
 
   // ✅ Step 3: Verify OTP for new phone number
-  await verifyPhoneOtp(newPhoneNumber, otp);
+  await verifyPhoneOtp(newPhoneNumber, otp, ln);
 
   // ✅ Step 4: Fetch driver details
   const driver = await DriverBasicDetails.findOne({ driverId });
   if (!driver) {
-    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "DRIVER_NOT_FOUND")
+    );
   }
 
   // ✅ Step 5: Prevent duplicate phone numbers
@@ -634,14 +640,14 @@ const updateDriverPhoneNumber = catchAsyncError(async (req, res) => {
   if (driver.phoneNo === newPhoneNumber) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "New phone number is the same as your current phone number"
+      translateLn(ln, "SAME_PHONE_NUMBER")
     );
   }
 
   if (existingDriver && String(existingDriver.driverId) !== String(driverId)) {
     throw new ApiError(
       statusCode.CONFLICT,
-      "This phone number is already registered with another driver"
+      translateLn(ln, "PHONE_NUMBER_ALREADY_REGISTERED")
     );
   }
 
@@ -671,6 +677,7 @@ const updateDriverPhoneNumber = catchAsyncError(async (req, res) => {
 });
 
 const updateDriverEmail = catchAsyncError(async (req, res) => {
+  const ln = req.get("ln") || "en";
   const authHeader = req.headers.authorization;
 
   // Step 1: Validate token
@@ -724,7 +731,7 @@ const updateDriverEmail = catchAsyncError(async (req, res) => {
   }
 
   // Step 5: Verify OTP for the new email
-  await verifyEmailOtp(newEmail, otp); // Implement similar to verifyPhoneOtp
+  await verifyEmailOtp(newEmail, otp, ln); // Implement similar to verifyPhoneOtp
 
   // Step 6: Log change in history
   await DriverHistory.create({

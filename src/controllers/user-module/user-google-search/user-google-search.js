@@ -3,8 +3,10 @@ const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const {
-  getAutoCompleteSuggestions, getDbAutoComplete
+  getAutoCompleteSuggestions,
+  getDbAutoComplete,
 } = require("../../../utils/services/maps.services");
+const { translateLn } = require("../../../utils/services/translator.service");
 
 // const userGoogleSearch = catchAsyncError(async (req, res, next) => {
 //   const { address, index } = req.query;
@@ -41,16 +43,23 @@ const {
 // });
 const customSearch = catchAsyncError(async (req, res, next) => {
   const { address, index } = req.query;
+  const ln = req.get("ln") || "en";
 
   if (!address) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Address must be provided");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "ADDRESS_REQUIRED")
+    );
   }
 
   // 🔍 Get suggestions from DB
-  let data = await getDbAutoComplete(address);
+  let data = await getDbAutoComplete(address, ln);
 
   if (!data || data.length === 0) {
-    throw new ApiError(statusCode.NOT_FOUND, "No searches found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "NO_SEARCHES_FOUND")
+    );
   }
 
   // 📌 If index is passed, split values same like Google autocomplete version
@@ -73,7 +82,7 @@ const customSearch = catchAsyncError(async (req, res, next) => {
   }
 
   return res.json(
-    new ApiResponse(statusCode.OK, data, "Location found")
+    new ApiResponse(statusCode.OK, data, translateLn(ln, "LOCATION_FOUND"))
   );
 });
 
