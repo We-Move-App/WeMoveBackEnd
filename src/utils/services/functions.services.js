@@ -54,6 +54,10 @@ const {
 } = require("../../models/user-module/user-address/user-address.model");
 const { getIO } = require("../../socket");
 const { translateLn } = require("./translator.service");
+const {
+  generateOtpEmailTemplate,
+} = require("../../templates/otpEmailTemplate");
+const { sendEmail } = require("./brevo-email.service");
 // ==============================================
 const registerUserWithEmailAndPhoneNumber = async ({
   req,
@@ -437,12 +441,13 @@ const refreshTokenFunc = async ({ req, res, reqModel, typeOfUser }) => {
 
 const resendOtpFunc = async ({ req, res, reqModel }) => {
   const { emailOrPhone } = req.body;
-  console.log("emailOrPhone", emailOrPhone);
 
   let isEmail = false;
   let isPhoneNumber = false;
   let query = {};
   let otpData = {};
+  let recipientEmail = null;
+  let recipientPhone = null;
 
   if (emailOrPhone) {
     isEmail = validateEmail(emailOrPhone);
@@ -456,25 +461,14 @@ const resendOtpFunc = async ({ req, res, reqModel }) => {
       );
     }
 
-    // const userExists = await reqModel.findOne(
-    //   isEmail ? { email: emailOrPhone } : { phoneNumber: emailOrPhone }
-    // );
-
-    // if (userExists) {
-    //   return new ApiResponse(
-    //     statusCode.CONFLICT,
-    //     {},
-    //     `User already exists with this ${isEmail ? "email" : "phone number"}!`
-    //   );
-    // }
-
-    // Define query and data for upsert
     if (isEmail) {
       query = { email: emailOrPhone };
       otpData.email = emailOrPhone;
+      recipientEmail = emailOrPhone;
     } else {
       query = { phoneNumber: emailOrPhone };
       otpData.phoneNumber = emailOrPhone;
+      recipientPhone = emailOrPhone;
     }
   } else {
     const user = await reqModel.findById(req.user._id);
@@ -482,7 +476,7 @@ const resendOtpFunc = async ({ req, res, reqModel }) => {
       return new ApiResponse(statusCode.NOT_FOUND, {}, "User not found");
     }
 
-    const { email, phoneNumber } = user;
+    const { email, phoneNumber, fullName } = user;
 
     if (!email && !phoneNumber) {
       return new ApiResponse(
@@ -496,6 +490,9 @@ const resendOtpFunc = async ({ req, res, reqModel }) => {
     otpData.ownerId = req.user._id;
     otpData.email = email || undefined;
     otpData.phoneNumber = phoneNumber || undefined;
+
+    recipientEmail = email;
+    recipientPhone = phoneNumber;
   }
 
   const otp = getOtp();
@@ -507,10 +504,28 @@ const resendOtpFunc = async ({ req, res, reqModel }) => {
     { upsert: true, new: true }
   );
 
+  if (recipientEmail) {
+    const { subject, htmlContent, textContent } = generateOtpEmailTemplate(otp);
+
+    await sendEmail({
+      toEmail: recipientEmail,
+      toName: "User",
+      subject,
+      htmlContent,
+      textContent,
+    });
+  }
+
+  console.log("otp", otp);
+
   return new ApiResponse(
     statusCode.OK,
     {},
-    `OTP has been sent to ${emailOrPhone ? "provided" : "registered"} ${isEmail ? "email" : "phone number"}: ${emailOrPhone || otpData.email || otpData.phoneNumber}`
+    `OTP has been sent to ${
+      recipientEmail
+        ? `email: ${recipientEmail}`
+        : `phone number: ${recipientPhone}`
+    }`
   );
 };
 
@@ -849,17 +864,21 @@ const addEmailOrPhoneNumberFunc = async ({
   res,
   reqModel,
   historyModel,
+  ln = "en",
 }) => {
   const { _id } = req.user;
   const { emailOrPhone, otp } = req.body;
 
   if (!emailOrPhone) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Please enter email or phone");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "EMAIL_OR_PHONE_REQUIRED")
+    );
   }
 
   const user = await reqModel.findById(_id);
   if (!user) {
-    throw new ApiError(statusCode.NOT_FOUND, "User not found");
+    throw new ApiError(statusCode.NOT_FOUND, translateLn(ln, "USER_NOT_FOUND"));
   }
 
   const isEmail = validateEmail(emailOrPhone);
@@ -868,7 +887,7 @@ const addEmailOrPhoneNumberFunc = async ({
   if (!isEmail && !isPhoneNumber) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Enter a valid email or phone number"
+      translateLn(ln, "VALID_EMAIL_OR_PHONE_REQUIRED")
     );
   }
 
@@ -881,7 +900,7 @@ const addEmailOrPhoneNumberFunc = async ({
   if (isUserExistWithThis) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      `User already exists with this ${isEmail ? "email" : "phone number"}!`
+      translateLn(ln, "USER_ALREADY_EXISTS")
     );
   }
   const otpInDb = await OtpModel.findOne({
@@ -892,11 +911,11 @@ const addEmailOrPhoneNumberFunc = async ({
   });
 
   if (!otpInDb) {
-    throw new ApiError(statusCode.NOT_FOUND, "Expired or used OTP");
+    throw new ApiError(statusCode.NOT_FOUND, translateLn(ln, "OTP_EXPIRED"));
   }
 
   if (otpInDb.otp !== otp) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid OTP");
+    throw new ApiError(statusCode.BAD_REQUEST, translateLn(ln, "INVALID_OTP"));
   }
 
   if (

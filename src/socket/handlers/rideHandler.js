@@ -94,8 +94,14 @@ const assignRideToDrivers = async (
 
     await createNotification(
       booking.userId,
-      "Ride Cancelled",
-      "No drivers were available for your ride"
+      {
+        en: "Ride Cancelled",
+        fr: "Course annulée",
+      },
+      {
+        en: "No drivers were available for your ride",
+        fr: "Aucun chauffeur n'était disponible pour votre course",
+      }
     );
 
     stopAssigning(io, bookingId);
@@ -182,13 +188,26 @@ const assignRideToDrivers = async (
       await Promise.all([
         createNotification(
           data.driverId,
-          "Ride Assigned",
-          `You have successfully accepted ride ${bookingId}`
+          {
+            en: "Ride Assigned",
+            fr: "Course assignée",
+          },
+          {
+            en: `You have successfully accepted ride ${bookingId}`,
+            fr: `Vous avez accepté avec succès la course ${bookingId}`,
+          }
         ),
+
         createNotification(
           booking.userId,
-          "Driver Assigned",
-          "Your ride has been accepted by a driver"
+          {
+            en: "Driver Assigned",
+            fr: "Chauffeur assigné",
+          },
+          {
+            en: "Your ride has been accepted by a driver",
+            fr: "Votre course a été acceptée par un chauffeur",
+          }
         ),
       ]);
     } catch (err) {

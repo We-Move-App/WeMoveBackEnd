@@ -260,4 +260,9 @@ module.exports = {
   WITHDRAW_LIMIT:
     "Vous ne pouvez pas retirer ce montant pour le moment. Les fonds récents sont bloqués pendant 24 heures.",
   MOMO_FAILED: "Échec du traitement du retrait avec MoMo",
+  EMAIL_OR_PHONE_REQUIRED:
+    "Veuillez saisir une adresse e-mail ou un numéro de téléphone",
+  VALID_EMAIL_OR_PHONE_REQUIRED:
+    "Veuillez saisir une adresse e-mail ou un numéro de téléphone valide",
+  USER_ALREADY_EXISTS: "L'utilisateur existe déjà",
 };

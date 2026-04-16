@@ -784,19 +784,30 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
 
   await createNotification(
     userId,
-    "Bus Booking Cancelled",
-    `Your booking ${bookingId} has been cancelled successfully`
+    {
+      en: "Bus Booking Cancelled",
+      fr: "Réservation de bus annulée",
+    },
+    {
+      en: `Your booking ${bookingId} has been cancelled successfully`,
+      fr: `Votre réservation ${bookingId} a été annulée avec succès`,
+    }
   );
 
   if (bus?.ownerId) {
     await createNotification(
       bus.ownerId,
-      "Bus Booking Cancelled",
-      `A booking ${bookingId} has been cancelled by the user`
+      {
+        en: "Bus Booking Cancelled",
+        fr: "Réservation de bus annulée",
+      },
+      {
+        en: `A booking ${bookingId} has been cancelled by the user`,
+        fr: `Une réservation ${bookingId} a été annulée par l'utilisateur`,
+      }
     );
   }
 
-  // sanitize response
   const bookingResponse = {
     journeyDate: booking.journeyDate,
     paymentStatus: booking.paymentStatus,

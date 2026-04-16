@@ -1,13 +1,16 @@
 const OtpModel = require("../../models/otp-module/otp.model");
 const sgMail = require("@sendgrid/mail");
-const sendEmail = require("../emailService/sendEmail");
 const { translateLn } = require("../../utils/services/translator.service");
+const { sendEmail } = require("../services/brevo-email.service");
+const {
+  generateOtpEmailTemplate,
+} = require("../../templates/otpEmailTemplate");
 
 // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 const getOtp = () => {
-  // return Math.floor(1000 + Math.random() * 9000).toString();
-  return "1234";
+  return Math.floor(1000 + Math.random() * 9000).toString();
+  // return "1234";
 };
 
 const sendOtpToPhone = async (phoneNumber) => {
@@ -36,12 +39,15 @@ const sendOtpToEmail = async (email) => {
     { upsert: true, new: true }
   );
 
-  // await sendEmail({
-  //   to: email,
-  //   name: email.split("@")[0],
-  //   otp,
-  //   template: "otp.ejs",
-  // });
+  const { subject, htmlContent, textContent } = generateOtpEmailTemplate(otp);
+
+  await sendEmail({
+    toEmail: email,
+    toName: "User",
+    subject,
+    htmlContent,
+    textContent,
+  });
 
   return {
     expiresAt,
