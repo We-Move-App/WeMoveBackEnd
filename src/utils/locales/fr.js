@@ -19,6 +19,15 @@ module.exports = {
   PHONE_REQUIRED: "Le numéro de téléphone est requis",
   PHONE_AND_OTP_REQUIRED: "Le numéro de téléphone et le code OTP sont requis",
   PHONE_VERIFIED: "Numéro de téléphone vérifié avec succès",
+  NO_COUPONS_AVAILABLE: "Aucun coupon disponible",
+
+  GET_FLAT: "Obtenez",
+  OFF_ON: "de réduction sur",
+
+  HOTEL_BOOKINGS: "réservations d'hôtel",
+  BUS_BOOKINGS: "réservations de bus",
+  RIDE_BOOKINGS: "réservations de trajets",
+  ALL_SERVICES: "tous les services",
 
   BANK_FILES_REQUIRED:
     "Les documents des coordonnées bancaires sont obligatoires",

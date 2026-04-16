@@ -878,7 +878,7 @@ const getHotelsByLocation = catchAsyncError(async (req, res) => {
 const getHotelById = catchAsyncError(async (req, res) => {
   const { hotelId } = req.params;
   const { checkInDate, checkOutDate } = req.query;
-  const ln = (req.headers["x-language"] || "en").toLowerCase();
+  const ln = (req.headers["ln"] || "en").toLowerCase();
 
   if (!hotelId) {
     throw new ApiError(statusCode.BAD_REQUEST, "Hotel ID is required.");
