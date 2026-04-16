@@ -199,10 +199,11 @@ const requestTopay = catchAsyncError(async (req, res) => {
 const withdrawFunds = catchAsyncError(async (req, res) => {
   // ----------------- Step 1: Token Validation -----------------
   const authHeader = req.headers.authorization;
+  const ln = (req.headers["ln"] || "en").toLowerCase();
   if (!authHeader?.startsWith("Bearer ")) {
     throw new ApiError(
       statusCode.UNAUTHORIZED,
-      "Access token is missing or invalid"
+      translateLn(ln, "TOKEN_INVALID")
     );
   }
 
@@ -213,7 +214,10 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
   const currency = process.env.MOMO_CURRENCY;
 
   if (!entity || !["busOperator", "hotelManager", "driver"].includes(entity)) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Invalid entity");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "INVALID_ENTITY")
+    );
   }
 
   // ----------------- Step 2: Resolve entity-specific details -----------------
@@ -236,7 +240,10 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
   }
 
   if (!userId || !phoneNumber) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      translateLn(ln, "TOKEN_INVALID")
+    );
   }
 
   // ----------------- Step 3: Validate entity & wallet -----------------
@@ -253,7 +260,11 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
   }
 
   const wallet = await Wallet.findOne({ userId });
-  if (!wallet) throw new ApiError(statusCode.NOT_FOUND, "Wallet not found");
+  if (!wallet)
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "WALLET_NOT_FOUND")
+    );
 
   // ----------------- Step 3.1: Check withdrawable balance -----------------
   const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
@@ -298,16 +309,14 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
   if (Number(amount) > withdrawableBalance) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      `You can only withdraw ${withdrawableBalance} at this moment. Funds added in the last 24h are locked.`
+      // `You can only withdraw ${withdrawableBalance} at this moment. Funds added in the last 24h are locked.`
+      translateLn(ln, "WITHDRAW_LIMIT")
     );
   }
 
   // ----------------- Step 3.2: Minimum balance check -----------------
   if (wallet.balance - Number(amount) < 1000) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "You must keep a minimum balance of 1000"
-    );
+    throw new ApiError(statusCode.BAD_REQUEST, translateLn(ln, "MIN_BALANCE"));
   }
 
   // ----------------- Step 4: MTN MoMo Transfer -----------------
@@ -400,20 +409,20 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
             newBalance: wallet.balance,
             withdrawableBalance: withdrawableBalance - amt,
           },
-          "Withdrawal processed successfully"
+          translateLn(ln, "WITHDRAW_SUCCESS")
         )
       );
     } else {
       throw new ApiError(
         statusCode.BAD_GATEWAY,
-        "Failed to initiate withdrawal with MoMo"
+        translateLn(ln, "MOMO_FAILED")
       );
     }
   } catch (error) {
     console.error("MoMo API Error:", error.response?.data || error.message);
     throw new ApiError(
       statusCode.BAD_GATEWAY,
-      error.response?.data?.message || "Failed to process withdrawal with MoMo"
+      error.response?.data?.message || translateLn(ln, "MOMO_FAILED")
     );
   }
 });
