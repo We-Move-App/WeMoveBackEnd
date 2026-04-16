@@ -11,7 +11,9 @@ const { translateLn } = require("../../../utils/services/translator.service");
 const getAllCoupons = catchAsyncError(async (req, res) => {
   const userId = req.user?._id;
 
-  const ln = await fetchLn(userId);
+  // const ln = await fetchLn(userId);
+
+  const ln = (req.headers["ln"] || "en").toLowerCase();
 
   const currentDate = new Date();
   console.log("Current Date:", currentDate);
@@ -47,9 +49,38 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     return {
       couponId: coupon._id,
       header,
-      tilte: discountText,
+      title: discountText,
       couponCode: coupon.couponCode,
-      description: `${translateLn(ln, "USE")} ${coupon.couponCode} ${translateLn(ln, "ON_ORDER_ABOVE")} ${coupon.minOrderAmount}`,
+      description: (() => {
+        let serviceKey = "ALL_SERVICES";
+
+        switch (coupon.serviceType) {
+          case "Hotel":
+            serviceKey = "HOTEL_BOOKINGS";
+            break;
+
+          case "Bus":
+            serviceKey = "BUS_BOOKINGS";
+            break;
+
+          case "Bike":
+          case "Taxi":
+            serviceKey = "RIDE_BOOKINGS";
+            break;
+
+          case "All Services":
+          default:
+            serviceKey = "ALL_SERVICES";
+        }
+
+        const serviceText = translateLn(ln, serviceKey);
+
+        if (coupon.discountType === "Percentage") {
+          return `${translateLn(ln, "GET_FLAT")} ${coupon.discountPercentage}% ${translateLn(ln, "OFF_ON")} ${serviceText}`;
+        } else {
+          return `${translateLn(ln, "GET_FLAT")} ₹${coupon.discountAmount} ${translateLn(ln, "OFF_ON")} ${serviceText}`;
+        }
+      })(),
     };
   });
 

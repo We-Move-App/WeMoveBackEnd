@@ -15,6 +15,7 @@ const {
 const { uploadRoomImages } = require("../../../utils/uploadFiles/multer");
 const mongoose = require("mongoose");
 const individualRoom = require("../../../models/hotel-module/single-room/individual-room.module");
+const { translateLn } = require("../../../utils/services/translator.service");
 
 const createRoom = catchAsyncError(async (req, res, next) => {
   const { _id } = req.user;
@@ -143,7 +144,7 @@ const createRoom = catchAsyncError(async (req, res, next) => {
 const getRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
   const { hotelId, roomType } = req.query;
 
-  const ln = (req.headers["x-language"] || "en").toLowerCase();
+  const ln = (req.headers["ln"] || "en").toLowerCase();
 
   if (!hotelId || !roomType) {
     return next(

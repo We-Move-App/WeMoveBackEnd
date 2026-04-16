@@ -20,6 +20,19 @@ module.exports = {
   PHONE_AND_OTP_REQUIRED: "Phone number and OTP are required",
   PHONE_VERIFIED: "Phone verified successfully",
 
+  GET_FLAT_PERCENT_OFF_ON: "Get FLAT {value}% off on {service}",
+  GET_FLAT_AMOUNT_OFF_ON: "Get FLAT ₹{value} off on {service}",
+
+  NO_COUPONS_AVAILABLE: "No coupons available",
+
+  GET_FLAT: "Get FLAT",
+  OFF_ON: "off on",
+
+  HOTEL_BOOKINGS: "hotel bookings",
+  BUS_BOOKINGS: "bus bookings",
+  RIDE_BOOKINGS: "ride bookings",
+  ALL_SERVICES: "all services",
+
   BANK_FILES_REQUIRED: "Bank account details files are mandatory",
   ACCOUNT_NUMBER_REQUIRED: "Account number is required",
   BANK_ALREADY_EXISTS: "User already has a registered bank account",
