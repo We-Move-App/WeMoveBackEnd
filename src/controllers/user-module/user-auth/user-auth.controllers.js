@@ -153,10 +153,8 @@ const sendOtpToPhoneHandler = catchAsyncError(async (req, res) => {
 });
 
 const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
+  const ln = req.get("ln") || "en";
   const { phoneNo, otp } = req.body;
-  const _id = req.user._id;
-
-  const ln = await fetchLn(_id);
 
   if (!phoneNo || !otp) {
     throw new ApiError(
@@ -165,7 +163,7 @@ const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
     );
   }
 
-  await verifyPhoneOtp(phoneNo, otp);
+  await verifyPhoneOtp(phoneNo, otp, ln);
 
   return res
     .status(statusCode.OK)
@@ -226,11 +224,13 @@ const verifyStatus = catchAsyncError(async (req, res, next) => {
 });
 // =====================|| ADD EMAIL  ||==================================
 const addEmailOrPhone = catchAsyncError(async (req, res, next) => {
+  const ln = req.get("ln") || "en";
   const result = await addEmailOrPhoneNumberFunc({
     req,
     res,
     reqModel: UserModel,
     historyModel: userHistoryModel,
+    ln,
   });
   return res.status(statusCode.OK).json(result);
 });

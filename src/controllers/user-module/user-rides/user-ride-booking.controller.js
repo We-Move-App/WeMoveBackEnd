@@ -203,8 +203,14 @@ const createRide = catchAsyncError(async (req, res, next) => {
   try {
     await createNotification(
       req.user._id,
-      "Ride Requested",
-      `Your ride from ${pickup} to ${drop} has been created`
+      {
+        en: "Ride Requested",
+        fr: "Course demandée",
+      },
+      {
+        en: `Your ride from ${pickup} to ${drop} has been created`,
+        fr: `Votre course de ${pickup} à ${drop} a été créée`,
+      }
     );
   } catch (err) {
     console.error("Notification error:", err.message);

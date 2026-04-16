@@ -231,4 +231,6 @@ module.exports = {
   PHONE_AND_OTP_REQUIRED: "Phone number and OTP are required",
   OTP_ALREADY_USED: "OTP has already been used",
   OTP_EXPIRED: "OTP has expired.",
+  EMAIL_OR_PHONE_REQUIRED: "Please enter email or phone",
+  USER_ALREADY_EXISTS: "User already exists",
 };

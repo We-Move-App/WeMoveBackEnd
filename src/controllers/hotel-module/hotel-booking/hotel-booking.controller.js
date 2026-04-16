@@ -314,14 +314,26 @@ const createBooking = catchAsyncError(async (req, res) => {
       await Promise.all([
         createNotification(
           bookedBy,
-          "Hotel Booking Confirmed",
-          `Your booking ${booking[0].bookingId} at ${hotelExists.hotelName} is confirmed`
+          {
+            en: "Hotel Booking Confirmed",
+            fr: "Réservation d'hôtel confirmée",
+          },
+          {
+            en: `Your booking ${booking[0].bookingId} at ${hotelExists.hotelName} is confirmed`,
+            fr: `Votre réservation ${booking[0].bookingId} à ${hotelExists.hotelName} est confirmée`,
+          }
         ),
 
         createNotification(
           hotelExists.ownerId,
-          "New Hotel Booking",
-          `You received a new booking ${booking[0].bookingId}`
+          {
+            en: "New Hotel Booking",
+            fr: "Nouvelle réservation d'hôtel",
+          },
+          {
+            en: `You received a new booking ${booking[0].bookingId}`,
+            fr: `Vous avez reçu une nouvelle réservation ${booking[0].bookingId}`,
+          }
         ),
       ]);
     } catch (err) {
