@@ -36,25 +36,25 @@ const sendOtpToPhoneNumbers = async (phoneNumber, otp) => {
   }
 };
 
-const getOtp = () =>{
-  let otp
+// const getOtp = () =>{
+//   let otp
 
-  if(node_env!=='production')
-    {
-      otp = "1234"
-    }
-    else
-    {
-      const generateOtp = () => {
-        return Math.floor(1000 + Math.random() * 9000).toString();
-      };
-      otp = generateOtp
-    }
+//   if(node_env!=='production')
+//     {
+//       otp = "1234"
+//     }
+//     else
+//     {
+//       const generateOtp = () => {
+//         return Math.floor(1000 + Math.random() * 9000).toString();
+//       };
+//       otp = generateOtp
+//     }
 
-    return otp
-}
-// const getOtp = () => {
-//   return Math.floor(1000 + Math.random() * 9000).toString();
-// };
+//     return otp
+// }
+const getOtp = () => {
+  return Math.floor(1000 + Math.random() * 9000).toString();
+};
 
 module.exports = { sendOtpToPhoneNumbers, getOtp };
