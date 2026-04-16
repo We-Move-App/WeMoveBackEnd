@@ -8,7 +8,6 @@ module.exports = {
   USER_NOT_FOUND: "User not found",
   ADDRESS_ID_MISSING: "Address ID is missing",
   ADDRESSES_DELETED: "Addresses deleted successfully",
-
   OTP_SENT: "OTP sent Successfully",
   ENTER_EMAIL_OR_PHONE: "Please enter email or phone",
   VALID_EMAIL_OR_PHONE: "Enter a valid email or phone number",
@@ -70,6 +69,17 @@ module.exports = {
 
   UPCOMING_BUS_BOOKINGS: "Upcoming bus bookings fetched successfully",
   OLD_BUS_BOOKINGS: "Old bus bookings fetched successfully",
+
+  //Wallet---Trasnlation
+
+   WITHDRAW_SUCCESS: "Withdrawal processed successfully",
+  INVALID_ENTITY: "Invalid entity",
+  TOKEN_INVALID: "Access token is missing or invalid",
+  WALLET_NOT_FOUND: "Wallet not found",
+  ENTITY_NOT_FOUND: "Entity not found",
+  MIN_BALANCE: "You must keep a minimum balance of 1000",
+  WITHDRAW_LIMIT: "You cannot withdraw this amount right now. Recent funds are locked for 24 hours.",
+  MOMO_FAILED: "Failed to process withdrawal with MoMo",
 
   // Sent
   NO_BUS_ROUTES_FOUND: "No matching bus routes found",

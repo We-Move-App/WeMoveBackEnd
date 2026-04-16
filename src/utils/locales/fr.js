@@ -249,4 +249,15 @@ module.exports = {
   PHONE_AND_OTP_REQUIRED: "Le numéro de téléphone et l'OTP sont requis",
   OTP_ALREADY_USED: "L'OTP a déjà été utilisé",
   OTP_EXPIRED: "L'OTP a expiré.",
+
+  //Wallet----Translation
+  WITHDRAW_SUCCESS: "Retrait effectué avec succès",
+  INVALID_ENTITY: "Entité invalide",
+  TOKEN_INVALID: "Le jeton d'accès est manquant ou invalide",
+  WALLET_NOT_FOUND: "Portefeuille introuvable",
+  ENTITY_NOT_FOUND: "Entité introuvable",
+  MIN_BALANCE: "Vous devez maintenir un solde minimum de 1000",
+  WITHDRAW_LIMIT:
+    "Vous ne pouvez pas retirer ce montant pour le moment. Les fonds récents sont bloqués pendant 24 heures.",
+  MOMO_FAILED: "Échec du traitement du retrait avec MoMo",
 };
