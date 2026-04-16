@@ -104,7 +104,7 @@ const deleteFeedback = catchAsyncError(async (req, res, next) => {
 
 const getAllFeedback = catchAsyncError(async (req, res, next) => {
   const { _id: ownerId } = req.user;
-  const ln = (req.headers["x-language"] || "en").toLowerCase();
+  const ln = (req.headers["ln"] || "en").toLowerCase();
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;

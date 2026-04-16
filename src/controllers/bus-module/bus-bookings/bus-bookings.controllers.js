@@ -57,7 +57,7 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
 
   // const ln = await fetchBusOperatorLn(loggedInUser._id);
 
-  const ln = (req.headers["x-language"] || "en").toLowerCase();
+   const ln = (req.headers["ln"] || "en").toLowerCase();
 
   const query = {};
 
