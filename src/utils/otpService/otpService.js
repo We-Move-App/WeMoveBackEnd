@@ -9,8 +9,8 @@ const {
 // sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 
 const getOtp = () => {
-  return Math.floor(1000 + Math.random() * 9000).toString();
-  // return "1234";
+  // return Math.floor(1000 + Math.random() * 9000).toString();
+  return "1234";
 };
 
 const sendOtpToPhone = async (phoneNumber) => {
