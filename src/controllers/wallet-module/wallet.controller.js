@@ -455,7 +455,8 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
 });
 
 const getTransactions = catchAsyncError(async (req, res) => {
-  const ln = req.get("ln") || "fr";
+  const ln = req.get("ln") || "en";
+
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
     throw new ApiError(
@@ -529,7 +530,7 @@ const getTransactions = catchAsyncError(async (req, res) => {
 
       bookingId: tx.bookingId ?? null,
       type,
-      status: tx.status,
+      status: translateLn(ln, `STATUS_${tx.status.toUpperCase()}`) || tx.status,
       amount,
       currency: tx.currency,
       description: tx.description,

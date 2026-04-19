@@ -376,6 +376,7 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
 const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
   const { userId } = req.params;
   const { filter, search } = req.query;
+  const ln = (req.headers["ln"] || "en").toLowerCase();
 
   const page = Math.max(parseInt(req.query.page || "1", 10), 1);
   const perPage = Math.min(
@@ -426,7 +427,13 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
         {
           pagination: { page, limit: perPage, total, totalPages },
           count: items.length,
-          bookings: items,
+          bookings: items.map((item) => ({
+            ...item,
+            entries: (item.entries || []).map((entry) => ({
+              ...entry,
+              type: translateLn(ln, `TYPE_${entry.type}`) || entry.type,
+            })),
+          })),
         },
         message
       )

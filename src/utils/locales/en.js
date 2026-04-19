@@ -80,6 +80,11 @@ module.exports = {
   MIN_BALANCE: "You must keep a minimum balance of 1000",
   WITHDRAW_LIMIT: "You cannot withdraw this amount right now. Recent funds are locked for 24 hours.",
   MOMO_FAILED: "Failed to process withdrawal with MoMo",
+  STATUS_SUCCESS: "Success",
+STATUS_FAILED: "Failed",
+STATUS_PENDING: "Pending",
+TYPE_DEBIT: "Debit",
+TYPE_CREDIT: "Credit",
 
   // Sent
   NO_BUS_ROUTES_FOUND: "No matching bus routes found",

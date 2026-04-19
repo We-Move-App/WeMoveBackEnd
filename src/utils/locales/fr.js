@@ -252,6 +252,8 @@ module.exports = {
 
   //Wallet----Translation
   WITHDRAW_SUCCESS: "Retrait effectué avec succès",
+  TYPE_DEBIT: "Débit",
+  TYPE_CREDIT: "Crédit",
   INVALID_ENTITY: "Entité invalide",
   TOKEN_INVALID: "Le jeton d'accès est manquant ou invalide",
   WALLET_NOT_FOUND: "Portefeuille introuvable",
@@ -260,6 +262,9 @@ module.exports = {
   WITHDRAW_LIMIT:
     "Vous ne pouvez pas retirer ce montant pour le moment. Les fonds récents sont bloqués pendant 24 heures.",
   MOMO_FAILED: "Échec du traitement du retrait avec MoMo",
+  STATUS_SUCCESS: "Succès",
+  STATUS_FAILED: "Échoué",
+  STATUS_PENDING: "En attente",
   EMAIL_OR_PHONE_REQUIRED:
     "Veuillez saisir une adresse e-mail ou un numéro de téléphone",
   VALID_EMAIL_OR_PHONE_REQUIRED:
