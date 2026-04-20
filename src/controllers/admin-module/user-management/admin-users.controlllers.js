@@ -100,7 +100,8 @@ const getAllUsers = catchAsyncError(async (req, res) => {
 
 const getSingleUser = catchAsyncError(async (req, res, next) => {
   const { _id } = req.params;
-  // ✅ 1. Validate _id param
+
+  const ln = (req.headers["ln"] || "en").toLowerCase();
 
   if (!_id || typeof _id !== "string" || _id.trim() === "") {
     throw new ApiError(
@@ -141,6 +142,7 @@ const getSingleUser = catchAsyncError(async (req, res, next) => {
   // ✅ 5. Combine and format data
   const profileData = {
     ...user,
+    verificationStatus: translateLn(ln, user.verificationStatus?.toUpperCase()),
     address: userAddress?.address || null,
     document: documents || null,
     bankDetails: bankDetails || null,
@@ -151,7 +153,7 @@ const getSingleUser = catchAsyncError(async (req, res, next) => {
   return res.status(statusCode.OK).json({
     success: true,
     statusCode: 200,
-    message: "User profile fetched successfully",
+    message: translateLn(ln, "USER_PROFILE_FETCHED"),
     data: profileData,
   });
 });
@@ -174,7 +176,7 @@ const deleteUserPermanently = catchAsyncError(async (req, res, next) => {
 
 const getAllUsersBookings = catchAsyncError(async (req, res) => {
   const adminId = req.user._id;
-  const ln = await fetchAdminLn(adminId);
+  const ln = (req.headers["ln"] || "en").toLowerCase();
 
   const {
     page = 1,

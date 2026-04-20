@@ -132,6 +132,11 @@ module.exports = {
   COMMISSION_FETCHED: "Commissions récupérées avec succès",
   NO_COMMISSIONS: "Aucune commission trouvée",
 
+  APPROVED: "Approuvé",
+  PENDING: "En attente",
+  REJECTED: "Rejeté",
+  USER_PROFILE_FETCHED: "Profil utilisateur récupéré avec succès",
+
   USER_MANAGEMENT: "Gestion des utilisateurs",
   BUS_MANAGEMENT: "Gestion des bus",
   TAXI_MANAGEMENT: "Gestion des taxis",

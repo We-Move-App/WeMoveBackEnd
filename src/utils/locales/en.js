@@ -72,19 +72,20 @@ module.exports = {
 
   //Wallet---Trasnlation
 
-   WITHDRAW_SUCCESS: "Withdrawal processed successfully",
+  WITHDRAW_SUCCESS: "Withdrawal processed successfully",
   INVALID_ENTITY: "Invalid entity",
   TOKEN_INVALID: "Access token is missing or invalid",
   WALLET_NOT_FOUND: "Wallet not found",
   ENTITY_NOT_FOUND: "Entity not found",
   MIN_BALANCE: "You must keep a minimum balance of 1000",
-  WITHDRAW_LIMIT: "You cannot withdraw this amount right now. Recent funds are locked for 24 hours.",
+  WITHDRAW_LIMIT:
+    "You cannot withdraw this amount right now. Recent funds are locked for 24 hours.",
   MOMO_FAILED: "Failed to process withdrawal with MoMo",
   STATUS_SUCCESS: "Success",
-STATUS_FAILED: "Failed",
-STATUS_PENDING: "Pending",
-TYPE_DEBIT: "Debit",
-TYPE_CREDIT: "Credit",
+  STATUS_FAILED: "Failed",
+  STATUS_PENDING: "Pending",
+  TYPE_DEBIT: "Debit",
+  TYPE_CREDIT: "Credit",
 
   // Sent
   NO_BUS_ROUTES_FOUND: "No matching bus routes found",
@@ -145,6 +146,11 @@ TYPE_CREDIT: "Credit",
 
   ACTIVE: "Active",
   INACTIVE: "Inactive",
+
+  APPROVED: "Approved",
+  PENDING: "Pending",
+  REJECTED: "Rejected",
+  USER_PROFILE_FETCHED: "User profile fetched successfully",
 
   COMMISSION_FETCHED: "Commissions fetched successfully",
   NO_COMMISSIONS: "No commissions found",
