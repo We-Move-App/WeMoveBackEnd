@@ -58,7 +58,7 @@ const generateOtp = () => {
 
 // =====================|| REGISTER HOTEL-MANAGER ||==========================
 const registerHotelManager = catchAsyncError(async (req, res, next) => {
-  const { email, fullName, password, address, phoneNumber, branch } = req.body;
+  let { email, fullName, password, address, phoneNumber, branch } = req.body;
 
   const reqField = [
     "email",
@@ -69,6 +69,8 @@ const registerHotelManager = catchAsyncError(async (req, res, next) => {
     "branch",
   ];
   validateRequestBody(reqField, req.body);
+  email = email?.trim().toLowerCase();
+  phoneNumber = phoneNumber?.trim();
 
   const branchDoc = await BranchModel.findById(branch);
   if (!branchDoc) {
@@ -97,6 +99,19 @@ const registerHotelManager = catchAsyncError(async (req, res, next) => {
   const existingUser = await HotelManagerModel.findOne({
     $or: [{ email }, { phoneNumber }],
   }).select("-password");
+
+  if (existingUser) {
+    if (existingUser.email === email) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Email already registered");
+    }
+
+    if (existingUser.phoneNumber === phoneNumber) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "Phone number already registered"
+      );
+    }
+  }
 
   if (existingUser) {
     if (["approved", "processing"].includes(existingUser.verificationStatus)) {
@@ -139,8 +154,23 @@ const registerHotelManager = catchAsyncError(async (req, res, next) => {
     phoneNumber,
     branch: branchDoc._id,
   });
+  try {
+    await newUser.save();
+  } catch (error) {
+    if (error.code === 11000) {
+      if (error.keyPattern?.email) {
+        throw new ApiError(statusCode.BAD_REQUEST, "Email already registered");
+      }
 
-  await newUser.save();
+      if (error.keyPattern?.phoneNumber) {
+        throw new ApiError(
+          statusCode.BAD_REQUEST,
+          "Phone number already registered"
+        );
+      }
+    }
+    throw error;
+  }
 
   // ✅ Ensure wallet
   let wallet = await Wallet.findOne({ userId: newUser._id });
@@ -416,7 +446,8 @@ const resendOtp = catchAsyncError(async (req, res, next) => {
       new ApiResponse(
         statusCode.OK,
         {},
-        `OTP is sent to ${emailOrPhone ? "provided" : "registered"
+        `OTP is sent to ${
+          emailOrPhone ? "provided" : "registered"
         } ${isEmail ? "email" : "phone number"}: ${targetEmailOrPhone}`
       )
     );
