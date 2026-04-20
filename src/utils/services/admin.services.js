@@ -3,6 +3,7 @@ const ApiError = require("../response/ApiError");
 const ApiResponse = require("../response/ApiResponse");
 const busModel = require("../../models/bus-module/buses/buses.model");
 const { HostAddress } = require("mongodb");
+const { translateLn } = require("../../utils/services/translator.service");
 
 const getAllUsersByAdmin = async ({ req, model }) => {
   let {
@@ -83,7 +84,10 @@ const getAllUsersByAdmin = async ({ req, model }) => {
     .sort({ [sortBy]: order.toLowerCase() === "asc" ? 1 : -1 })
     .skip(skip)
     .limit(limit)
-    .select("avatar email phoneNumber fullName verificationStatus branchId batchVerified").populate([
+    .select(
+      "avatar email phoneNumber fullName verificationStatus branchId batchVerified"
+    )
+    .populate([
       { path: "verifiedBy", select: "userName email" },
       { path: "batchVerifiedBy", select: "userName email" },
     ]);
@@ -130,15 +134,17 @@ const getUserByIdByAdmin = async ({
   };
   return new ApiResponse(statusCode.OK, result, `Data found Successfully`);
 };
+
 const userVerifiedByAdmin = async ({ req, model }) => {
   const { status, remarks, batchVerified } = req.body;
+  const ln = (req.headers["ln"] || "en").toLowerCase();
 
   const { userId } = req.params;
 
   if (!userId || !status) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Please enter Id in params and status in body"
+      translateLn(ln, "PLEASE_ENTER_ID_AND_STATUS")
     );
   }
   // 2️⃣ If status is 'blocked', remarks becomes required
@@ -148,13 +154,13 @@ const userVerifiedByAdmin = async ({ req, model }) => {
   ) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Remarks are required when blocking a user"
+      translateLn(ln, "REMARKS_REQUIRED_FOR_BLOCK")
     );
   }
 
   const isUser = await model.findOne({ _id: userId });
   if (!isUser) {
-    throw new ApiError(statusCode.NOT_FOUND, "User not found");
+    throw new ApiError(statusCode.NOT_FOUND, translateLn(ln, "USER_NOT_FOUND"));
   }
   isUser.verificationStatus = status;
 
@@ -177,19 +183,15 @@ const userVerifiedByAdmin = async ({ req, model }) => {
     } else {
       // Reset if turned off
       isUser.batchVerifiedBy = null;
-
     }
   }
 
-
-
   await isUser.save();
-
 
   return new ApiResponse(
     statusCode.OK,
 
-    `User status updated Successfully`
+    translateLn(ln, "USER_STATUS_UPDATED_SUCCESSFULLY")
   );
 };
 

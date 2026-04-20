@@ -137,6 +137,17 @@ module.exports = {
   REJECTED: "Rejeté",
   USER_PROFILE_FETCHED: "Profil utilisateur récupéré avec succès",
 
+  PLEASE_ENTER_ID_AND_STATUS:
+    "Veuillez saisir l'identifiant dans les paramètres et le statut dans le corps",
+
+  REMARKS_REQUIRED_FOR_BLOCK:
+    "Les remarques sont requises lors du blocage d'un utilisateur",
+
+  USER_NOT_FOUND: "Utilisateur non trouvé",
+
+  USER_STATUS_UPDATED_SUCCESSFULLY:
+    "Le statut de l'utilisateur a été mis à jour avec succès",
+
   USER_MANAGEMENT: "Gestion des utilisateurs",
   BUS_MANAGEMENT: "Gestion des bus",
   TAXI_MANAGEMENT: "Gestion des taxis",

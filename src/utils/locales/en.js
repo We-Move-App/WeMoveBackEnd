@@ -171,6 +171,14 @@ module.exports = {
   DATA_FOUND: "Data found successfully",
   LOGIN_SUCCESS: "Logged in successfully",
 
+  PLEASE_ENTER_ID_AND_STATUS: "Please enter Id in params and status in body",
+
+  REMARKS_REQUIRED_FOR_BLOCK: "Remarks are required when blocking a user",
+
+  USER_NOT_FOUND: "User not found",
+
+  USER_STATUS_UPDATED_SUCCESSFULLY: "User status updated successfully",
+
   //--BusOperator----
   ANALYTICS_DAILY: "Daily",
   ANALYTICS_WEEKLY: "Weekly",
