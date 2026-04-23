@@ -207,8 +207,15 @@ const getRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
     roomId: room._id,
     roomType: normalizedRoomType,
   });
+  // const roomImagesData =
+  //   roomImages.length > 0 ? roomImages[0].images.slice(0, 3) : [];
   const roomImagesData =
-    roomImages.length > 0 ? roomImages[0].images.slice(0, 3) : [];
+    roomImages.length > 0
+      ? roomImages[0].images.slice(0, 3).map((img) => ({
+          ...(img.toObject?.() || img),
+          fileName: img.fileName || img.url?.split("/").pop() || "image",
+        }))
+      : [];
 
   const baseRoom = rooms[0];
 
@@ -229,7 +236,7 @@ const getRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
           images: roomImagesData,
         },
       },
-      "Room data fetched successfully."
+      translateLn(ln, "ROOM_DATA_FETCHED_SUCCESSFULLY")
     )
   );
 });

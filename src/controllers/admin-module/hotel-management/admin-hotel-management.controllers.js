@@ -48,11 +48,10 @@ const {
   BranchModel,
 } = require("../../../models/admin-module/branch/branches.model");
 const walletsModel = require("../../../models/wallet-module/wallets.model");
+const { translateLn } = require("../../../utils/services/translator.service");
 
 const getAllHotelManagers = catchAsyncError(async (req, res, next) => {
   const { filter } = req.query;
-
-  const { translateLn } = require("../../../utils/services/translator.service");
 
   const allowedStatuses = [
     "approved",
@@ -63,7 +62,6 @@ const getAllHotelManagers = catchAsyncError(async (req, res, next) => {
     "blocked",
     "p",
   ];
-  
 
   if (filter && !allowedStatuses.includes(filter)) {
     throw new ApiError(
@@ -582,201 +580,6 @@ const registerHotelManagerFromAdmin = catchAsyncError(
     }
   }
 );
-// const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
-//   const { managerId } = req.params;
-//   console.log('Manager ID:', managerId);
-
-//   const { profileInfo, bankInfo, hotelInfo, addressInfo, roomInfo, policyInfo } = req.body;
-//   const adminId = req.user?._id || "system";
-
-//   try {
-//     // 1) Update manager
-//     const manager = await HotelManagerModel.findByIdAndUpdate(
-//       managerId,
-//       {
-//         ...profileInfo,
-//         updatedBy: adminId
-//       },
-//       { new: true }
-//     );
-
-//     if (!manager) throw new ApiError(404, "Manager not found");
-
-//     // 2) Update bank info (find by userId)
-//     const bankAccount = await HotelManagerBankModel.findOneAndUpdate(
-//       { userId: manager._id },
-//       {
-//         ...bankInfo,
-//         updatedBy: adminId
-//       },
-//       { new: true }
-//     );
-
-//     // 3) (Optional) Update wallet if needed (e.g., currency)
-//     // Assuming wallet update only allows some fields
-//     const wallet = await Wallet.findOneAndUpdate(
-//       { userId: manager._id },
-//       {
-//         ...(req.body.walletInfo || {}),
-//         updatedBy: adminId
-//       },
-//       { new: true }
-//     );
-
-//     // 4) Update hotel info
-//     const hotel = await Hotel.findOneAndUpdate(
-//       { ownerId: manager._id },
-//       {
-//         ...hotelInfo,
-//         updatedBy: adminId
-//       },
-//       { new: true }
-//     );
-
-//     if (!hotel) throw new ApiError(404, "Hotel not found");
-
-//     // 5) Update hotel images
-//     if (hotelInfo?.hotelImages) {
-//       // Replace all images or update as needed
-//       await hotelImagesModel.findOneAndUpdate(
-//         { hotelId: hotel._id },
-//         {
-//           images: hotelInfo.hotelImages.map(img =>
-//             typeof img === "string" ? { url: img } : img
-//           ),
-//           updatedBy: adminId
-//         },
-//         { upsert: true, new: true }
-//       );
-//     }
-
-//     // 6) Update address linked to hotel
-//     if (addressInfo) {
-//       const hotelAddress = await HotelAddressModel.findOne({ hotelId: hotel._id });
-//       if (hotelAddress) {
-//         await AddressModel.findByIdAndUpdate(
-//           hotelAddress.address,
-//           { ...addressInfo, updatedBy: adminId },
-//           { new: true }
-//         );
-//       } else {
-//         // Create new address and link if missing
-//         const newAddress = await AddressModel.create({
-//           ...addressInfo,
-//           createdBy: adminId
-//         });
-//         await HotelAddressModel.create({
-//           hotelId: hotel._id,
-//           address: newAddress._id,
-//           createdBy: adminId
-//         });
-//       }
-//     }
-
-//     // 7) Update Rooms and Room Images
-
-//     // Standard Room
-//     if (roomInfo?.standardRoomCount || roomInfo?.standardRoomPrice) {
-//       const standardRoom = await Room.findOneAndUpdate(
-//         { hotelId: hotel._id, roomType: "standard" },
-//         {
-//           numberOfRoom: roomInfo.standardRoomCount,
-//           roomPrice: roomInfo.standardRoomPrice ? parseFloat(roomInfo.standardRoomPrice) : undefined,
-//           amenities: roomInfo.standardAmenities || undefined,
-//           updatedBy: adminId
-//         },
-//         { new: true }
-//       );
-
-//       if (roomInfo?.standardImages) {
-//         await HotelRoomImagesModel.findOneAndUpdate(
-//           { roomId: standardRoom._id },
-//           {
-//             images: roomInfo.standardImages.map(img => (typeof img === "string" ? { url: img } : img)),
-//             updatedBy: adminId
-//           },
-//           { upsert: true, new: true }
-//         );
-//       }
-//       // Optionally update individualRoom documents if room counts changed (you'll want to handle add/remove carefully)
-//     }
-
-//     // Luxury Room
-//     if (roomInfo?.luxuryRoomCount || roomInfo?.luxuryRoomPrice) {
-//       const luxuryRoom = await Room.findOneAndUpdate(
-//         { hotelId: hotel._id, roomType: "luxury" },
-//         {
-//           numberOfRoom: roomInfo.luxuryRoomCount,
-//           roomPrice: roomInfo.luxuryRoomPrice ? parseFloat(roomInfo.luxuryRoomPrice) : undefined,
-//           amenities: roomInfo.luxuryAmenities || undefined,
-//           updatedBy: adminId
-//         },
-//         { new: true }
-//       );
-
-//       if (roomInfo?.luxuryImages) {
-//         await HotelRoomImagesModel.findOneAndUpdate(
-//           { roomId: luxuryRoom._id },
-//           {
-//             images: roomInfo.luxuryImages.map(img => (typeof img === "string" ? { url: img } : img)),
-//             updatedBy: adminId
-//           },
-//           { upsert: true, new: true }
-//         );
-//       }
-//       // Optionally update individualRoom documents as well
-//     }
-
-//     // 8) Update Policy
-//     const policy = await HotelPolicyModel.findOneAndUpdate(
-//       { hotelId: hotel._id },
-//       {
-//         ...policyInfo,
-//         updatedBy: adminId
-//       },
-//       { new: true, upsert: true }
-//     );
-
-//     // Now populate data for response like before
-
-//     const updatedHotelAddress = await HotelAddressModel.findOne({ hotelId: hotel._id }).populate("address");
-//     const updatedHotelImages = await hotelImagesModel.findOne({ hotelId: hotel._id });
-//     const updatedStandardRoom = await Room.findOne({ hotelId: hotel._id, roomType: "standard" });
-//     const updatedStandardRoomImages = await HotelRoomImagesModel.findOne({ roomId: updatedStandardRoom._id });
-//     const updatedLuxuryRoom = await Room.findOne({ hotelId: hotel._id, roomType: "luxury" });
-//     const updatedLuxuryRoomImages = await HotelRoomImagesModel.findOne({ roomId: updatedLuxuryRoom._id });
-
-//     // Merge images inside rooms
-//     const standardRoomWithImages = {
-//       ...updatedStandardRoom.toObject(),
-//       images: updatedStandardRoomImages?.images || []
-//     };
-//     const luxuryRoomWithImages = {
-//       ...updatedLuxuryRoom.toObject(),
-//       images: updatedLuxuryRoomImages?.images || []
-//     };
-
-//     // Final response data
-//     res.status(200).json(
-//       new ApiResponse(200, {
-//         manager,
-//         bankAccount,
-//         wallet,
-//         hotel: {
-//           ...hotel.toObject(),
-//           address: updatedHotelAddress?.address || null,
-//           images: updatedHotelImages?.images || []
-//         },
-//         standardRoom: standardRoomWithImages,
-//         luxuryRoom: luxuryRoomWithImages,
-//         policy
-//       }, "Hotel Manager & related data updated successfully")
-//     );
-
-//   } catch (err) {
-//     next(err instanceof ApiError ? err : new ApiError(statusCode.INTERNAL_SERVER_ERROR, err.message));
-//   }
-// });
 
 const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
   const { managerId } = req.params;

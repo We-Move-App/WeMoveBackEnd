@@ -45,6 +45,7 @@ const WalletModel = require("../../../models/wallet-module/wallets.model");
 const {
   BranchModel,
 } = require("../../../models/admin-module/branch/branches.model");
+const { translateLn } = require("../../../utils/services/translator.service");
 
 const getAllDrivers = async (req, res) => {
   try {
@@ -340,7 +341,6 @@ const verifyUserProfile = catchAsyncError(async (req, res) => {
   const adminId = req.user && req.user._id ? req.user._id : null;
   const { driverId } = req.params;
   const { status, remarks, batchVerified } = req.body;
-  console.log("driverId", driverId);
 
   if (!driverId || !status) {
     throw new ApiError(
@@ -1212,6 +1212,7 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
 const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
   const { driverId } = req.params;
   const { vehicleType } = req.query;
+  const ln = (req.headers["ln"] || "en").toLowerCase();
 
   if (!driverId || !vehicleType) {
     throw new ApiError(

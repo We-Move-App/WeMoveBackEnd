@@ -28,6 +28,50 @@ module.exports = {
   BUS_BOOKINGS: "réservations de bus",
   RIDE_BOOKINGS: "réservations de trajets",
   ALL_SERVICES: "tous les services",
+  Hotel: "Hôtel",
+  Bus: "Bus",
+  Bike: "Moto",
+  "All Services": "Tous Services",
+
+  Active: "Actif",
+  Inactive: "Inactif",
+  NO_COUPONS_FOUND: "Aucun coupon trouvé",
+  ONLY_ADMIN_CREATE_COUPON:
+    "Seuls les SuperAdmin ou Admin peuvent créer des coupons",
+  COUPON_CODE_ALREADY_EXISTS: "Le code promo existe déjà",
+  INVALID_DATE_FORMAT: "Format de date invalide",
+  START_DATE_PAST: "La date de début ne peut pas être passée",
+  EXPIRY_AFTER_START: "La date d'expiration doit être après la date de début",
+  COUPON_CREATED_SUCCESS: "Coupon créé avec succès",
+  ONLY_ADMIN_UPDATE_COUPON:
+    "Seuls les SuperAdmin ou Admin peuvent mettre à jour les coupons",
+  COUPON_NOT_FOUND: "Coupon introuvable",
+  COUPON_UPDATED_SUCCESS: "Coupon mis à jour avec succès",
+  STATUS_REQUIRED: "Le champ statut est requis",
+  COUPON_NOT_FOUND: "Coupon introuvable",
+  COUPON_STATUS_UPDATED_SUCCESS:
+    "Le statut du coupon a été mis à jour avec succès",
+  ONLY_ADMIN_VIEW_COUPONS:
+    "Seuls les SuperAdmin ou Admin peuvent voir tous les coupons",
+  NO_COUPONS_FOUND: "Aucun coupon trouvé",
+  COUPON_NAME_ALREADY_EXISTS: "Le nom du coupon existe déjà",
+  COUPON_NAME_REQUIRED: "Le nom du coupon est requis",
+  COUPON_CODE_REQUIRED: "Le code du coupon est requis",
+
+  COMMISSION_ALREADY_EXISTS_FOR: "La commission existe déjà pour",
+  COMMISSION_CREATED_SUCCESS: "Commission créée avec succès",
+  SERVICE_TYPE_REQUIRED: "Le type de service est requis",
+  COMMISSION_ALREADY_EXISTS_FOR: "La commission existe déjà pour",
+  COMMISSION_CREATED_SUCCESS: "Commission créée avec succès",
+  COMMISSION_FETCHED: "Commission récupérée avec succès",
+  COMMISSION_UPDATED_SUCCESS: "Commission mise à jour avec succès",
+  COMMISSION_NOT_FOUND: "Commission introuvable",
+  NO_COMMISSIONS: "Aucune commission trouvée",
+
+  Hotel: "Hôtel",
+  Bus: "Bus",
+  Bike: "Moto",
+  Taxi: "Taxi",
 
   BANK_FILES_REQUIRED:
     "Les documents des coordonnées bancaires sont obligatoires",
@@ -163,6 +207,32 @@ module.exports = {
 
   DATA_FOUND: "Données récupérées avec succès",
   LOGIN_SUCCESS: "Connexion réussie",
+  // fr.js
+  NO_USER_FOUND: "Aucun utilisateur trouvé",
+  "Logged in successfully": "Connexion réussie",
+
+  //wallet
+
+  // Roles
+  user: "Utilisateur",
+  "bus-operator": "Opérateur de bus",
+  "hotel-manager": "Gestionnaire d'hôtel",
+  driver: "Chauffeur",
+  admin: "Administrateur",
+  system: "Système",
+
+  // Descriptions
+  topUp: "Recharge",
+  "Withdraw via MoMo": "Retrait via MoMo",
+  "Withdraw earnings from bookings": "Retirer les gains des réservations",
+  "Withdraw earnings from July bookings":
+    "Retirer les gains des réservations de juillet",
+
+  "taxi Ride": "Course en taxi",
+  "bike Ride": "Course à moto",
+
+  Sent: "Envoyé",
+  "includes commission": "commission incluse",
 
   // ----BusOperator
   ANALYTICS_DAILY: "Quotidien",
@@ -286,4 +356,63 @@ module.exports = {
   VALID_EMAIL_OR_PHONE_REQUIRED:
     "Veuillez saisir une adresse e-mail ou un numéro de téléphone valide",
   USER_ALREADY_EXISTS: "L'utilisateur existe déjà",
+
+  //Hotel---
+  ROOM_DATA_FETCHED_SUCCESSFULLY: "Données de chambre récupérées avec succès.",
+
+  //admin---Admin------
+
+  ALL_FIELDS_REQUIRED: "Veuillez remplir tous les champs obligatoires",
+
+  INVALID_ADMIN_ROLE: "Vous pouvez ajouter uniquement le rôle Admin",
+
+  EMAIL_REQUIRED: "L'email est requis",
+
+  USERNAME_REQUIRED: "Le nom d'utilisateur est requis",
+
+  PHONE_NUMBER_REQUIRED: "Le numéro de téléphone est requis",
+
+  BRANCH_REQUIRED: "La branche est requise",
+
+  ROLE_REQUIRED: "Le rôle est requis",
+
+  IS_SPECIAL_ADMIN_REQUIRED: "isSpecialAdmin est requis",
+
+  PERMISSIONS_REQUIRED: "Les permissions sont requises",
+
+  PERMISSIONS_OBJECT_REQUIRED:
+    "Les permissions doivent être un objet avec des valeurs booléennes",
+
+  INVALID_PERMISSIONS: "Permissions invalides fournies",
+
+  ADMIN_ALREADY_EXISTS: "L'administrateur existe déjà",
+
+  ADMIN_CREATED_SUCCESS: "Créé avec succès",
+
+  MISSING_REQUIRED_FIELDS: "Champs obligatoires manquants",
+  REPORTING_MANAGER_REQUIRED:
+    "Le responsable hiérarchique est requis lorsque le SuperAdmin crée un utilisateur",
+
+  ONLY_ADMIN_SUPERADMIN_CREATE_SUBADMIN:
+    "Seuls Admin ou SuperAdmin peuvent créer un SubAdmin",
+
+  USER_ALREADY_EXISTS: "L'utilisateur existe déjà",
+
+  ADMIN_CREATED_SUCCESS: "Admin créé avec succès",
+
+  SUBADMIN_CREATED_SUCCESS: "SubAdmin créé avec succès",
+
+  INVALID_EMAIL: "Un email valide est requis",
+
+  USERNAME_MIN_3: "Le nom d'utilisateur doit contenir au moins 3 caractères",
+
+  PHONE_REQUIRED: "Le numéro de téléphone est requis",
+
+  ROLE_REQUIRED: "Le rôle est requis",
+
+  INVALID_ROLE: "Le rôle doit être Admin ou SubAdmin",
+  BOOLEAN_REQUIRED: "Doit être vrai ou faux",
+  NO_BOOKINGS_FOUND: "Aucune réservation trouvée",
+  ALL_BOOKINGS_RETRIEVED_SUCCESS:
+    "Toutes les réservations ont été récupérées avec succès",
 };

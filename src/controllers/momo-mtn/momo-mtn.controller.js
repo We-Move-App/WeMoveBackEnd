@@ -23,6 +23,7 @@ const DriverBasicDetails = require("../../models/new-driver-module/basic-details
 const Wallet = require("../../models/wallet-module/wallets.model");
 const { getIO } = require("../../socket");
 const TransactionModel = require("../../models/transaction-module/transaction.model");
+const { translateLn } = require("../../utils/services/translator.service");
 
 const requestTopay = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;

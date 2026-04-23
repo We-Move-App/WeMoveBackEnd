@@ -40,9 +40,12 @@ const CouponSchema = new Schema(
       },
       validate: {
         validator: function (value) {
-          return this.discountType === "Percentage" ? value !== undefined : true;
+          return this.discountType === "Percentage"
+            ? value !== undefined
+            : true;
         },
-        message: "Discount Percentage is required when discount type is Percentage",
+        message:
+          "Discount Percentage is required when discount type is Percentage",
       },
     },
     discountAmount: {
@@ -53,9 +56,12 @@ const CouponSchema = new Schema(
       },
       validate: {
         validator: function (value) {
-          return this.discountType === "Fixed Amount" ? value !== undefined : true;
+          return this.discountType === "Fixed Amount"
+            ? value !== undefined
+            : true;
         },
-        message: "Discount Amount is required when discount type is Fixed Amount",
+        message:
+          "Discount Amount is required when discount type is Fixed Amount",
       },
     },
     startDate: {
@@ -89,7 +95,7 @@ const CouponSchema = new Schema(
     },
     maxUsage: {
       type: Number,
-      default: 1,
+      default: 1000,
       min: [1, "Max usage must be at least 1"],
     },
     usedCount: {
@@ -134,9 +140,6 @@ CouponSchema.methods.resetForUser = function (userId) {
   }
   return Promise.resolve(this); // Nothing to reset
 };
-
-
-
 
 const CouponModel = mongoose.model("Coupon", CouponSchema);
 

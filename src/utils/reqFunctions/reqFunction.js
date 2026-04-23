@@ -3,6 +3,8 @@ const statusCode = require("../constants/statusCode");
 const ApiError = require("../response/ApiError");
 const moment = require("moment");
 
+const { translateLn } = require("../../utils/services/translator.service");
+
 const formatDistanceTime = (data) => {
   return {
     distance: (data.distance.value / 1000).toFixed(1),
@@ -10,13 +12,21 @@ const formatDistanceTime = (data) => {
   };
 };
 
-const validateRequestBody = (requiredFields, reqBody) => {
-  const missingFields = requiredFields.filter((field) => !reqBody[field]);
+const validateRequestBody = (requiredFields, reqBody, ln = "en") => {
+  const missingFields = requiredFields.filter(
+    (field) =>
+      reqBody[field] === undefined ||
+      reqBody[field] === null ||
+      reqBody[field] === ""
+  );
 
   if (missingFields.length > 0) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      `Missing required fields: ${missingFields.join(", ")}`
+      `${translateLn(
+        ln,
+        "MISSING_REQUIRED_FIELDS"
+      )}: ${missingFields.join(", ")}`
     );
   }
 };
@@ -39,21 +49,6 @@ const logNormalizedDate = (dateInput) => {
   const normalizedDate = normalizeDate(dateInput).toISOString();
   return normalizedDate;
 };
-
-// const normalizeDate = (dateInput) => {
-//   let mDate = moment(dateInput, ["YYYY-MM-DD", moment.ISO_8601], true);
-
-//   if (!mDate.isValid()) {
-//     throw new ApiError(statusCode.BAD_REQUEST, "Invalid date input");
-//   }
-
-//   // Format as "YYYY-MM-DD" string to remove time component
-//   return mDate.format("YYYY-MM-DD");
-// };
-
-// const getTodayNormalized = () => {
-//   return moment().format("YYYY-MM-DD");
-// };
 
 const isValidFutureDate = (dateInput) => {
   let mDate = moment(dateInput, "YYYY-MM-DD", true);
@@ -189,5 +184,5 @@ module.exports = {
   getStatusMessage,
   validateMongooseId,
   getDateRange,
-  checkUserAuthority
+  checkUserAuthority,
 };
