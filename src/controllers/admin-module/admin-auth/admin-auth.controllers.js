@@ -64,7 +64,10 @@ const {
 } = require("../../../utils/jwtToken/customTokenService");
 const TransactionModel = require("../../../models/transaction-module/transaction.model");
 const { fetchAdminLn } = require("../../../utils/services/user.services");
-const { translateLn } = require("../../../utils/services/translator.service");
+const {
+  translateLn,
+  formatTranslatedActivity,
+} = require("../../../utils/services/translator.service");
 
 const roleMap = {
   Admin: "ADMIN",
@@ -88,6 +91,8 @@ const permissionMap = {
 };
 
 const addAdmins = catchAsyncError(async (req, res, next) => {
+  const ln = (req.headers["ln"] || "en").toLowerCase();
+
   const {
     email,
     userName,
@@ -101,7 +106,10 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
 
   const isRoleValid = ["Admin", "SubAdmin"].includes(role);
   if (!isRoleValid) {
-    throw new ApiError(statusCode.BAD_REQUEST, `You can add Admin role only`);
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "INVALID_ADMIN_ROLE")
+    );
   }
 
   const reqField = [
@@ -113,12 +121,12 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
     "isSpecialAdmin",
     "permissions",
   ];
-  validateRequestBody(reqField, req.body);
+  validateRequestBody(reqField, req.body, ln);
 
   if (typeof permissions !== "object" || Array.isArray(permissions)) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Permissions must be an object with boolean values"
+      translateLn(ln, "PERMISSIONS_OBJECT_REQUIRED")
     );
   }
 
@@ -126,10 +134,11 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
   const invalidPermissions = Object.keys(permissions).filter(
     (key) => !validPermissions.includes(key)
   );
+
   if (invalidPermissions.length > 0) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      `Invalid permissions: ${invalidPermissions.join(", ")}. Allowed values: ${validPermissions.join(", ")}`
+      translateLn(ln, "INVALID_PERMISSIONS")
     );
   }
 
@@ -137,7 +146,10 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
     $or: [{ email }, { phoneNumber }, { userName }],
   });
   if (existingUser) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Admin already exist");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "ADMIN_ALREADY_EXISTS")
+    );
   }
 
   const defaultPassword = "Admin@123";
@@ -185,25 +197,62 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
 
   return res
     .status(statusCode.OK)
-    .json(new ApiResponse(statusCode.OK, data, `created successfully`));
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        data,
+        translateLn(ln, "ADMIN_CREATED_SUCCESS")
+      )
+    );
 });
 
 const addSubAdmins = catchAsyncError(async (req, res, next) => {
   const { _id: performedBy, role: loggedInRole, branch: userBranch } = req.user;
 
+  const ln = (req.headers["ln"] || "en").toLowerCase();
+
   const schema = Joi.object({
-    email: Joi.string().email().required(),
-    userName: Joi.string().min(3).required(),
-    phoneNumber: Joi.string().required(),
-    role: Joi.string().valid("Admin", "SubAdmin").required(),
+    email: Joi.string().email().required().messages({
+      "string.empty": "EMAIL_REQUIRED",
+      "any.required": "EMAIL_REQUIRED",
+      "string.email": "INVALID_EMAIL",
+    }),
+
+    userName: Joi.string().min(3).required().messages({
+      "string.empty": "USERNAME_REQUIRED",
+      "any.required": "USERNAME_REQUIRED",
+      "string.min": "USERNAME_MIN_3",
+    }),
+
+    phoneNumber: Joi.string().required().messages({
+      "string.empty": "PHONE_REQUIRED",
+      "any.required": "PHONE_REQUIRED",
+    }),
+
+    role: Joi.string().valid("Admin", "SubAdmin").required().messages({
+      "string.empty": "ROLE_REQUIRED",
+      "any.required": "ROLE_REQUIRED",
+      "any.only": "INVALID_ROLE",
+    }),
+
     branch: Joi.string().optional(),
+
     reportingManager: Joi.string().optional(),
-    permissions: Joi.object().optional(),
-    isSpecialAdmin: Joi.boolean().optional(),
+
+    permissions: Joi.object().optional().messages({
+      "object.base": "INVALID_PERMISSIONS",
+    }),
+
+    isSpecialAdmin: Joi.boolean().optional().messages({
+      "boolean.base": "INVALID_BOOLEAN",
+    }),
   });
 
   const { error, value } = schema.validate(req.body);
-  if (error) throw new ApiError(400, error.details[0].message);
+
+  if (error) {
+    throw new ApiError(400, translateLn(ln, error.details[0].message));
+  }
 
   let {
     email,
@@ -218,43 +267,49 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
 
   if (loggedInRole === "Admin" && role === "SubAdmin") {
     reportingManager = performedBy;
-    branch = userBranch; // Admin can only assign within own branch
+    branch = userBranch;
   }
 
-  if (loggedInRole === "SuperAdmin") {
-    if (!reportingManager) {
-      throw new ApiError(
-        400,
-        "Reporting Manager is required when SuperAdmin creates a user"
-      );
-    }
+  if (
+    loggedInRole === "SuperAdmin" &&
+    role === "SubAdmin" &&
+    !reportingManager
+  ) {
+    throw new ApiError(400, translateLn(ln, "REPORTING_MANAGER_REQUIRED"));
   }
 
   if (!["Admin", "SuperAdmin"].includes(loggedInRole)) {
-    throw new ApiError(403, "Only Admin or SuperAdmin can create SubAdmin");
+    throw new ApiError(
+      403,
+      translateLn(ln, "ONLY_ADMIN_SUPERADMIN_CREATE_SUBADMIN")
+    );
   }
 
-  // Check duplicates
   const existingUser = await AdminModel.findOne({
     $or: [{ email }, { phoneNumber }, { userName }],
   });
-  if (existingUser) throw new ApiError(400, "User already exists");
 
-  // Default password
+  if (existingUser) {
+    throw new ApiError(400, translateLn(ln, "USER_ALREADY_EXISTS"));
+  }
+
   const defaultPassword = "subadmin@123";
 
-  // Create new user
   const adminId = await generateCustomId(EntityCodeEnum.ADMIN, "A");
+
   const newUser = new AdminModel({
     adminId,
-    email,
-    userName,
-    phoneNumber,
+    email: email.trim().toLowerCase(),
+    userName: userName.trim(),
+    phoneNumber: phoneNumber.trim(),
     role,
-    isSpecialAdmin,
+    isSpecialAdmin: isSpecialAdmin ?? false,
     branch,
     reportingManager,
-    permissions: { ...defaultPermissions, ...permissions },
+    permissions: {
+      ...defaultPermissions,
+      ...(permissions || {}),
+    },
     parentUserId: performedBy,
     createdBy: performedBy,
     updatedBy: performedBy,
@@ -263,7 +318,6 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
 
   await newUser.save();
 
-  // Log activity
   const logs = await logActivity({
     userId: newUser._id,
     activity: `Created a new ${role} with username: ${userName}`,
@@ -277,17 +331,24 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
     newUser,
     TypeOfUser.ADMIN
   );
+
   setTokenCookies(res, accessToken, refreshToken);
 
-  return res
-    .status(200)
-    .json(
-      new ApiResponse(
-        200,
-        { accessToken, refreshToken, user: userObject, logs },
-        `${role} created successfully`
+  return res.status(200).json(
+    new ApiResponse(
+      200,
+      {
+        accessToken,
+        refreshToken,
+        user: userObject,
+        logs,
+      },
+      translateLn(
+        ln,
+        role === "Admin" ? "ADMIN_CREATED_SUCCESS" : "SUBADMIN_CREATED_SUCCESS"
       )
-    );
+    )
+  );
 });
 
 const loginAdmin = catchAsyncError(async (req, res, next) => {
@@ -621,26 +682,25 @@ const getSubAdminsByBranch = catchAsyncError(async (req, res) => {
 const getAdminById = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
 
-  let ln = req.user?.ln;
-
-  if (!ln && req.user?._id) {
-    ln = await fetchAdminLn(req.user._id);
-  }
-
-  ln = ln || "en";
+  const ln = (req.headers["ln"] || "en").toLowerCase();
 
   const admin = await AdminModel.findById(id)
     .populate("branch", "name location")
     .populate("reportingManager", "userName phoneNumber email");
 
   if (!admin) {
-    throw new ApiError(statusCode.NOT_FOUND, "No user found");
+    throw new ApiError(statusCode.NOT_FOUND, translateLn(ln, "NO_USER_FOUND"));
   }
 
   // Get last activity of this admin
   const lastActivity = await UserActivityModel.findOne({ userId: id })
     .sort({ createdAt: -1 })
     .select("activity createdAt -_id");
+  console.log(lastActivity);
+
+  const translatedActivity = lastActivity?.activity
+    ? translateLn(ln, lastActivity.activity)
+    : null;
 
   // Format response
   const formattedAdmin = {
@@ -678,7 +738,10 @@ const getAdminById = catchAsyncError(async (req, res, next) => {
       : null,
     UserActivity: lastActivity
       ? {
-          activity: translateLn(ln, lastActivity.activity || "LOGIN_SUCCESS"),
+          activity:
+            translatedActivity === "Something went wrong"
+              ? lastActivity.activity
+              : translatedActivity,
           time: lastActivity.createdAt,
         }
       : null,
@@ -708,6 +771,7 @@ const getProfile = catchAsyncError(async (req, res, next) => {
     .status(statusCode.OK)
     .json(new ApiResponse(statusCode.OK, admin, "Data found successfully"));
 });
+
 const getAvatar = catchAsyncError(async (req, res, next) => {
   const result = await getAvatarFunc({
     req,
@@ -718,6 +782,7 @@ const getAvatar = catchAsyncError(async (req, res, next) => {
     ...result,
   });
 });
+
 const updateAvatar = catchAsyncError(async (req, res, next) => {
   const result = await updateAvatarFunc({
     req,
@@ -736,6 +801,7 @@ const updateAvatar = catchAsyncError(async (req, res, next) => {
     UserActivity: activityLog,
   });
 });
+
 const changePassword = catchAsyncError(async (req, res, next) => {
   const result = await changePasswordFunc({
     req,
@@ -774,6 +840,7 @@ const resetPassword = catchAsyncError(async (req, res, next) => {
     UserActivity: activityLog,
   });
 });
+
 const addSuperAdmin = catchAsyncError(async (req, res, next) => {
   const { email, userName, password, phoneNumber } = req.body;
 
@@ -1025,7 +1092,9 @@ const updateSubAdmin = catchAsyncError(async (req, res, next) => {
       )
     );
 });
+
 const createCoupon = catchAsyncError(async (req, res) => {
+  const ln = (req.headers["ln"] || "en").toLowerCase();
   let {
     couponName,
     couponCode,
@@ -1048,20 +1117,47 @@ const createCoupon = catchAsyncError(async (req, res) => {
   if (!["SuperAdmin", "Admin"].includes(role)) {
     throw new ApiError(
       statusCode.FORBIDDEN,
-      "Only SuperAdmin or Admin can create coupons"
+      translateLn(ln, "ONLY_ADMIN_CREATE_COUPON")
     );
   }
 
-  const existingCoupon = await CouponModel.findOne({ couponCode });
-  if (existingCoupon) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Coupon Code already exists");
+  const duplicateCoupon = await CouponModel.findOne({
+    $or: [{ couponCode }, { couponName }],
+  });
+
+  if (duplicateCoupon) {
+    if (duplicateCoupon.couponCode === couponCode) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        translateLn(ln, "COUPON_CODE_ALREADY_EXISTS")
+      );
+    }
+
+    if (duplicateCoupon.couponName === couponName) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        translateLn(ln, "COUPON_NAME_ALREADY_EXISTS")
+      );
+    }
+  }
+  const errors = [];
+
+  if (!couponName) errors.push(translateLn(ln, "COUPON_NAME_REQUIRED"));
+
+  if (!couponCode) errors.push(translateLn(ln, "COUPON_CODE_REQUIRED"));
+
+  if (errors.length) {
+    throw new ApiError(statusCode.BAD_REQUEST, errors.join(", "));
   }
 
   const start = new Date(startDate?.trim());
   const expiry = new Date(expiryDate?.trim());
 
   if (isNaN(start.getTime()) || isNaN(expiry.getTime())) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Invalid date format");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "INVALID_DATE_FORMAT")
+    );
   }
 
   const today = new Date();
@@ -1074,14 +1170,14 @@ const createCoupon = catchAsyncError(async (req, res) => {
   if (start < today) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Start date cannot be in the past"
+      translateLn(ln, "START_DATE_PAST")
     );
   }
 
   if (expiry <= start) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Expiry date must be after start date"
+      translateLn(ln, "EXPIRY_AFTER_START")
     );
   }
 
@@ -1109,7 +1205,7 @@ const createCoupon = catchAsyncError(async (req, res) => {
 
   res.status(statusCode.CREATED).json({
     success: true,
-    message: "Coupon created successfully",
+    message: translateLn(ln, "COUPON_CREATED_SUCCESS"),
     data: newCoupon,
     activityLog,
   });
@@ -1118,18 +1214,34 @@ const createCoupon = catchAsyncError(async (req, res) => {
 const updateCoupon = catchAsyncError(async (req, res) => {
   const { couponId } = req.params;
   const updateData = req.body;
+  const ln = (req.headers["ln"] || "en").toLowerCase();
   const { _id: performedBy, role } = req.user;
 
   if (!["SuperAdmin", "Admin"].includes(role)) {
     throw new ApiError(
       statusCode.FORBIDDEN,
-      "Only SuperAdmin or Admin can update coupons"
+      translateLn(ln, "ONLY_ADMIN_UPDATE_COUPON")
     );
   }
 
   const coupon = await CouponModel.findById(couponId);
   if (!coupon) {
-    throw new ApiError(statusCode.NOT_FOUND, "Coupon not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "COUPON_NOT_FOUND")
+    );
+  }
+
+  const existingCouponName = await CouponModel.findOne({
+    couponName,
+    _id: { $ne: couponId },
+  });
+
+  if (existingCouponName) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "COUPON_NAME_ALREADY_EXISTS")
+    );
   }
 
   Object.assign(coupon, updateData, { updatedBy: performedBy });
@@ -1143,7 +1255,7 @@ const updateCoupon = catchAsyncError(async (req, res) => {
 
   res.status(statusCode.OK).json({
     success: true,
-    message: "Coupon updated successfully",
+    message: translateLn(ln, "COUPON_UPDATED_SUCCESS:"),
     data: coupon,
     activityLog,
   });
@@ -1152,15 +1264,22 @@ const updateCoupon = catchAsyncError(async (req, res) => {
 const updateCouponStatus = catchAsyncError(async (req, res) => {
   const { couponId } = req.params;
   const { status } = req.body;
+  const ln = (req.headers["ln"] || "en").toLowerCase();
 
   if (!status) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Status field is required");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "STATUS_REQUIRED")
+    );
   }
 
   // Find coupon
   const coupon = await CouponModel.findById(couponId);
   if (!coupon) {
-    throw new ApiError(statusCode.NOT_FOUND, "Coupon not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "COUPON_NOT_FOUND")
+    );
   }
 
   // Save old status
@@ -1181,19 +1300,22 @@ const updateCouponStatus = catchAsyncError(async (req, res) => {
   // Return only status in response
   return res.status(statusCode.OK).json({
     success: true,
+    message: translateLn(ln, "COUPON_STATUS_UPDATED_SUCCESS"),
     data: {
       oldStatus,
       newStatus: status,
     },
   });
 });
+
 const getAllCoupons = catchAsyncError(async (req, res) => {
-  const { _id, role } = req.user;
+  const { role } = req.user;
+  const ln = (req.headers["ln"] || "en").toLowerCase();
 
   if (!["SuperAdmin", "Admin"].includes(role)) {
     throw new ApiError(
       statusCode.FORBIDDEN,
-      "Only SuperAdmin or Admin can view all coupons"
+      translateLn(ln, "ONLY_ADMIN_VIEW_COUPONS")
     );
   }
 
@@ -1213,12 +1335,12 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
   limit = limit ? Math.max(parseInt(limit, 10), 1) : 12;
 
   const skip = (page - 1) * limit;
-
   sortBy = sortBy || "createdAt";
   order = order === "asc" ? 1 : -1;
 
   const filter = {};
 
+  // Search
   if (search) {
     filter.$or = [
       { couponCode: { $regex: search, $options: "i" } },
@@ -1228,15 +1350,17 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
     ];
   }
 
+  // Status filter
   if (status && status !== "All") {
     filter.status = status;
   }
 
-  // ✅ ServiceType filter (All = skip filter)
-  if (serviceType && serviceType !== "All") {
-    filter.serviceType = serviceType;
+  // ServiceType filter
+  if (serviceType && serviceType !== "All" && serviceType.trim() !== "") {
+    filter.serviceType = serviceType.trim();
   }
 
+  // Date filter
   if (startDate && endDate) {
     filter.startDate = { $gte: new Date(startDate) };
     filter.expiryDate = { $lte: new Date(endDate) };
@@ -1244,38 +1368,48 @@ const getAllCoupons = catchAsyncError(async (req, res) => {
 
   const total = await CouponModel.countDocuments(filter);
 
-  const coupons = await CouponModel.find(filter)
-    .sort({ [sortBy]: order }) // recent first by default
-    .skip(skip)
-    .limit(limit)
-    .lean();
-
-  const data = coupons.map((c) => ({
-    couponId: c._id,
-    couponName: c.couponName,
-    header: c.header,
-    couponCode: c.couponCode,
-    serviceType: c.serviceType,
-    discount:
-      c.discountType === "Percentage"
-        ? `${c.discountPercentage}%`
-        : `₹${c.discountAmount}`,
-    startDate: c.startDate,
-    expiryDate: c.expiryDate,
-    status: c.status,
-  }));
-
-  if (data.length === 0) {
+  // ✅ if no data found after search/filter
+  if (total === 0) {
     return res.status(200).json({
       success: true,
       total: 0,
       page,
       limit,
       totalPages: 0,
-      message: "No coupons found",
+      message: translateLn(ln, "NO_COUPONS_FOUND"),
       data: [],
     });
   }
+
+  const coupons = await CouponModel.find(filter)
+    .sort({ [sortBy]: order })
+    .skip(skip)
+    .limit(limit)
+    .lean();
+
+  // change only inside map()
+
+  const data = coupons.map((c) => ({
+    couponId: c._id,
+    couponName: c.couponName,
+    header: c.header,
+    couponCode: c.couponCode,
+
+    // ✅ translated serviceType
+    serviceType: translateLn(ln, c.serviceType),
+
+    discount:
+      c.discountType === "Percentage"
+        ? `${c.discountPercentage}%`
+        : `₹${c.discountAmount}`,
+
+    startDate: c.startDate,
+    expiryDate: c.expiryDate,
+
+    // ✅ translated status
+    status: translateLn(ln, c.status),
+  }));
+
   res.status(200).json({
     success: true,
     total,
@@ -1335,21 +1469,26 @@ const getUserActivities = async (req, res) => {
     const { userId } = req.params;
     const { page = 1, limit = 10, type, startDate, endDate } = req.query;
 
+    const ln = (req.headers["ln"] || "en").toLowerCase();
+
     if (!userId) {
-      return res
-        .status(400)
-        .json({ success: false, message: "User ID is required" });
+      return res.status(400).json({
+        success: false,
+        message: translateLn(ln, "USER_ID_REQUIRED"),
+      });
     }
 
     const pageNum = parseInt(page, 10);
     const limitNum = parseInt(limit, 10);
 
     const filter = { userId };
+
     if (type) filter.type = type;
 
     if (startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
+
       if (!isNaN(start) && !isNaN(end)) {
         filter.createdAt = { $gte: start, $lte: end };
       }
@@ -1365,25 +1504,39 @@ const getUserActivities = async (req, res) => {
     const total = await UserActivityModel.countDocuments(filter);
 
     if (!activities.length) {
-      return res
-        .status(404)
-        .json({ success: false, message: "No activities found for this user" });
+      return res.status(404).json({
+        success: false,
+        message: translateLn(ln, "NO_ACTIVITIES_FOUND"),
+      });
     }
 
     const formatActivityTime = (date) => {
       if (!date) return null;
+
       const now = new Date();
       const daysDiff = differenceInCalendarDays(now, date);
 
-      if (daysDiff === 0)
-        return `Today, ${format(date, "hh:mm a")} (${formatDistanceToNowStrict(date)} ago)`;
-      if (daysDiff === 1)
-        return `Yesterday, ${format(date, "hh:mm a")} (${formatDistanceToNowStrict(date)} ago)`;
-      return `${format(date, "eee, dd MMM, hh:mm a")} (${formatDistanceToNowStrict(date)} ago)`;
+      if (daysDiff === 0) {
+        return `Today, ${format(
+          date,
+          "hh:mm a"
+        )} (${formatDistanceToNowStrict(date)} ago)`;
+      }
+
+      if (daysDiff === 1) {
+        return `Yesterday, ${format(
+          date,
+          "hh:mm a"
+        )} (${formatDistanceToNowStrict(date)} ago)`;
+      }
+
+      return `${format(date, "eee, dd MMM, hh:mm a")} (${formatDistanceToNowStrict(
+        date
+      )} ago)`;
     };
 
     const formattedActivities = activities.map((act) => ({
-      activity: act.activity,
+      activity: formatTranslatedActivity(act.activity, ln),
       type: act.type,
       time: formatActivityTime(act.createdAt),
       performedBy: act.performedBy
@@ -1400,8 +1553,9 @@ const getUserActivities = async (req, res) => {
     const lastActivity =
       formattedActivities.length > 1 ? formattedActivities[1] : null;
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
+      message: translateLn(ln, "DATA_FOUND"),
       total,
       page: pageNum,
       limit: limitNum,
@@ -1416,10 +1570,12 @@ const getUserActivities = async (req, res) => {
       data: formattedActivities,
     });
   } catch (err) {
-    console.error("Error fetching activities:", err.message);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
-      message: "Server error while fetching activities",
+      message: translateLn(
+        (req.headers["ln"] || "en").toLowerCase(),
+        "SERVER_ERROR_FETCHING_ACTIVITIES"
+      ),
     });
   }
 };
@@ -1429,6 +1585,8 @@ const getTransactionHistory = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
+
+    const ln = (req.headers["ln"] || "en").toLowerCase();
 
     const { search = "", type = "ALL", status = "ALL" } = req.query;
 
@@ -1533,7 +1691,7 @@ const getTransactionHistory = async (req, res) => {
       results.push({
         transactionId: txn.transactionId,
         name,
-        role,
+        role: translateLn(ln, role),
         type: pickEntry?.type || null,
         amount:
           pickEntry?.amount != null
@@ -1543,7 +1701,7 @@ const getTransactionHistory = async (req, res) => {
               : 0,
         date: txn.createdAt,
         status: txn.status,
-        description: txn.description,
+        description: txn.description ? translateLn(ln, txn.description) : "",
       });
     }
 

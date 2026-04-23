@@ -73,10 +73,8 @@ const getAllUsers = catchAsyncError(async (req, res) => {
     });
   }
 
-  // 🔹 LIFO sorting (always latest first)
   const sort = { createdAt: -1 };
 
-  // 🔹 Fetch users
   const data = await UserModel.find(
     filter,
     "fullName phoneNumber email verificationStatus createdAt userId user_id"
@@ -177,6 +175,7 @@ const deleteUserPermanently = catchAsyncError(async (req, res, next) => {
 const getAllUsersBookings = catchAsyncError(async (req, res) => {
   const adminId = req.user._id;
   const ln = (req.headers["ln"] || "en").toLowerCase();
+  console.log(ln);
 
   const {
     page = 1,
@@ -363,7 +362,11 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
 
   return res.status(200).json({
     success: true,
-    message: "All bookings retrieved successfully",
+    message: translateLn(
+      ln,
+      total === 0 ? "NO_BOOKINGS_FOUND" : "ALL_BOOKINGS_RETRIEVED_SUCCESS"
+    ),
+
     total,
     page: pageNum,
     limit: limitNum,

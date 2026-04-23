@@ -24,6 +24,8 @@ const statusMap = {
 };
 
 const createCommission = catchAsyncError(async (req, res) => {
+  const ln = (req.headers["ln"] || "en").toLowerCase();
+
   const { error, value } = createCommissionValidation.validate(req.body, {
     abortEarly: false,
     stripUnknown: true,
@@ -32,15 +34,21 @@ const createCommission = catchAsyncError(async (req, res) => {
   if (error) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      error.details.map((d) => d.message).join(", ")
+      error.details.map((d) => translateLn(ln, d.message)).join(", ")
     );
   }
 
-  const existing = await Commission.findOne({ serviceType: value.serviceType });
+  const existing = await Commission.findOne({
+    serviceType: value.serviceType,
+  });
+
   if (existing) {
     throw new ApiError(
       statusCode.CONFLICT,
-      `Commission for ${value.serviceType} already exists`
+      `${translateLn(ln, "COMMISSION_ALREADY_EXISTS_FOR")} ${translateLn(
+        ln,
+        serviceTypeMap[value.serviceType?.toLowerCase()] || value.serviceType
+      )}`
     );
   }
 
@@ -52,33 +60,13 @@ const createCommission = catchAsyncError(async (req, res) => {
       new ApiResponse(
         statusCode.CREATED,
         commission,
-        "Commission created successfully"
+        translateLn(ln, "COMMISSION_CREATED_SUCCESS")
       )
     );
 });
 
-// const getAllCommissions = catchAsyncError(async (req, res) => {
-//   const commissions = await Commission.find().sort({ serviceType: 1 }); // sort by serviceType for consistency
-
-//   if (!commissions || commissions.length === 0) {
-//     throw new ApiError(statusCode.NOT_FOUND, "No commissions found");
-//   }
-
-//   return res
-//     .status(statusCode.OK)
-//     .json(
-//       new ApiResponse(
-//         statusCode.OK,
-//         commissions,
-//         "Commissions fetched successfully"
-//       )
-//     );
-// });
-
 const getAllCommissions = catchAsyncError(async (req, res) => {
-  const ln = await fetchAdminLn(req.user._id);
-
-  console.log("Language is :", ln);
+  const ln = (req.headers["ln"] || "en").toLowerCase();
 
   const commissions = await Commission.find().sort({ serviceType: 1 });
 
@@ -112,11 +100,16 @@ const getAllCommissions = catchAsyncError(async (req, res) => {
 });
 
 const getCommissionById = catchAsyncError(async (req, res) => {
+  const ln = (req.headers["ln"] || "en").toLowerCase();
   const { commissionId } = req.params;
 
   const commission = await Commission.findById(commissionId);
+
   if (!commission) {
-    throw new ApiError(statusCode.NOT_FOUND, `Commission not found`);
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "COMMISSION_NOT_FOUND")
+    );
   }
 
   return res
@@ -125,12 +118,57 @@ const getCommissionById = catchAsyncError(async (req, res) => {
       new ApiResponse(
         statusCode.OK,
         commission,
-        `Commission fetched successfully`
+        translateLn(ln, "COMMISSION_FETCHED")
       )
     );
 });
 
+// const updateCommission = catchAsyncError(async (req, res) => {
+//   const { commissionId } = req.params;
+
+//   const { error, value } = updateCommissionValidation.validate(req.body, {
+//     abortEarly: false,
+//     stripUnknown: true,
+//   });
+
+//   if (error) {
+//     throw new ApiError(
+//       statusCode.BAD_REQUEST,
+//       error.details.map((d) => d.message).join(", ")
+//     );
+//   }
+
+//   if (value.commissionType === "percentage") {
+//     value.commissionRate = null;
+//   }
+//   if (value.commissionType === "fixed") {
+//     value.commissionPercentage = null;
+//   }
+
+//   const commission = await Commission.findByIdAndUpdate(
+//     commissionId,
+//     { $set: value },
+//     { new: true, runValidators: true }
+//   );
+
+//   if (!commission) {
+//     throw new ApiError(statusCode.NOT_FOUND, "Commission not found");
+//   }
+
+//   return res
+//     .status(statusCode.OK)
+//     .json(
+//       new ApiResponse(
+//         statusCode.OK,
+//         commission,
+//         "Commission updated successfully"
+//       )
+//     );
+// });
+
 const updateCommission = catchAsyncError(async (req, res) => {
+  const ln = (req.headers["ln"] || "en").toLowerCase();
+
   const { commissionId } = req.params;
 
   const { error, value } = updateCommissionValidation.validate(req.body, {
@@ -141,13 +179,14 @@ const updateCommission = catchAsyncError(async (req, res) => {
   if (error) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      error.details.map((d) => d.message).join(", ")
+      error.details.map((d) => translateLn(ln, d.message)).join(", ")
     );
   }
 
   if (value.commissionType === "percentage") {
     value.commissionRate = null;
   }
+
   if (value.commissionType === "fixed") {
     value.commissionPercentage = null;
   }
@@ -159,7 +198,10 @@ const updateCommission = catchAsyncError(async (req, res) => {
   );
 
   if (!commission) {
-    throw new ApiError(statusCode.NOT_FOUND, "Commission not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "COMMISSION_NOT_FOUND")
+    );
   }
 
   return res
@@ -168,7 +210,7 @@ const updateCommission = catchAsyncError(async (req, res) => {
       new ApiResponse(
         statusCode.OK,
         commission,
-        "Commission updated successfully"
+        translateLn(ln, "COMMISSION_UPDATED_SUCCESS")
       )
     );
 });

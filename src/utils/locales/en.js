@@ -31,6 +31,30 @@ module.exports = {
   BUS_BOOKINGS: "bus bookings",
   RIDE_BOOKINGS: "ride bookings",
   ALL_SERVICES: "all services",
+  Hotel: "Hotel",
+  Bus: "Bus",
+  Bike: "Bike",
+  "All Services": "All Services",
+  Active: "Active",
+  Inactive: "Inactive",
+  NO_COUPONS_FOUND: "No coupons found",
+  ONLY_ADMIN_CREATE_COUPON: "Only SuperAdmin or Admin can create coupons",
+  COUPON_CODE_ALREADY_EXISTS: "Coupon code already exists",
+  INVALID_DATE_FORMAT: "Invalid date format",
+  START_DATE_PAST: "Start date cannot be in the past",
+  EXPIRY_AFTER_START: "Expiry date must be after start date",
+  COUPON_CREATED_SUCCESS: "Coupon created successfully",
+  ONLY_ADMIN_UPDATE_COUPON: "Only SuperAdmin or Admin can update coupons",
+  COUPON_NOT_FOUND: "Coupon not found",
+  COUPON_UPDATED_SUCCESS: "Coupon updated successfully",
+  STATUS_REQUIRED: "Status field is required",
+  COUPON_NOT_FOUND: "Coupon not found",
+  COUPON_STATUS_UPDATED_SUCCESS: "Coupon status updated successfully",
+  ONLY_ADMIN_VIEW_COUPONS: "Only SuperAdmin or Admin can view all coupons",
+  NO_COUPONS_FOUND: "No coupons found",
+  COUPON_NAME_ALREADY_EXISTS: "Coupon name already exists",
+  COUPON_NAME_REQUIRED: "Coupon name is required",
+  COUPON_CODE_REQUIRED: "Coupon code is required",
 
   BANK_FILES_REQUIRED: "Bank account details files are mandatory",
   ACCOUNT_NUMBER_REQUIRED: "Account number is required",
@@ -132,6 +156,34 @@ module.exports = {
   UNKNOWN_USER: "Unknown User",
   UNKNOWN_DRIVER: "Unknown Driver",
 
+  //Wallet
+  user: "User",
+  "bus-operator": "Bus Operator",
+  "hotel-manager": "Hotel Manager",
+  driver: "Driver",
+  admin: "Admin",
+  system: "System",
+
+  // Descriptions
+  topUp: "Top Up",
+  "Withdraw via MoMo": "Withdraw via MoMo",
+  "Withdraw earnings from bookings": "Withdraw earnings from bookings",
+  "Withdraw earnings from July bookings":
+    "Withdraw earnings from July bookings",
+
+  "taxi Ride": "Taxi Ride",
+  "bike Ride": "Bike Ride",
+
+  Sent: "Sent",
+  "includes commission": "includes commission",
+
+  COMMISSION_ALREADY_EXISTS_FOR: "Commission already exists for",
+  COMMISSION_CREATED_SUCCESS: "Commission created successfully",
+  COMMISSION_FETCHED: "Commission fetched successfully",
+  COMMISSION_UPDATED_SUCCESS: "Commission updated successfully",
+  COMMISSION_NOT_FOUND: "Commission not found",
+  NO_COMMISSIONS: "No commissions found",
+
   ////Admin-section
 
   ADMIN: "Admin",
@@ -169,14 +221,34 @@ module.exports = {
   REFERRAL_MANAGEMENT: "Referral Management",
 
   DATA_FOUND: "Data found successfully",
-  LOGIN_SUCCESS: "Logged in successfully",
+
+  "Logged in successfully": "Logged in successfully",
+  // en.js
+  NO_USER_FOUND: "No user found",
 
   PLEASE_ENTER_ID_AND_STATUS: "Please enter Id in params and status in body",
 
   REMARKS_REQUIRED_FOR_BLOCK: "Remarks are required when blocking a user",
 
   USER_NOT_FOUND: "User not found",
+  USER_ID_REQUIRED: "User ID is required",
+  NO_ACTIVITIES_FOUND: "No activities found for this user",
+  SERVER_ERROR_FETCHING_ACTIVITIES: "Server error while fetching activities",
+  DATA_FOUND: "Data found successfully",
 
+  "Logged in successfully": "Logged in successfully",
+  USER_ID_REQUIRED: "L'identifiant utilisateur est requis",
+
+  NO_ACTIVITIES_FOUND: "Aucune activité trouvée pour cet utilisateur",
+
+  SERVER_ERROR_FETCHING_ACTIVITIES:
+    "Erreur serveur lors de la récupération des activités",
+
+  DATA_FOUND: "Données récupérées avec succès",
+
+  "Logged in successfully": "Logged in successfully",
+  CREATED_ADMIN_USERNAME: "Created a new Admin with username:",
+  CREATED_SUBADMIN_USERNAME: "Created a new SubAdmin with username:",
   USER_STATUS_UPDATED_SUCCESSFULLY: "User status updated successfully",
 
   //--BusOperator----
@@ -275,4 +347,52 @@ module.exports = {
   OTP_EXPIRED: "OTP has expired.",
   EMAIL_OR_PHONE_REQUIRED: "Please enter email or phone",
   USER_ALREADY_EXISTS: "User already exists",
+
+  //Hotel---,Model
+
+  ROOM_DATA_FETCHED_SUCCESSFULLY: "Room data fetched successfully.",
+  //ADMIN--Add
+
+  ALL_FIELDS_REQUIRED: "Please fill all required fields",
+
+  INVALID_ADMIN_ROLE: "You can add Admin role only",
+
+  EMAIL_REQUIRED: "Email is required",
+  USERNAME_REQUIRED: "Username is required",
+  PHONE_NUMBER_REQUIRED: "Phone number is required",
+  BRANCH_REQUIRED: "Branch is required",
+  ROLE_REQUIRED: "Role is required",
+  IS_SPECIAL_ADMIN_REQUIRED: "isSpecialAdmin is required",
+  PERMISSIONS_REQUIRED: "Permissions is required",
+
+  PERMISSIONS_OBJECT_REQUIRED:
+    "Permissions must be an object with boolean values",
+
+  INVALID_PERMISSIONS: "Invalid permissions provided",
+
+  ADMIN_ALREADY_EXISTS: "Admin already exists",
+
+  ADMIN_CREATED_SUCCESS: "Created successfully",
+  MISSING_REQUIRED_FIELDS: "Missing required fields",
+
+  REPORTING_MANAGER_REQUIRED:
+    "Reporting Manager is required when SuperAdmin creates a user",
+
+  ONLY_ADMIN_SUPERADMIN_CREATE_SUBADMIN:
+    "Only Admin or SuperAdmin can create SubAdmin",
+
+  USER_ALREADY_EXISTS: "User already exists",
+
+  ADMIN_CREATED_SUCCESS: "Admin created successfully",
+
+  SUBADMIN_CREATED_SUCCESS: "SubAdmin created successfully",
+
+  INVALID_EMAIL: "Valid email is required",
+  USERNAME_MIN_3: "Username must be at least 3 characters",
+  PHONE_REQUIRED: "Phone number is required",
+  ROLE_REQUIRED: "Role is required",
+  INVALID_ROLE: "Role must be Admin or SubAdmin",
+  BOOLEAN_REQUIRED: "Must be true or false",
+  NO_BOOKINGS_FOUND: "No bookings found",
+  ALL_BOOKINGS_RETRIEVED_SUCCESS: "All bookings retrieved successfully",
 };

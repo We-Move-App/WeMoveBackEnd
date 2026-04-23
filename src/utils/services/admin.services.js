@@ -14,7 +14,6 @@ const getAllUsersByAdmin = async ({ req, model }) => {
     search = "",
     verificationStatus,
   } = req.query;
-  console.log("req.user", req.query);
 
   page = page ? Math.max(parseInt(page, 10), 1) : 1;
   limit = limit ? Math.max(parseInt(limit, 10), 1) : 10;
