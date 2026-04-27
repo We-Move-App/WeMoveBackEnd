@@ -120,6 +120,7 @@ const verifyUserProfile = catchAsyncError(async (req, res, next) => {
 
 const getHotelByManagerId = catchAsyncError(async (req, res, next) => {
   const { ownerId } = req.params;
+  const ln = (req.headers["ln"] || "en").toLowerCase();
 
   try {
     const manager = await HotelManagerModel.findById(ownerId)
@@ -180,7 +181,15 @@ const getHotelByManagerId = catchAsyncError(async (req, res, next) => {
       new ApiResponse(
         200,
         {
-          manager,
+          manager: {
+            ...manager,
+            verificationStatus: translateLn(
+              ln,
+              `VERIFICATION_${manager.verificationStatus
+                .toUpperCase()
+                .replace(/-/g, "_")}`
+            ),
+          },
           bankAccount,
           wallet,
           hotel: {
@@ -192,7 +201,7 @@ const getHotelByManagerId = catchAsyncError(async (req, res, next) => {
           luxuryRoom: luxuryRoomWithImages,
           policy,
         },
-        "Hotel Manager & related data fetched successfully"
+        translateLn(ln, "HOTEL_MANAGER_DATA_FETCHED_SUCCESS")
       )
     );
   } catch (err) {

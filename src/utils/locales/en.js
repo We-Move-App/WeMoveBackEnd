@@ -404,5 +404,17 @@ module.exports = {
   PENDING: "Pending",
   REJECTED: "Rejected",
   NO_BANK_ACCOUNT_DETAILS_UPLOADED: "No Bank Account Details uploaded",
-  
+  BUS: "Bus",
+  HOTEL: "Hotel",
+  RIDE: "Ride",
+  VERIFICATION_SUBMITTED: "Submitted",
+  VERIFICATION_PROCESSING: "Processing",
+  VERIFICATION_WAITING_FOR_APPROVAL: "Waiting for approval",
+  VERIFICATION_APPROVED: "Approved",
+  VERIFICATION_REJECTED: "Rejected",
+  VERIFICATION_BLOCKED: "Blocked",
+  USER_NOT_FOUND: "User not found",
+  DATA_FOUND_SUCCESS: "Data found successfully",
+  HOTEL_MANAGER_DATA_FETCHED_SUCCESS:
+    "Hotel Manager & related data fetched successfully",
 };

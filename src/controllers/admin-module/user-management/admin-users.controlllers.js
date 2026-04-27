@@ -107,6 +107,7 @@ const getAllUsers = catchAsyncError(async (req, res) => {
   });
 });
 
+
 const getSingleUser = catchAsyncError(async (req, res, next) => {
   const { _id } = req.params;
 
@@ -614,6 +615,8 @@ const getWalletBalance = catchAsyncError(async (req, res) => {
     )
   );
 });
+
+
 
 module.exports = {
   getAllUsers,

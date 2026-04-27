@@ -1213,6 +1213,7 @@ const createCoupon = catchAsyncError(async (req, res) => {
 
 const updateCoupon = catchAsyncError(async (req, res) => {
   const { couponId } = req.params;
+  const { couponName } = req.body;
   const updateData = req.body;
   const ln = (req.headers["ln"] || "en").toLowerCase();
   const { _id: performedBy, role } = req.user;
@@ -1255,7 +1256,7 @@ const updateCoupon = catchAsyncError(async (req, res) => {
 
   res.status(statusCode.OK).json({
     success: true,
-    message: translateLn(ln, "COUPON_UPDATED_SUCCESS:"),
+    message: translateLn(ln, "COUPON_UPDATED_SUCCESS"),
     data: coupon,
     activityLog,
   });

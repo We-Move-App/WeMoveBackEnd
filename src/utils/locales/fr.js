@@ -33,8 +33,10 @@ module.exports = {
   Bike: "Moto",
   "All Services": "Tous Services",
 
-  Active: "Actif",
-  Inactive: "Inactif",
+  ACTIVE: "Actif",
+
+  INACTIVE: "Inactif",
+
   NO_COUPONS_FOUND: "Aucun coupon trouvé",
   ONLY_ADMIN_CREATE_COUPON:
     "Seuls les SuperAdmin ou Admin peuvent créer des coupons",
@@ -425,5 +427,18 @@ module.exports = {
   REJECTED: "Rejeté",
   NO_BANK_ACCOUNT_DETAILS_UPLOADED:
     "Aucun détail de compte bancaire téléchargé",
-    
+
+  BUS: "Bus",
+  HOTEL: "Hôtel",
+  RIDE: "Course",
+  VERIFICATION_SUBMITTED: "Soumis",
+  VERIFICATION_PROCESSING: "En traitement",
+  VERIFICATION_WAITING_FOR_APPROVAL: "En attente d'approbation",
+  VERIFICATION_APPROVED: "Approuvé",
+  VERIFICATION_REJECTED: "Rejeté",
+  VERIFICATION_BLOCKED: "Bloqué",
+  USER_NOT_FOUND: "Utilisateur introuvable",
+  DATA_FOUND_SUCCESS: "Données trouvées avec succès",
+  HOTEL_MANAGER_DATA_FETCHED_SUCCESS:
+    "Les données du gestionnaire d'hôtel ont été récupérées avec succès",
 };

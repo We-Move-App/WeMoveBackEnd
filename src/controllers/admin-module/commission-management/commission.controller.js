@@ -20,7 +20,7 @@ const serviceTypeMap = {
 
 const statusMap = {
   active: "ACTIVE",
-  inactive: "INACTIVE",
+  in_active: "INACTIVE",
 };
 
 const createCommission = catchAsyncError(async (req, res) => {
@@ -168,6 +168,7 @@ const getCommissionById = catchAsyncError(async (req, res) => {
 
 const updateCommission = catchAsyncError(async (req, res) => {
   const ln = (req.headers["ln"] || "en").toLowerCase();
+  console.log(ln);
 
   const { commissionId } = req.params;
 

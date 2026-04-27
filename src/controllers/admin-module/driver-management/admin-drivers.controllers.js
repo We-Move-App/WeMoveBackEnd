@@ -56,7 +56,6 @@ const getAllDrivers = async (req, res) => {
     const { vehicleType, search, filter, verificationStatus, batchVerified } =
       req.query;
 
-    // ✅ Validate vehicleType
     if (!vehicleType) {
       return res.status(400).json({
         success: false,

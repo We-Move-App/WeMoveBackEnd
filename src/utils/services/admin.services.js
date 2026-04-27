@@ -110,28 +110,45 @@ const getUserByIdByAdmin = async ({
   userBankModel,
 }) => {
   const { userId } = req.params;
-  console.log("userId", userId);
+  const ln = (req.headers["ln"] || "en").toLowerCase();
 
   const [user, userDocs, userBank] = await Promise.all([
     userModel
       .findOne({ _id: userId })
       .populate("verifiedBy.admin", "userName phoneNumber email")
-      .populate("branch", "name location"), //
+      .populate("branch", "name location"),
+
     userDocsModel.findOne({ userId }).populate("documentIds"),
     userBankModel.findOne({ userId }),
   ]);
 
   if (!user) {
-    throw new ApiError(statusCode.NOT_FOUND, "User not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "USER_NOT_FOUND")
+    );
   }
 
   const result = {
-    user,
+    user: {
+      ...user.toObject(),
+      verificationStatus: translateLn(
+        ln,
+        `VERIFICATION_${user.verificationStatus
+          .toUpperCase()
+          .replace(/-/g, "_")}`
+      ),
+    },
     docs: userDocs,
     bank: userBank,
     address: user.address,
   };
-  return new ApiResponse(statusCode.OK, result, `Data found Successfully`);
+
+  return new ApiResponse(
+    statusCode.OK,
+    result,
+    translateLn(ln, "DATA_FOUND_SUCCESS")
+  );
 };
 
 const userVerifiedByAdmin = async ({ req, model }) => {
