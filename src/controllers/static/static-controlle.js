@@ -7,14 +7,7 @@ const {
 } = require("../../utils/services/user.services");
 
 const privacyPolicy = catchAsyncError(async (req, res) => {
-  const _id = req.user._id;
-  const role = req.user.role;
-
-  let ln = await fetchLn(_id);
-
-  if (role === "driver") {
-    ln = await fetchDriverLn(_id);
-  }
+  let ln = req.get("ln") || "en";
 
   const folder = role === "driver" ? "drivers" : "users";
 
@@ -37,14 +30,7 @@ const privacyPolicy = catchAsyncError(async (req, res) => {
 });
 
 const termsAndCondition = catchAsyncError(async (req, res) => {
-  const _id = req.user._id;
-  const role = req.user.role;
-
-  let ln = await fetchLn(_id);
-
-  if (role === "driver") {
-    ln = await fetchDriverLn(_id);
-  }
+  let ln = req.get("ln") || "en";
 
   const folder = role === "driver" ? "drivers" : "users";
 
@@ -61,14 +47,7 @@ const termsAndCondition = catchAsyncError(async (req, res) => {
 });
 
 const generalDisclaimer = catchAsyncError(async (req, res) => {
-  const _id = req.user._id;
-  const role = req.user.role;
-
-  let ln = await fetchLn(_id);
-
-  if (role === "driver") {
-    ln = await fetchDriverLn(_id);
-  }
+  let ln = req.get("ln") || "en";
 
   let filePath = path.join(
     __dirname,

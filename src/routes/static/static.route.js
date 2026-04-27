@@ -7,8 +7,8 @@ const {
 const { authenticate } = require("../../middlewares/authenticator");
 const staticRouter = express.Router();
 
-staticRouter.get("/privacy-policy", authenticate, privacyPolicy);
-staticRouter.get("/terms-and-conditions", authenticate, termsAndCondition);
-staticRouter.get("/general-disclaimer", authenticate, generalDisclaimer);
+staticRouter.get("/privacy-policy", privacyPolicy);
+staticRouter.get("/terms-and-conditions", termsAndCondition);
+staticRouter.get("/general-disclaimer", generalDisclaimer);
 
 module.exports = staticRouter;
