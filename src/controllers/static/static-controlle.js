@@ -7,7 +7,8 @@ const {
 } = require("../../utils/services/user.services");
 
 const privacyPolicy = catchAsyncError(async (req, res) => {
-  let ln = req.get("ln") || "en";
+  const role = String(req.query.role || "user").toLowerCase();
+  const ln = req.get("ln") || "en";
 
   const folder = role === "driver" ? "drivers" : "users";
 
@@ -30,7 +31,8 @@ const privacyPolicy = catchAsyncError(async (req, res) => {
 });
 
 const termsAndCondition = catchAsyncError(async (req, res) => {
-  let ln = req.get("ln") || "en";
+  const role = String(req.query.role || "user").toLowerCase();
+  const ln = req.get("ln") || "en";
 
   const folder = role === "driver" ? "drivers" : "users";
 
@@ -47,7 +49,7 @@ const termsAndCondition = catchAsyncError(async (req, res) => {
 });
 
 const generalDisclaimer = catchAsyncError(async (req, res) => {
-  let ln = req.get("ln") || "en";
+  const ln = req.get("ln") || "en";
 
   let filePath = path.join(
     __dirname,
