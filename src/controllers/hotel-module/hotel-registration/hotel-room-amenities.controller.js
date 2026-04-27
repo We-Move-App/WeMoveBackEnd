@@ -219,6 +219,28 @@ const getRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
 
   const baseRoom = rooms[0];
 
+  const amenitiesTranslation = {
+    "Mini Bar": { fr: "Mini-bar" },
+    "Air Conditioning": { fr: "Climatisation" },
+    "Free Wi-Fi": { fr: "Wi-Fi gratuit" },
+    "AC Sleeper": { fr: "Couchette climatisée" },
+    "NON AC Sleeper": { fr: "Couchette non climatisée" },
+    "Laundry Service": { fr: "Service de blanchisserie" },
+    "Swimming Pool": { fr: "Piscine" },
+    TV: { fr: "Télévision" },
+  };
+
+  const localizedAmenities = baseRoom.amenities.map((amenity) => {
+    if (ln === "en") return amenity;
+
+    const translated = amenitiesTranslation[amenity.name]?.[ln] || amenity.name;
+
+    return {
+      ...(amenity.toObject?.() || amenity),
+      name: translated,
+    };
+  });
+
   res.status(statusCode.OK).json(
     new ApiResponse(
       statusCode.OK,
@@ -233,6 +255,7 @@ const getRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
 
         sampleRoom: {
           ...baseRoom.toObject(),
+          amenities: localizedAmenities,
           images: roomImagesData,
         },
       },

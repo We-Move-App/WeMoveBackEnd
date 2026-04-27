@@ -386,6 +386,36 @@ const createBusBooking = catchAsyncError(async (req, res) => {
     bookingWithDetails.seatNumbers =
       passengers.map((p) => p.seatNumber).filter(Boolean) || [];
 
+    try {
+      await Promise.all([
+        createNotification(
+          userId,
+          {
+            en: "Bus Booking Confirmed",
+            fr: "Réservation de bus confirmée",
+          },
+          {
+            en: `Your booking ${booking._id} at ${bus.busName} is confirmed`,
+            fr: `Votre réservation ${booking._id} à ${bus.busName} est confirmée`,
+          }
+        ),
+
+        createNotification(
+          bus.ownerId,
+          {
+            en: "New Bus Booking",
+            fr: "Nouvelle réservation de bus",
+          },
+          {
+            en: `You received a new booking ${booking._id}`,
+            fr: `Vous avez reçu une nouvelle réservation ${booking._id}`,
+          }
+        ),
+      ]);
+    } catch (err) {
+      console.error("Notification error:", err.message);
+    }
+
     return res
       .status(statusCode.CREATED)
       .json(

@@ -404,17 +404,10 @@ module.exports = {
   PENDING: "Pending",
   REJECTED: "Rejected",
   NO_BANK_ACCOUNT_DETAILS_UPLOADED: "No Bank Account Details uploaded",
-  BUS: "Bus",
-  HOTEL: "Hotel",
-  RIDE: "Ride",
-  VERIFICATION_SUBMITTED: "Submitted",
-  VERIFICATION_PROCESSING: "Processing",
-  VERIFICATION_WAITING_FOR_APPROVAL: "Waiting for approval",
-  VERIFICATION_APPROVED: "Approved",
-  VERIFICATION_REJECTED: "Rejected",
-  VERIFICATION_BLOCKED: "Blocked",
-  USER_NOT_FOUND: "User not found",
-  DATA_FOUND_SUCCESS: "Data found successfully",
-  HOTEL_MANAGER_DATA_FETCHED_SUCCESS:
-    "Hotel Manager & related data fetched successfully",
+  TOO_MANY_OTP_VERIFY_REQUEST:
+    "Too many invalid attempts. Try again after after sometime",
+  NEW_EMAIL_AND_OTP_REQUIRED: "New email and OTP are required",
+  NEW_EMAIL_SAME_AS_CURRENT: "New email is the same as your current email",
+  EMAIL_ALREADY_REGISTERED_WITH_ANOTHER_DRIVER:
+    "This email is already registered with another driver",
 };
