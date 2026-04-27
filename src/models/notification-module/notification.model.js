@@ -1,10 +1,18 @@
 const mongoose = require("mongoose");
 const { NotificationTypeEnum } = require("../../utils/constants/ENUM");
 
+const MultiLangSchema = new mongoose.Schema(
+  {
+    en: { type: String, required: true },
+    fr: { type: String, required: true },
+  },
+  { _id: false }
+);
+
 const NotificationSchema = new mongoose.Schema({
   type: { type: String, enum: Object.values(NotificationTypeEnum) },
-  title: String,
-  message: String,
+  title: { type: MultiLangSchema, required: true },
+  message: { type: MultiLangSchema, required: true },
   referenceId: String,
   referenceModel: String,
   createdBy: String, // driverId in this case

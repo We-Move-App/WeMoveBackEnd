@@ -141,8 +141,14 @@ const createHotelPolicy = catchAsyncError(async (req, res, next) => {
   await sendNotification({
     recipients,
     type: NotificationTypeEnum.HOTEL_MANAGER_REGISTERED,
-    title: "New Hotel Manager Registered",
-    message: `New Hotel Manager Registered (ID: ${_id}).`,
+    title: {
+      en: "New Hotel Manager Registered",
+      fr: "Nouveau gestionnaire d'hôtel enregistré",
+    },
+    message: {
+      en: `New Hotel Manager Registered (ID: ${_id}).`,
+      fr: `Nouveau gestionnaire d'hôtel enregistré (ID : ${_id}).`,
+    },
     referenceId: hotelId,
     referenceModel: "Hotel",
     createdBy: _id,

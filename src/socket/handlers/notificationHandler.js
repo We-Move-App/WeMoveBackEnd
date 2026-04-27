@@ -1,17 +1,6 @@
 const NotificationModel = require("../../models/notification-module/notification.model");
 const { getIO } = require("../index");
 
-/**
- * Send notification to admins via Socket.IO and save in DB
- * @param {Object} params
- * @param {Array} params.recipients - Array of { adminId, role, isRead }
- * @param {String} params.type - Notification type
- * @param {String} params.title - Notification title
- * @param {String} params.message - Notification message
- * @param {String} [params.referenceId] - Related model ID
- * @param {String} [params.referenceModel] - Related model name
- * @param {String} [params.createdBy] - Creator (driverId or system)
- */
 const sendNotification = async ({
   recipients,
   type,
@@ -27,18 +16,32 @@ const sendNotification = async ({
       return null;
     }
 
-    // Save notification in DB
+    const normalizedTitle =
+      typeof title === "string"
+        ? { en: title, fr: title }
+        : {
+            en: title.en,
+            fr: title.fr || title.en,
+          };
+
+    const normalizedMessage =
+      typeof message === "string"
+        ? { en: message, fr: message }
+        : {
+            en: message.en,
+            fr: message.fr || message.en,
+          };
+
     const notification = await NotificationModel.create({
       type,
-      title,
-      message,
+      title: normalizedTitle,
+      message: normalizedMessage,
       referenceId,
       referenceModel,
       createdBy,
       recipients,
     });
 
-    // Emit via Socket.IO
     const io = getIO();
     const adminNamespace = io.of("/admin");
 
@@ -58,6 +61,7 @@ const sendNotification = async ({
     console.log(
       `Notification sent to recipients: ${recipients.map((r) => r.role).join(", ")}`
     );
+
     return notification;
   } catch (err) {
     console.error("Error sending notification:", err);
