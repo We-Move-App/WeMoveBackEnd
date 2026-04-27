@@ -29,7 +29,7 @@ adminUserManagementRoutes
     isAdminAuthenticated,
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
     cacheMiddleware(120),
-    getSingleUser
+    getSingleUser 
   );
 
 adminUserManagementRoutes

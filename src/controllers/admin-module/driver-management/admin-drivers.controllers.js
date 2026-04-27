@@ -56,8 +56,6 @@ const getAllDrivers = async (req, res) => {
     const { vehicleType, search, filter, verificationStatus, batchVerified } =
       req.query;
 
-    console.log("Query Params:", req.query);
-
     // ✅ Validate vehicleType
     if (!vehicleType) {
       return res.status(400).json({
@@ -85,13 +83,11 @@ const getAllDrivers = async (req, res) => {
     // ✅ Vehicle filter
     const vehicleMatch = { "vehicleInfo.vehicleType": vehicleType };
 
-    // ✅ Branch filter (only for Admins)
     let branchFilter = {};
     if (req.user.role !== "SuperAdmin") {
       branchFilter = { branch: req.user.branch };
     }
 
-    // ✅ Search filter
     let searchFilter = {};
     if (search) {
       const regex = { $regex: search, $options: "i" };
@@ -107,9 +103,6 @@ const getAllDrivers = async (req, res) => {
       };
     }
 
-    // ✅ Status filter (pending / approved)
-    // ✅ Verification Status filter (pending / approved / blocked / rejected)
-    // ✅ Verification Status filter (pending / approved / blocked / rejected)
     let verificationStatusFilter = {};
     const allowedStatuses = ["pending", "approved", "blocked", "rejected"];
     if (verificationStatus && allowedStatuses.includes(verificationStatus)) {
@@ -348,7 +341,7 @@ const verifyUserProfile = catchAsyncError(async (req, res) => {
       "Driver ID and status are required"
     );
   }
-  // 2️⃣ If status is 'blocked', remarks becomes required
+
   if (
     status.toLowerCase() === "blocked" &&
     (!remarks || remarks.trim() === "")
@@ -358,7 +351,7 @@ const verifyUserProfile = catchAsyncError(async (req, res) => {
       "Remarks are required when blocking a user"
     );
   }
-  // 1️⃣ Update DriverBasicDetails
+
   await DriverBasicDetails.findOneAndUpdate(
     { driverId },
     {
@@ -374,14 +367,12 @@ const verifyUserProfile = catchAsyncError(async (req, res) => {
       { $set: { remarks: remarks.trim() } }
     );
   } else {
-    // Optional: clear previous remarks if status is not blocked/rejected
     await DriverBasicDetails.findOneAndUpdate(
       { driverId },
       { $set: { remarks: "" } }
     );
   }
 
-  // ✅ Handle batch verification independently
   if (typeof batchVerified === "boolean") {
     await DriverBasicDetails.findOneAndUpdate(
       { driverId },
@@ -394,7 +385,6 @@ const verifyUserProfile = catchAsyncError(async (req, res) => {
     );
   }
 
-  // 2️⃣ Update all documents in DriverDocDetails
   await DriverDocDetails.updateMany(
     { driverId },
     { $set: { "documents.$[].status": status } } // Updates all docs in array
@@ -1209,10 +1199,12 @@ const updateTaxiDriverByAdmin = catchAsyncError(async (req, res) => {
     )
   );
 });
+
 const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
   const { driverId } = req.params;
   const { vehicleType } = req.query;
   const ln = (req.headers["ln"] || "en").toLowerCase();
+  console.log(ln);
 
   if (!driverId || !vehicleType) {
     throw new ApiError(
@@ -1251,8 +1243,16 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
     return doc
       ? {
           documentType: doc.documentType,
-          fileName: doc.fileName,
-          fileUrl: doc.fileUrl,
+          fileName:
+            doc.fileName === "No Bank Account Details uploaded"
+              ? translateLn(ln, "NO_BANK_ACCOUNT_DETAILS_UPLOADED")
+              : doc.fileName,
+
+          fileUrl:
+            doc.fileUrl === "No Bank Account Details uploaded"
+              ? translateLn(ln, "NO_BANK_ACCOUNT_DETAILS_UPLOADED")
+              : doc.fileUrl,
+
           status: doc.status,
         }
       : null;
@@ -1280,7 +1280,7 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
         mobile: basicDetails.phoneNo,
         email: basicDetails.email,
         address: basicDetails.address,
-        status: basicDetails.status,
+        status: translateLn(ln, basicDetails.status?.toUpperCase()),
         experience: basicDetails.experience || 0,
         createdById: basicDetails.createdById,
         updatedById: basicDetails.updatedAtById,

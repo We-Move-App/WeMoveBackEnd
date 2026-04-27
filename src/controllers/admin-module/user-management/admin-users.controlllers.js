@@ -35,18 +35,21 @@ const getAllUsers = catchAsyncError(async (req, res) => {
     page,
     limit,
     sortBy = "createdAt",
-    order = "desc", // default descending
+    order = "desc",
   } = req.query;
 
-  // 🔹 Pagination defaults
+  const ln = (req.headers["ln"] || "en").toLowerCase();
+
+  // Pagination
   const pageNum = page ? Math.max(parseInt(page, 10), 1) : 1;
   const limitNum = limit ? Math.max(parseInt(limit, 10), 1) : 20;
   const skip = (pageNum - 1) * limitNum;
 
-  // 🔍 Build filter
   const filter = {};
+
   if (search) {
     const regex = new RegExp(search, "i");
+
     filter.$or = [
       { fullName: regex },
       { email: regex },
@@ -54,16 +57,18 @@ const getAllUsers = catchAsyncError(async (req, res) => {
       { userId: regex },
     ];
   }
+
   if (verificationStatus) {
     filter.verificationStatus = new RegExp(verificationStatus, "i");
   }
 
-  // 🔹 Count total users
+  // Total users
   const total = await UserModel.countDocuments(filter);
+
   if (total === 0) {
     return res.status(404).json({
       success: false,
-      message: "No users found",
+      message: translateLn(ln, "NO_USERS_FOUND"),
       total: 0,
       page: pageNum,
       limit: limitNum,
@@ -75,7 +80,7 @@ const getAllUsers = catchAsyncError(async (req, res) => {
 
   const sort = { createdAt: -1 };
 
-  const data = await UserModel.find(
+  let data = await UserModel.find(
     filter,
     "fullName phoneNumber email verificationStatus createdAt userId user_id"
   )
@@ -84,9 +89,15 @@ const getAllUsers = catchAsyncError(async (req, res) => {
     .sort(sort)
     .lean();
 
+  // Translate verificationStatus
+  data = data.map((user) => ({
+    ...user,
+    verificationStatus: translateLn(ln, user.verificationStatus?.toUpperCase()),
+  }));
+
   res.status(200).json({
     success: true,
-    message: "Users fetched successfully (LIFO order)",
+    message: translateLn(ln, "USERS_FETCHED_SUCCESSFULLY"),
     totalUsers: total,
     page: pageNum,
     limit: limitNum,

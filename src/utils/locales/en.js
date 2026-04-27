@@ -395,4 +395,14 @@ module.exports = {
   BOOLEAN_REQUIRED: "Must be true or false",
   NO_BOOKINGS_FOUND: "No bookings found",
   ALL_BOOKINGS_RETRIEVED_SUCCESS: "All bookings retrieved successfully",
+  USERS_FETCHED_SUCCESSFULLY: "Users fetched successfully",
+  NO_USERS_FOUND: "No users found",
+
+  APPROVED: "Approved",
+  BLOCKED: "Blocked",
+  SUBMITTED: "Submitted",
+  PENDING: "Pending",
+  REJECTED: "Rejected",
+  NO_BANK_ACCOUNT_DETAILS_UPLOADED: "No Bank Account Details uploaded",
+  
 };

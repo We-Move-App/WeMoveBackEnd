@@ -146,7 +146,7 @@ const userVerifiedByAdmin = async ({ req, model }) => {
       translateLn(ln, "PLEASE_ENTER_ID_AND_STATUS")
     );
   }
-  // 2️⃣ If status is 'blocked', remarks becomes required
+
   if (
     status.toLowerCase() === "blocked" &&
     (!remarks || remarks.trim() === "")

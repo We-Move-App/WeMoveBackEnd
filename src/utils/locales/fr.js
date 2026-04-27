@@ -415,4 +415,15 @@ module.exports = {
   NO_BOOKINGS_FOUND: "Aucune réservation trouvée",
   ALL_BOOKINGS_RETRIEVED_SUCCESS:
     "Toutes les réservations ont été récupérées avec succès",
+  USERS_FETCHED_SUCCESSFULLY: "Utilisateurs récupérés avec succès",
+  NO_USERS_FOUND: "Aucun utilisateur trouvé",
+
+  APPROVED: "Approuvé",
+  BLOCKED: "Bloqué",
+  SUBMITTED: "Soumis",
+  PENDING: "En attente",
+  REJECTED: "Rejeté",
+  NO_BANK_ACCOUNT_DETAILS_UPLOADED:
+    "Aucun détail de compte bancaire téléchargé",
+    
 };
