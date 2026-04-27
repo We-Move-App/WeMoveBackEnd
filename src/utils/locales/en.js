@@ -404,5 +404,10 @@ module.exports = {
   PENDING: "Pending",
   REJECTED: "Rejected",
   NO_BANK_ACCOUNT_DETAILS_UPLOADED: "No Bank Account Details uploaded",
-  
+  TOO_MANY_OTP_VERIFY_REQUEST:
+    "Too many invalid attempts. Try again after after sometime",
+  NEW_EMAIL_AND_OTP_REQUIRED: "New email and OTP are required",
+  NEW_EMAIL_SAME_AS_CURRENT: "New email is the same as your current email",
+  EMAIL_ALREADY_REGISTERED_WITH_ANOTHER_DRIVER:
+    "This email is already registered with another driver",
 };

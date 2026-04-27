@@ -425,5 +425,11 @@ module.exports = {
   REJECTED: "Rejeté",
   NO_BANK_ACCOUNT_DETAILS_UPLOADED:
     "Aucun détail de compte bancaire téléchargé",
-    
+  TOO_MANY_OTP_VERIFY_REQUEST:
+    "Trop de tentatives invalides. Veuillez réessayer après un certain temps",
+  NEW_EMAIL_AND_OTP_REQUIRED: "Un nouvel e-mail et un OTP sont requis",
+  NEW_EMAIL_SAME_AS_CURRENT:
+    "Le nouvel e-mail est identique à votre e-mail actuel",
+  EMAIL_ALREADY_REGISTERED_WITH_ANOTHER_DRIVER:
+    "Cet e-mail est déjà enregistré avec un autre conducteur",
 };

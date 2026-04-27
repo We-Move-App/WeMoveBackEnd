@@ -1295,11 +1295,8 @@ const validatePin = catchAsyncError(async (req, res) => {
   const _id = req.user._id;
   const role = req.user.role;
 
-  let ln = await fetchLn(_id);
-
-  if (role === "driver") {
-    ln = await fetchDriverLn(_id);
-  }
+  const ln = (req.headers["ln"] || "en").toLowerCase();
+  console.log("ln", ln);
 
   const jwtToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(jwtToken);
@@ -1336,7 +1333,7 @@ const validatePin = catchAsyncError(async (req, res) => {
     );
     throw new ApiError(
       statusCode.FORBIDDEN,
-      `Too many invalid attempts. Try again after ${remaining} seconds.`
+      translateLn(ln, "TOO_MANY_OTP_VERIFY_REQUEST")
     );
   }
 

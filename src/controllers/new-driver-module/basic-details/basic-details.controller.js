@@ -394,26 +394,37 @@ const verifyPin = catchAsyncError(async (req, res) => {
     );
   }
 
+  const ln = (req.headers["ln"] || "en").toLowerCase();
+
   const accessToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(accessToken);
   const driverId = decoded?.driverId;
 
   if (!driverId) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+    throw new ApiError(
+      statusCode.UNAUTHORIZED,
+      translateLn(ln, "INVALID_TOKEN")
+    );
   }
 
   const driver = await DriverBasicDetails.findOne({ driverId });
   if (!driver) {
-    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "DRIVER_NOT_FOUND")
+    );
   }
 
   if (!driver.isPinExist || !driver.pin) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Pin not set for this driver");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "SECURE_PIN_NOT_SET")
+    );
   }
 
   const { pin } = req.body;
   if (!pin) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Pin is required");
+    throw new ApiError(statusCode.BAD_REQUEST, translateLn(ln, "PIN_REQUIRED"));
   }
 
   if (pin.length !== 4 || !/^\d{4}$/.test(pin)) {
@@ -425,7 +436,7 @@ const verifyPin = catchAsyncError(async (req, res) => {
     const remaining = Math.ceil((driver.blockUntil - new Date()) / 1000);
     throw new ApiError(
       statusCode.FORBIDDEN,
-      `Too many invalid attempts. Try again after ${remaining} seconds.`
+      translateLn(ln, "TOO_MANY_OTP_VERIFY_REQUEST")
     );
   }
 
@@ -443,7 +454,7 @@ const verifyPin = catchAsyncError(async (req, res) => {
         new ApiResponse(
           statusCode.OK,
           { driverId: driver.driverId },
-          "Pin verified successfully"
+          translateLn(ln, "PIN_VERIFIED_SUCCESSFULLY")
         )
       );
   }
@@ -472,7 +483,7 @@ const verifyPin = catchAsyncError(async (req, res) => {
 
   await driver.save();
 
-  throw new ApiError(statusCode.BAD_REQUEST, "Invalid pin");
+  throw new ApiError(statusCode.BAD_REQUEST, translateLn(ln, "INVALID_PIN"));
 });
 
 const resetSecurePin = catchAsyncError(async (req, res) => {
@@ -599,7 +610,7 @@ const updateDriverPhoneNumber = catchAsyncError(async (req, res) => {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     throw new ApiError(
       statusCode.UNAUTHORIZED,
-      "Access token is missing or invalid"
+      translateLn(ln, "INVALID_TOKEN")
     );
   }
 
@@ -684,7 +695,7 @@ const updateDriverEmail = catchAsyncError(async (req, res) => {
   if (!authHeader || !authHeader.startsWith("Bearer ")) {
     throw new ApiError(
       statusCode.UNAUTHORIZED,
-      "Access token is missing or invalid"
+      translateLn(ln, "TOKEN_INVALID")
     );
   }
 
@@ -701,21 +712,24 @@ const updateDriverEmail = catchAsyncError(async (req, res) => {
   if (!newEmail || !otp) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "New email and OTP are required"
+      translateLn(ln, "NEW_EMAIL_AND_OTP_REQUIRED")
     );
   }
 
   // Step 2: Fetch driver
   const driver = await DriverBasicDetails.findOne({ driverId });
   if (!driver) {
-    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "DRIVER_NOT_FOUND")
+    );
   }
 
   // Step 3: Prevent updating to the same email
   if (driver.email === newEmail.toLowerCase()) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "New email is the same as your current email"
+      translateLn(ln, "NEW_EMAIL_SAME_AS_CURRENT")
     );
   }
 
@@ -726,7 +740,7 @@ const updateDriverEmail = catchAsyncError(async (req, res) => {
   if (existingDriver && String(existingDriver.driverId) !== String(driverId)) {
     throw new ApiError(
       statusCode.CONFLICT,
-      "This email is already registered with another driver"
+      translateLn(ln, "EMAIL_ALREADY_REGISTERED_WITH_ANOTHER_DRIVER")
     );
   }
 
