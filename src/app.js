@@ -301,7 +301,7 @@ app.use("/api/v1/fcm", fcmRouter);
 app.use("/api/v1", staticRouter);
 
 //Notification
-app.use("/api/v1/notification", notificationRouter);
+app.use("/api/v1/admin/notification", notificationRouter);
 app.use("/api/v1/global/notification", globalNotificationRouter);
 
 app.use((req, res, next) => {

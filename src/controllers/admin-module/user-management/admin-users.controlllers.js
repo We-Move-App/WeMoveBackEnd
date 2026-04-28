@@ -92,7 +92,7 @@ const getAllUsers = catchAsyncError(async (req, res) => {
   // Translate verificationStatus
   data = data.map((user) => ({
     ...user,
-    verificationStatus: translateLn(ln, user.verificationStatus?.toUpperCase()),
+    verificationStatus: user.verificationStatus,
   }));
 
   res.status(200).json({
@@ -106,7 +106,6 @@ const getAllUsers = catchAsyncError(async (req, res) => {
     data,
   });
 });
-
 
 const getSingleUser = catchAsyncError(async (req, res, next) => {
   const { _id } = req.params;
@@ -152,7 +151,7 @@ const getSingleUser = catchAsyncError(async (req, res, next) => {
   // ✅ 5. Combine and format data
   const profileData = {
     ...user,
-    verificationStatus: translateLn(ln, user.verificationStatus?.toUpperCase()),
+    verificationStatus: user.verificationStatus,
     address: userAddress?.address || null,
     document: documents || null,
     bankDetails: bankDetails || null,
@@ -615,8 +614,6 @@ const getWalletBalance = catchAsyncError(async (req, res) => {
     )
   );
 });
-
-
 
 module.exports = {
   getAllUsers,

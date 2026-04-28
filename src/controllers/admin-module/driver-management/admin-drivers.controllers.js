@@ -1279,7 +1279,7 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
         mobile: basicDetails.phoneNo,
         email: basicDetails.email,
         address: basicDetails.address,
-        status: translateLn(ln, basicDetails.status?.toUpperCase()),
+        status: basicDetails.status,
         experience: basicDetails.experience || 0,
         createdById: basicDetails.createdById,
         updatedById: basicDetails.updatedAtById,

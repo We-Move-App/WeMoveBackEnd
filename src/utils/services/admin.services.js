@@ -123,21 +123,13 @@ const getUserByIdByAdmin = async ({
   ]);
 
   if (!user) {
-    throw new ApiError(
-      statusCode.NOT_FOUND,
-      translateLn(ln, "USER_NOT_FOUND")
-    );
+    throw new ApiError(statusCode.NOT_FOUND, translateLn(ln, "USER_NOT_FOUND"));
   }
 
   const result = {
     user: {
       ...user.toObject(),
-      verificationStatus: translateLn(
-        ln,
-        `VERIFICATION_${user.verificationStatus
-          .toUpperCase()
-          .replace(/-/g, "_")}`
-      ),
+      verificationStatus: user.verificationStatus,
     },
     docs: userDocs,
     bank: userBank,

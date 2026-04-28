@@ -96,4 +96,12 @@ const getNotifications = catchAsyncError(async (req, res, next) => {
   );
 });
 
+const getVerificationStatus = catchAsyncError(async (req, res, next) => {
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(statusCode.OK, ["approved", "rejected", "pending"], "")
+    );
+});
+
 module.exports = { createNotification, getNotifications };
