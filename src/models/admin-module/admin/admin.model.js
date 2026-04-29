@@ -20,7 +20,7 @@ const defaultPermissions = {
   roleManagement: { type: Boolean, default: false },
   commissionManagement: { type: Boolean, default: false },
   couponManagement: { type: Boolean, default: false },
-  referralManagement: { type: Boolean, default: false },
+  // referralManagement: { type: Boolean, default: false },
 };
 
 // Admin Schema
@@ -71,11 +71,11 @@ const AdminSchema = new mongoose.Schema(
       default: null,
     },
 
-    isSpecialAdmin: {
-      type: Boolean,
-      default: false,
-      required: true,
-    },
+    // isSpecialAdmin: {
+    //   type: Boolean,
+    //   default: false,
+    //   required: false,
+    // },
 
     branch: {
       type: mongoose.Schema.Types.ObjectId,
@@ -126,7 +126,7 @@ AdminSchema.pre("save", function (next) {
       roleManagement: true,
       commissionManagement: true,
       couponManagement: true,
-      referralManagement: true,
+      // referralManagement: true,
     };
   }
   this.isSpecialAdmin = true;

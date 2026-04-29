@@ -64,8 +64,8 @@ const getDistanceTime = async (pickup, drop) => {
   }
 };
 
-const getAutoCompleteSuggestions = async (input) => {
-  const ln = req.get("ln") || "en";
+const getAutoCompleteSuggestions = async (input, ln) => {
+  // const ln = req.get("ln") || "en";
   if (!input) {
     throw new ApiError(statusCode.BAD_REQUEST, "Query is required");
   }
