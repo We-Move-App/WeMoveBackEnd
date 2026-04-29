@@ -37,6 +37,7 @@ const createCommission = catchAsyncError(async (req, res) => {
       error.details.map((d) => translateLn(ln, d.message)).join(", ")
     );
   }
+  
 
   const existing = await Commission.findOne({
     serviceType: value.serviceType,

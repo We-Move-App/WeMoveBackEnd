@@ -414,6 +414,7 @@ const loginAdmin = catchAsyncError(async (req, res, next) => {
     .status(statusCode.OK)
     .json(new ApiResponse(statusCode.OK, data, `Login Successfully`));
 });
+
 const saveDeviceTokens = catchAsyncError(async (req, res, next) => {
   const { token, deviceType } = req.body;
 

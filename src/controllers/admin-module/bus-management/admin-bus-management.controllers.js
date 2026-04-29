@@ -44,6 +44,7 @@ const generateCustomId = require("../../../utils/customId/generateCustomId");
 const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
 const walletsModel = require("../../../models/wallet-module/wallets.model");
 const { Batch } = require("mongodb");
+const mongoose = require("mongoose");
 
 const getAllBusOperators = catchAsyncError(async (req, res, next) => {
   const { filter } = req.query;
@@ -69,9 +70,8 @@ const getAllBusOperators = catchAsyncError(async (req, res, next) => {
 
   let results = await getAllUsersByAdmin({
     req,
-    model: BusOperatorModel
+    model: BusOperatorModel,
   });
-
 
   const dataWithBusCount = await Promise.all(
     results.data.map(async (operator) => {
@@ -153,7 +153,6 @@ const deleteBusOperatorAccount = catchAsyncError(async (req, res, next) => {
     await BusOperatorDocumentModel.deleteMany({ userId });
   }
 
-  
   await Promise.all([
     BusOperatorModel.findByIdAndDelete(userId), // Delete user
     BusOperatorBankModel.deleteMany({ userId }), // Delete bank info
@@ -172,8 +171,6 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
     national_identity_card_back,
   } = req.body;
 
-  console.log("basicInfo", req.body);
-
   const existingOperator = await BusOperatorModel.findOne({
     $or: [{ email: basicInfo?.email }, { phoneNumber: basicInfo?.phoneNumber }],
   });
@@ -183,6 +180,10 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
       statusCode.BAD_REQUEST,
       "Bus operator with this email or phone number already exists"
     );
+  }
+
+  if (!basicInfo.branch || !mongoose.Types.ObjectId.isValid(basicInfo.branch)) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid or missing branch ID");
   }
   const branchDoc = await BranchModel.findById(basicInfo.branch);
   console.log("branchDoc", branchDoc);
@@ -356,7 +357,6 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
 
   for (const { key, data } of documentPayloads) {
     if (data && data.file?.url) {
-     
       const newDoc = await DocumentsModel.create({
         ...data,
         ownerId: userId,
@@ -368,7 +368,6 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
     }
   }
 
- 
   if (newDocIds.length > 0) {
     const existing = await BusOperatorDocumentModel.findOne({ userId });
 
@@ -383,7 +382,6 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
     }
   }
 
- 
   if (avatar?.url) {
     const existingUser = await BusOperatorModel.findById(userId);
     if (existingUser?.avatar?.public_id) {
@@ -591,7 +589,6 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     },
     { $unwind: { path: "$bus", preserveNullAndEmptyArrays: true } },
 
-  
     {
       $lookup: {
         from: "busoperators",
@@ -618,7 +615,6 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     },
     { $unwind: { path: "$bookedBy", preserveNullAndEmptyArrays: true } },
 
-   
     {
       $lookup: {
         from: "users",
@@ -635,7 +631,6 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     { $unwind: { path: "$passengers", preserveNullAndEmptyArrays: true } },
   ];
 
- 
   if (search && search.trim() !== "") {
     function escapeRegex(str) {
       return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -694,13 +689,13 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
       bookingId: booking._id,
       bookId: booking.bookingId,
       busRegNumber: booking.bus?.busRegNumber || "N/A",
-      branch: booking.busOperator?.branch || null, 
+      branch: booking.busOperator?.branch || null,
       bookedBy: booking.bookedBy
         ? {
-          fullName: booking.bookedBy.fullName,
-          email: booking.bookedBy.email,
-          phoneNumber: booking.bookedBy.phoneNumber,
-        }
+            fullName: booking.bookedBy.fullName,
+            email: booking.bookedBy.email,
+            phoneNumber: booking.bookedBy.phoneNumber,
+          }
         : null,
       from: booking.from,
       to: booking.to,
@@ -712,15 +707,15 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
       createdAt: booking.createdAt,
       passengers: booking.passengers
         ? [
-          {
-            name: booking.passengers.name,
-            age: booking.passengers.age,
-            gender: booking.passengers.gender,
-            contactNumber: booking.passengers.contactNumber,
-            seatNumber: booking.passengers.seatNumber,
-            email: booking.passengers.email,
-          },
-        ]
+            {
+              name: booking.passengers.name,
+              age: booking.passengers.age,
+              gender: booking.passengers.gender,
+              contactNumber: booking.passengers.contactNumber,
+              seatNumber: booking.passengers.seatNumber,
+              email: booking.passengers.email,
+            },
+          ]
         : [],
     })),
   });
@@ -806,7 +801,6 @@ const searchAllBusBookings = catchAsyncError(async (req, res, next) => {
     .skip(skip)
     .limit(pageSize);
 
- 
   const validBookings = bookings.filter((b) => b.busId);
 
   if (!validBookings.length) {
