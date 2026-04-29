@@ -181,12 +181,11 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
       "Bus operator with this email or phone number already exists"
     );
   }
-
   if (!basicInfo.branch || !mongoose.Types.ObjectId.isValid(basicInfo.branch)) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid or missing branch ID");
   }
   const branchDoc = await BranchModel.findById(basicInfo.branch);
-  console.log("branchDoc", branchDoc);
+
   if (!branchDoc) {
     throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
   }

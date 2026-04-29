@@ -468,12 +468,19 @@ const verifyUserProfile = catchAsyncError(async (req, res) => {
 });
 
 const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
+  // 🔹 Clean all inputs
+
   const {
     basicDriverDetails = {},
     bankDetails = {},
     vehicleDetails = {},
     documents = [],
   } = req.body;
+
+  basicDriverDetails.email = basicDriverDetails.email?.trim();
+  basicDriverDetails.phoneNo = basicDriverDetails.phoneNo?.trim();
+  vehicleDetails.registrationNo = vehicleDetails.registrationNo?.trim();
+  basicDriverDetails.branch = basicDriverDetails.branch?.trim();
 
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
@@ -498,6 +505,9 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
   basicDriverDetails.createdBy = "admin";
   basicDriverDetails.createdById = adminId;
 
+  if (!basicDriverDetails.email) {
+    throw new ApiError(400, "Email is required");
+  }
   if (basicDriverDetails.email) {
     const emailExists = await DriverBasicDetails.findOne({
       email: basicDriverDetails.email,
@@ -506,13 +516,18 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
       throw new ApiError(statusCode.BAD_REQUEST, "Email already exists");
     }
   }
+  if (!basicDriverDetails.phoneNo) {
+    throw new ApiError(400, "Phone number is required");
+  }
   const phoneExists = await DriverBasicDetails.findOne({
     phoneNo: basicDriverDetails.phoneNo,
   });
   if (phoneExists) {
     throw new ApiError(statusCode.BAD_REQUEST, "Phone number already exists");
   }
-
+  if (!vehicleDetails.registrationNo) {
+    throw new ApiError(400, "Vehicle registration number is required");
+  }
   const existingVehicle = await VehicleDetail.findOne({
     registrationNo: vehicleDetails.registrationNo,
   });
@@ -521,6 +536,13 @@ const createBikeDriverFromAdmin = catchAsyncError(async (req, res) => {
       statusCode.BAD_REQUEST,
       "Vehicle registration number already exists"
     );
+  }
+
+  if (
+    !basicDriverDetails.branch ||
+    !mongoose.Types.ObjectId.isValid(basicDriverDetails.branch)
+  ) {
+    throw new ApiError(400, "Invalid or missing branch ID");
   }
 
   if (basicDriverDetails.branch) {
@@ -857,15 +879,22 @@ const createTaxiDriverFromAdmin = catchAsyncError(async (req, res) => {
       throw new ApiError(statusCode.BAD_REQUEST, "Email already exists");
     }
   }
-  if (basicDriverDetails.branch) {
-    // Convert to ObjectId
-    basicDriverDetails.branch = new ObjectId(basicDriverDetails.branch);
+  // 🔹 Clean input
+  basicDriverDetails.branch = basicDriverDetails.branch?.trim();
 
-    // Optional: Check if branch exists in your Branch collection
-    const branchExists = await BranchModel.findById(basicDriverDetails.branch);
-    if (!branchExists) {
-      throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch ID");
-    }
+  // 🔹 Validate
+  if (
+    !basicDriverDetails.branch ||
+    !mongoose.Types.ObjectId.isValid(basicDriverDetails.branch)
+  ) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid or missing branch ID");
+  }
+
+  // 🔹 Fetch branch
+  const branchDoc = await BranchModel.findById(basicDriverDetails.branch);
+
+  if (!branchDoc) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
   }
 
   const phoneExists = await DriverBasicDetails.findOne({
@@ -873,6 +902,16 @@ const createTaxiDriverFromAdmin = catchAsyncError(async (req, res) => {
   });
   if (phoneExists) {
     throw new ApiError(statusCode.BAD_REQUEST, "Phone number already exists");
+  }
+  // 🔹 Clean input
+  vehicleDetails.registrationNo = vehicleDetails.registrationNo?.trim();
+
+  // 🔹 Reject empty or spaces
+  if (!vehicleDetails.registrationNo) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Vehicle registration number is required"
+    );
   }
 
   const existingVehicle = await VehicleDetail.findOne({
