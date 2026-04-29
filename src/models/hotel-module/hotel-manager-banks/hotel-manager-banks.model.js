@@ -10,10 +10,8 @@ const HotelManagerBankSchema = new mongoose.Schema(
     },
 
     bankDocs: {
-
       required: false,
       type: ImageSchema,
-
     },
     bankName: {
       type: String,
@@ -26,6 +24,7 @@ const HotelManagerBankSchema = new mongoose.Schema(
     accountNumber: {
       type: String,
       required: false,
+      sparse: true,
       unique: true,
       match: [/^\d{10,18}$/, "Please provide a valid account number"],
     },

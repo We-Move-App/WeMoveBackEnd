@@ -16,7 +16,7 @@ const BusOperatorBankSchema = new mongoose.Schema(
       type: String,
       required: false,
       unique: true,
-      match: [/^\d{8,18}$/, "Please provide a valid account number"],
+      match: [/^\d{8,30}$/, "Please provide a valid account number"],
     },
     bankName: {
       type: String,
