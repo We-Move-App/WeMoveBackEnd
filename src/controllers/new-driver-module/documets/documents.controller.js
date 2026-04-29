@@ -125,9 +125,21 @@ const uploadAvatar = catchAsyncError(async (req, res) => {
     type: notificationType,
     title:
       vehicle.vehicleType === "taxi"
-        ? "New Taxi Driver Registered"
-        : "New Bike Driver Registered",
-    message: `A new ${vehicle.vehicleType} driver (ID: ${driverId}) has registered.`,
+        ? {
+            en: "New Taxi Driver Registered",
+            fr: "Nouveau chauffeur de taxi enregistré",
+          }
+        : {
+            en: "New Bike Driver Registered",
+            fr: "Nouveau chauffeur de moto enregistré",
+          },
+    message: {
+      en: `A new ${vehicle.vehicleType} driver (ID: ${driverId}) has registered.`,
+      fr:
+        vehicle.vehicleType === "taxi"
+          ? `Un nouveau chauffeur de taxi (ID : ${driverId}) s'est enregistré.`
+          : `Un nouveau chauffeur de moto (ID : ${driverId}) s'est enregistré.`,
+    },
     referenceId: driverId,
     referenceModel: "Driver",
     createdBy: driverId,

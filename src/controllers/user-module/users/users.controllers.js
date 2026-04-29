@@ -333,8 +333,14 @@ const updateAvatar = catchAsyncError(async (req, res, next) => {
   await sendNotification({
     recipients,
     type: NotificationTypeEnum.USER_REGISTERED,
-    title: "User Registered",
-    message: `User Registered (ID: ${userId})`,
+    title: {
+      en: "User Registered",
+      fr: "Utilisateur enregistré",
+    },
+    message: {
+      en: `User Registered (ID: ${userId})`,
+      fr: `Utilisateur enregistré (ID : ${userId})`,
+    },
     referenceId: userId,
     referenceModel: "User",
     createdBy: userId,

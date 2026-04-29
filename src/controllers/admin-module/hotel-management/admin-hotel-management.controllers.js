@@ -183,12 +183,7 @@ const getHotelByManagerId = catchAsyncError(async (req, res, next) => {
         {
           manager: {
             ...manager,
-            verificationStatus: translateLn(
-              ln,
-              `VERIFICATION_${manager.verificationStatus
-                .toUpperCase()
-                .replace(/-/g, "_")}`
-            ),
+            verificationStatus: manager.verificationStatus,
           },
           bankAccount,
           wallet,

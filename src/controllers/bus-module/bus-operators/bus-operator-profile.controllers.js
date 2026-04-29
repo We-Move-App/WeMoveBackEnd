@@ -256,8 +256,14 @@ const updateAvatar = catchAsyncError(async (req, res, next) => {
   await sendNotification({
     recipients,
     type: NotificationTypeEnum.BUS_OPERATOR_REGISTERED,
-    title: "Bus Operator Registered",
-    message: `Bus Operator Registered (ID: ${operatorId})`,
+    title: {
+      en: "Bus Operator Registered",
+      fr: "Opérateur de bus enregistré",
+    },
+    message: {
+      en: `Bus Operator Registered (ID: ${operatorId})`,
+      fr: `Opérateur de bus enregistré (ID : ${operatorId})`,
+    },
     referenceId: operatorId,
     referenceModel: "BusOperator",
     createdBy: operatorId,

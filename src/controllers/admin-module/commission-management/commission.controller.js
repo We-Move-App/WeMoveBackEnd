@@ -83,10 +83,7 @@ const getAllCommissions = catchAsyncError(async (req, res) => {
       serviceTypeMap[item.serviceType?.toLowerCase()] || item.serviceType
     ),
 
-    status: translateLn(
-      ln,
-      statusMap[item.status?.toLowerCase()] || item.status
-    ),
+    status: item.status,
   }));
 
   return res

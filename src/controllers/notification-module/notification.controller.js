@@ -92,6 +92,9 @@ const updateReadStatusAdmin = catchAsyncError(async (req, res) => {
 });
 
 const getAllNotificationsAdmin = catchAsyncError(async (req, res) => {
+  const ln = req.get("ln") || "en";
+  console.log("ln", ln);
+
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
     throw new ApiError(
@@ -132,11 +135,14 @@ const getAllNotificationsAdmin = catchAsyncError(async (req, res) => {
     return {
       _id: n._id,
       type: n.type,
-      title: n.title,
-      message: n.message,
+
+      title: n.title?.[ln] || n.title?.en,
+      message: n.message?.[ln] || n.message?.en,
+
       referenceId: n.referenceId,
       referenceModel: n.referenceModel,
       createdBy: n.createdBy,
+
       recipients: recipient
         ? [
             {
@@ -147,6 +153,7 @@ const getAllNotificationsAdmin = catchAsyncError(async (req, res) => {
             },
           ]
         : [],
+
       createdAt: n.createdAt,
       __v: n.__v,
     };
@@ -163,6 +170,7 @@ const getAllNotificationsAdmin = catchAsyncError(async (req, res) => {
     )
   );
 });
+
 const deleteAllNotificationsAdmin = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith("Bearer ")) {
@@ -189,13 +197,19 @@ const deleteAllNotificationsAdmin = catchAsyncError(async (req, res) => {
     "recipients.adminId": adminId,
   });
 
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      { deletedCount: result.deletedCount },
-      "All notifications deleted successfully"
-    )
-  );
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { deletedCount: result.deletedCount },
+        "All notifications deleted successfully"
+      )
+    );
 });
 
-module.exports = { updateReadStatusAdmin, getAllNotificationsAdmin , deleteAllNotificationsAdmin};
+module.exports = {
+  updateReadStatusAdmin,
+  getAllNotificationsAdmin,
+  deleteAllNotificationsAdmin,
+};
