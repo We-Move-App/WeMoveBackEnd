@@ -395,8 +395,8 @@ const createBusBooking = catchAsyncError(async (req, res) => {
             fr: "Réservation de bus confirmée",
           },
           {
-            en: `Your booking ${booking._id} at ${bus.busName} is confirmed`,
-            fr: `Votre réservation ${booking._id} à ${bus.busName} est confirmée`,
+            en: `Your booking ${booking.bookingId} at ${bus.busName} is confirmed`,
+            fr: `Votre réservation ${booking.bookingId} à ${bus.busName} est confirmée`,
           }
         ),
 
@@ -407,8 +407,8 @@ const createBusBooking = catchAsyncError(async (req, res) => {
             fr: "Nouvelle réservation de bus",
           },
           {
-            en: `You received a new booking ${booking._id}`,
-            fr: `Vous avez reçu une nouvelle réservation ${booking._id}`,
+            en: `You received a new booking ${booking.bookingId}`,
+            fr: `Vous avez reçu une nouvelle réservation ${booking.bookingId}`,
           }
         ),
       ]);

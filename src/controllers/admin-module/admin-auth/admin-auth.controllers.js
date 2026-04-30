@@ -1245,6 +1245,17 @@ const updateCoupon = catchAsyncError(async (req, res) => {
     );
   }
 
+  if (
+    coupon.status === "Inactive" &&
+    updateData.status === "Active" &&
+    coupon.expiryDate < new Date()
+  ) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Cannot change status of expired coupon from Inactive to Active"
+    );
+  }
+
   Object.assign(coupon, updateData, { updatedBy: performedBy });
   await coupon.save();
 

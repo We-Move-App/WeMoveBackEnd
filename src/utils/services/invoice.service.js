@@ -417,16 +417,14 @@ const generateBusBookingInvoiceBase64 = async (booking, busName) => {
   });
 
   // // Center ticket no
-  // const ticketNo = String(booking?.ticketNo || booking?._id || "")
-  //   .toString()
-  //   .slice(-6);
-  // page.drawText(`Ticket No. ${ticketNo}`, {
-  //   x: BORDER_X + BORDER_W / 2 - 80,
-  //   y: BORDER_Y + BORDER_H - TOP_H + 20,
-  //   size: 13,
-  //   font,
-  //   color: rgb(0, 0, 0),
-  // });
+  const bookingId = String(booking?.bookingId || booking?._id || "").toString();
+  page.drawText(`Booking ID : ${bookingId}`, {
+    x: BORDER_X + BORDER_W / 2 - 80,
+    y: BORDER_Y + BORDER_H - TOP_H + 20,
+    size: 13,
+    font,
+    color: rgb(0, 0, 0),
+  });
 
   // Right "BUS TICKET"
   page.drawText("BUS TICKET", {
