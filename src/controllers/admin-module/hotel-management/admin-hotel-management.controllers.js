@@ -352,8 +352,14 @@ const registerHotelManagerFromAdmin = catchAsyncError(
       // if (!bankInfo?.accountNumber) {
       //   throw new ApiError(400, "Account number is required");
       // }
+      const cleanBankInfo = { ...bankInfo };
+
+      if (!cleanBankInfo.accountNumber || cleanBankInfo.accountNumber === "") {
+        delete cleanBankInfo.accountNumber;
+      }
       const bankAccount = await HotelManagerBankModel.create({
         ...bankInfo,
+        ...cleanBankInfo,
         userId: manager._id,
         createdBy: adminId,
         bankDocs: bankInfo.bankDocs

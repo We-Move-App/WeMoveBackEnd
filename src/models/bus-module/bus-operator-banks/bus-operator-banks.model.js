@@ -16,7 +16,10 @@ const BusOperatorBankSchema = new mongoose.Schema(
       type: String,
       required: false,
       unique: true,
-      match: [/^\d{8,18}$/, "Please provide a valid account number"],
+      match: [
+        /^\d{8,30}$/,
+        "Account number must be between 8 and 30 digits and contain only numbers",
+      ],
     },
     bankName: {
       type: String,
@@ -33,7 +36,7 @@ const BusOperatorBankSchema = new mongoose.Schema(
     },
     phoneNumber: {
       type: String,
-      match: [/^\d{10,15}$/, "Please provide a valid phone number"],
+      match: [/^\d{9}$/, "Phone number must be exactly 9 digits"],
     },
     isPrimary: {
       type: Boolean,

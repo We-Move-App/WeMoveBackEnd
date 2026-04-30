@@ -8,13 +8,14 @@ const {
 
 const googleSearch = catchAsyncError(async (req, res, next) => {
   const { address, index } = req.query;
-console.log("Address:", address, "Index:", index)
+  console.log("Address:", address, "Index:", index);
 
   if (!address) {
     throw new ApiError(statusCode.BAD_REQUEST, "Address must be provided");
   }
+  const ln = req.get("ln") || "en";
 
-  let data = await getAutoCompleteSuggestions(address);
+  let data = await getAutoCompleteSuggestions(address, ln);
 
   if (!data || data.length === 0) {
     throw new ApiError(statusCode.NOT_FOUND, "No searches found");

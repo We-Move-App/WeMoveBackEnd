@@ -100,7 +100,7 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
     branch,
     role,
     permissions,
-    isSpecialAdmin,
+    // isSpecialAdmin,
   } = req.body;
   const { _id, performedBy } = req.user;
 
@@ -118,7 +118,7 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
     "phoneNumber",
     "branch",
     "role",
-    "isSpecialAdmin",
+    // "isSpecialAdmin",
     "permissions",
   ];
   validateRequestBody(reqField, req.body, ln);
@@ -162,7 +162,7 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
     password: defaultPassword,
     phoneNumber,
     role,
-    isSpecialAdmin,
+    // isSpecialAdmin,
     branch,
     permissions: { ...defaultPermissions, ...permissions },
     parentUserId: _id,
@@ -243,9 +243,9 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
       "object.base": "INVALID_PERMISSIONS",
     }),
 
-    isSpecialAdmin: Joi.boolean().optional().messages({
-      "boolean.base": "INVALID_BOOLEAN",
-    }),
+    // isSpecialAdmin: Joi.boolean().optional().messages({
+    //   "boolean.base": "INVALID_BOOLEAN",
+    // }),
   });
 
   const { error, value } = schema.validate(req.body);
@@ -259,7 +259,7 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
     userName,
     phoneNumber,
     role,
-    isSpecialAdmin,
+    // isSpecialAdmin,
     branch,
     reportingManager,
     permissions,
@@ -303,7 +303,7 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
     userName: userName.trim(),
     phoneNumber: phoneNumber.trim(),
     role,
-    isSpecialAdmin: isSpecialAdmin ?? false,
+    // isSpecialAdmin: isSpecialAdmin ?? false,
     branch,
     reportingManager,
     permissions: {
@@ -414,6 +414,7 @@ const loginAdmin = catchAsyncError(async (req, res, next) => {
     .status(statusCode.OK)
     .json(new ApiResponse(statusCode.OK, data, `Login Successfully`));
 });
+
 const saveDeviceTokens = catchAsyncError(async (req, res, next) => {
   const { token, deviceType } = req.body;
 
