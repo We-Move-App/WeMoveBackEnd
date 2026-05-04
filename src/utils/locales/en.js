@@ -410,4 +410,13 @@ module.exports = {
   NEW_EMAIL_SAME_AS_CURRENT: "New email is the same as your current email",
   EMAIL_ALREADY_REGISTERED_WITH_ANOTHER_DRIVER:
     "This email is already registered with another driver",
+  SOURCE_BUS: "Bus",
+  SOURCE_HOTEL: "Hotel",
+  SOURCE_RIDE: "Ride",
+  TRANSACTION_RIDE: "Ride Booking",
+  TRANSACTION_BUS: "Bus Booking",
+  TRANSACTION_HOTEL: "Hotel Booking",
+  TRANSACTION_WALLET: "Wallet Top-up",
+  ERROR_DUPLICATE_EMAIL_PHONE:
+    "Email or phone number is already in use by another operator",
 };

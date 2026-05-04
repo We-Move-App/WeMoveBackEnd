@@ -394,6 +394,7 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
   const { filter, search } = req.query;
   const ln = (req.headers["ln"] || "en").toLowerCase();
 
+
   const page = Math.max(parseInt(req.query.page || "1", 10), 1);
   const perPage = Math.min(
     Math.max(parseInt(req.query.limit || "20", 10), 1),
@@ -416,6 +417,17 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
   if (!user) {
     throw new ApiError(statusCode.NOT_FOUND, "User not found");
   }
+
+  const getTransactionKey = (type = "") => {
+    const t = type.toLowerCase();
+
+    if (t.includes("ride")) return "TRANSACTION_RIDE";
+    if (t.includes("bus")) return "TRANSACTION_BUS";
+    if (t.includes("hotel")) return "TRANSACTION_HOTEL";
+    if (t.includes("wallet")) return "TRANSACTION_WALLET";
+
+    return null;
+  };
 
   const buildSearchQuery = (base = {}) => {
     if (search && search.trim() !== "") {
@@ -445,6 +457,10 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
           count: items.length,
           bookings: items.map((item) => ({
             ...item,
+            transactionType:
+              translateLn(ln, getTransactionKey(item.transactionType)) ||
+              item.transactionType,
+
             entries: (item.entries || []).map((entry) => ({
               ...entry,
               type: translateLn(ln, `TYPE_${entry.type}`) || entry.type,
@@ -552,11 +568,20 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
         RideBookingDetail.find(rideQuery).sort({ createdAt: -1 }).lean(),
       ]);
 
-      const merged = [
-        ...busItems.map((d) => ({ ...d, source: "bus" })),
-        ...hotelItems.map((d) => ({ ...d, source: "hotel" })),
-        ...rideItems.map((d) => ({ ...d, source: "ride" })),
-      ].sort((a, b) => {
+    const merged = [
+  ...busItems.map((d) => ({
+    ...d,
+    source: translateLn(ln, "SOURCE_BUS"),
+  })),
+  ...hotelItems.map((d) => ({
+    ...d,
+    source: translateLn(ln, "SOURCE_HOTEL"),
+  })),
+  ...rideItems.map((d) => ({
+    ...d,
+    source: translateLn(ln, "SOURCE_RIDE"),
+  })),
+].sort((a, b) => {
         const ac = new Date(a.createdAt || 0).getTime();
         const bc = new Date(b.createdAt || 0).getTime();
         if (bc !== ac) return bc - ac;

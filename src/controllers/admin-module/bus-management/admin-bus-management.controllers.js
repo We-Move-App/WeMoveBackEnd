@@ -45,6 +45,7 @@ const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
 const walletsModel = require("../../../models/wallet-module/wallets.model");
 const { Batch } = require("mongodb");
 const mongoose = require("mongoose");
+const { translateLn } = require("../../../utils/services/translator.service");
 
 const getAllBusOperators = catchAsyncError(async (req, res, next) => {
   const { filter } = req.query;
@@ -305,7 +306,7 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
     bankDocs,
     branch,
   } = req.body;
-
+  const ln = (req.headers["ln"] || "en").toLowerCase();
   // Simple duplicate email/phone check
   if (email || phoneNumber) {
     const existingOperator = await BusOperatorModel.findOne({
@@ -319,7 +320,7 @@ const updateBusOperator = catchAsyncError(async (req, res, next) => {
     if (existingOperator) {
       throw new ApiError(
         statusCode.CONFLICT,
-        "Email or phone number is already in use by another operator"
+        translateLn(ln, "ERROR_DUPLICATE_EMAIL_PHONE")
       );
     }
   }
