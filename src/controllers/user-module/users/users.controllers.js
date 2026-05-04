@@ -338,12 +338,12 @@ const updateAvatar = catchAsyncError(async (req, res, next) => {
       fr: "Utilisateur enregistré",
     },
     message: {
-      en: `User Registered (ID: ${userId})`,
-      fr: `Utilisateur enregistré (ID : ${userId})`,
+      en: `User Registered (ID: ${user.userId})`,
+      fr: `Utilisateur enregistré (ID : ${user.userId})`,
     },
-    referenceId: userId,
+    referenceId: user.userId,
     referenceModel: "User",
-    createdBy: userId,
+    createdBy: user.userId,
   });
 
   return res
