@@ -433,7 +433,7 @@ module.exports = {
   NEW_EMAIL_SAME_AS_CURRENT:
     "Le nouvel e-mail est identique à votre e-mail actuel",
   EMAIL_ALREADY_REGISTERED_WITH_ANOTHER_DRIVER:
-"Cet e-mail est déjà enregistré avec un autre conducteur",
+    "Cet e-mail est déjà enregistré avec un autre conducteur",
   BUS: "Bus",
   HOTEL: "Hôtel",
   RIDE: "Course",
@@ -447,4 +447,14 @@ module.exports = {
   DATA_FOUND_SUCCESS: "Données trouvées avec succès",
   HOTEL_MANAGER_DATA_FETCHED_SUCCESS:
     "Les données du gestionnaire d'hôtel ont été récupérées avec succès",
+
+  SOURCE_BUS: "Bus",
+  SOURCE_HOTEL: "Hôtel",
+  SOURCE_RIDE: "Trajet",
+  TRANSACTION_RIDE: "Réservation de trajet",
+  TRANSACTION_BUS: "Réservation de bus",
+  TRANSACTION_HOTEL: "Réservation d'hôtel",
+  TRANSACTION_WALLET: "Recharge portefeuille",
+  ERROR_DUPLICATE_EMAIL_PHONE:
+    "L'e-mail ou le numéro de téléphone est déjà utilisé par un autre opérateur",
 };
