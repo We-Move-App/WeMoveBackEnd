@@ -530,7 +530,7 @@ const getTransactions = catchAsyncError(async (req, res) => {
 
       bookingId: tx.bookingId ?? null,
       type,
-      status: translateLn(ln, `STATUS_${tx.status.toUpperCase()}`) || tx.status,
+      status: tx.status,
       amount,
       currency: tx.currency,
       description: tx.description,

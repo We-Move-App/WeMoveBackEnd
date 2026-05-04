@@ -261,12 +261,12 @@ const updateAvatar = catchAsyncError(async (req, res, next) => {
       fr: "Opérateur de bus enregistré",
     },
     message: {
-      en: `Bus Operator Registered (ID: ${operatorId})`,
-      fr: `Opérateur de bus enregistré (ID : ${operatorId})`,
+      en: `Bus Operator Registered (ID: ${operator.operatorId})`,
+      fr: `Opérateur de bus enregistré (ID : ${operator.operatorId})`,
     },
-    referenceId: operatorId,
+    referenceId: operator.operatorId,
     referenceModel: "BusOperator",
-    createdBy: operatorId,
+    createdBy: operator.operatorId,
   });
 
   return res

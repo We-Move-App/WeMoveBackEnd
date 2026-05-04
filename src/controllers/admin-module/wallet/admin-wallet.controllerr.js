@@ -278,7 +278,8 @@ async function runListAggregate(match, skip, limit, wantTotals) {
 /* ----------------------------- controller ----------------------------- */
 
 const getTransactionsSuperAdmin = catchAsyncError(async (req, res) => {
-  const superAdminId = assertSuperAdmin(req);
+  assertSuperAdmin(req);
+
   const {
     page,
     limit,
@@ -290,39 +291,200 @@ const getTransactionsSuperAdmin = catchAsyncError(async (req, res) => {
     wantTotals,
   } = parseQueryParams(req.query);
 
-  // Single transaction
+  // ---------------- SINGLE ----------------
   if (transactionId) {
-    const transaction = await fetchSingleTransaction(
-      superAdminId,
-      transactionId
+    const txn = await Transaction.findOne({ transactionId }).lean();
+
+    if (!txn) throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
+
+    const adminEntry = (txn.entries || []).find(
+      (e) => e.entityType === "ADMIN"
     );
-    if (!transaction)
-      throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
-    return res
-      .status(statusCode.OK)
-      .json(
-        new ApiResponse(
-          statusCode.OK,
-          transaction,
-          "Transaction details fetched successfully"
-        )
-      );
+
+    return res.status(statusCode.OK).json(
+      new ApiResponse(
+        statusCode.OK,
+        {
+          transactionId: txn.transactionId,
+          type: adminEntry?.type,
+          amount: adminEntry?.amount,
+          status: txn.status,
+          date: txn.createdAt,
+          description: txn.description,
+        },
+        "Transaction details fetched successfully"
+      )
+    );
   }
 
-  // List with filters
-  const match = buildMatch(superAdminId, { rawSearch, typeQuery, statusQuery });
-  const { data, totalRecords, creditTotal, debitTotal } =
-    await runListAggregate(match, skip, limit, wantTotals);
+  // ---------------- MATCH ----------------
+  const match = {
+    "entries.entityType": "ADMIN",
+  };
 
-  const totalPages = Math.ceil(totalRecords / limit) || 1;
+  if (statusQuery) {
+    const statuses = normalizeStatuses(statusQuery);
+    if (statuses) match.status = { $in: statuses };
+  }
+
+  if (typeQuery) {
+    const types = normalizeTypes(typeQuery);
+    if (types) match["entries.type"] = { $in: types };
+  }
+
+  if (rawSearch) {
+    match.transactionId = { $regex: rawSearch, $options: "i" };
+  }
+
+  // ---------------- AGGREGATION ----------------
+  const pipeline = [
+    { $match: match },
+    { $sort: { createdAt: -1, _id: -1 } },
+
+    // extract ADMIN entry
+    {
+      $addFields: {
+        adminEntry: {
+          $first: {
+            $filter: {
+              input: "$entries",
+              as: "e",
+              cond: { $eq: ["$$e.entityType", "ADMIN"] },
+            },
+          },
+        },
+      },
+    },
+
+    // serviceType from entries
+    {
+      $addFields: {
+        serviceType: {
+          $switch: {
+            branches: [
+              {
+                case: {
+                  $gt: [
+                    {
+                      $size: {
+                        $filter: {
+                          input: "$entries",
+                          as: "e",
+                          cond: { $eq: ["$$e.entityType", "DRIVER"] },
+                        },
+                      },
+                    },
+                    0,
+                  ],
+                },
+                then: "ride booking",
+              },
+              {
+                case: {
+                  $gt: [
+                    {
+                      $size: {
+                        $filter: {
+                          input: "$entries",
+                          as: "e",
+                          cond: { $eq: ["$$e.entityType", "BUS_OPERATOR"] },
+                        },
+                      },
+                    },
+                    0,
+                  ],
+                },
+                then: "bus booking",
+              },
+              {
+                case: {
+                  $gt: [
+                    {
+                      $size: {
+                        $filter: {
+                          input: "$entries",
+                          as: "e",
+                          cond: { $eq: ["$$e.entityType", "HOTEL"] },
+                        },
+                      },
+                    },
+                    0,
+                  ],
+                },
+                then: "hotel booking",
+              },
+            ],
+            default: null,
+          },
+        },
+      },
+    },
+
+    {
+      $facet: {
+        data: [
+          { $skip: skip },
+          { $limit: limit },
+          {
+            $project: {
+              _id: 0,
+              transactionId: 1,
+              type: "$adminEntry.type",
+              amount: "$adminEntry.amount",
+              date: "$createdAt",
+              status: 1,
+              description: 1,
+              serviceType: 1,
+            },
+          },
+        ],
+
+        meta: [{ $count: "totalRecords" }],
+
+        totals: wantTotals
+          ? [
+              {
+                $group: {
+                  _id: null,
+                  creditTotal: {
+                    $sum: {
+                      $cond: [
+                        { $eq: ["$adminEntry.type", "CREDIT"] },
+                        "$adminEntry.amount",
+                        0,
+                      ],
+                    },
+                  },
+                  debitTotal: {
+                    $sum: {
+                      $cond: [
+                        { $eq: ["$adminEntry.type", "DEBIT"] },
+                        "$adminEntry.amount",
+                        0,
+                      ],
+                    },
+                  },
+                },
+              },
+            ]
+          : [],
+      },
+    },
+  ];
+
+  const [agg] = await Transaction.aggregate(pipeline);
+
+  const data = agg?.data || [];
+  const totalRecords = agg?.meta?.[0]?.totalRecords || 0;
+  const totals = agg?.totals?.[0] || {};
 
   return res.status(statusCode.OK).json({
     page,
     limit,
-    totalPages,
+    totalPages: Math.ceil(totalRecords / limit) || 1,
     totalRecords,
-    creditTotal,
-    debitTotal,
+    creditTotal: totals.creditTotal || 0,
+    debitTotal: totals.debitTotal || 0,
     data,
   });
 });

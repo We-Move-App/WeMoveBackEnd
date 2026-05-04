@@ -146,8 +146,8 @@ const createHotelPolicy = catchAsyncError(async (req, res, next) => {
       fr: "Nouveau gestionnaire d'hôtel enregistré",
     },
     message: {
-      en: `New Hotel Manager Registered (ID: ${_id}).`,
-      fr: `Nouveau gestionnaire d'hôtel enregistré (ID : ${_id}).`,
+      en: `New Hotel Manager Registered (ID: ${user.managerId}).`,
+      fr: `Nouveau gestionnaire d'hôtel enregistré (ID : ${user.managerId}).`,
     },
     referenceId: hotelId,
     referenceModel: "Hotel",

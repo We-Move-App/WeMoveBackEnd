@@ -105,7 +105,6 @@ function getBucketKey(date, filter) {
 }
 
 async function analyticsSuperAdmin(filter) {
-  // Step 1: Get all transactions for relevant period
   let startDate, endDate;
 
   if (filter === "monthly") {
@@ -127,7 +126,6 @@ async function analyticsSuperAdmin(filter) {
 
   const buckets = getBuckets(filter);
 
-  // Step 2: Build metrics per bucket
   const results = {
     hotel: [],
     bus: [],
@@ -155,23 +153,34 @@ async function analyticsSuperAdmin(filter) {
 
     // ---- Booking Counts ----
     const hotelBookings = new Set(
-      bucketTxns.filter((t) => t.hotelManagerId).map((t) => t.bookingId)
-    );
-    const busBookings = new Set(
-      bucketTxns.filter((t) => t.busOperatorId).map((t) => t.bookingId)
+      bucketTxns
+        .filter((t) => (t.entries || []).some((e) => e.entityType === "HOTEL"))
+        .map((t) => t.bookingId)
     );
 
-    // Taxi & Bike → check RideBookingModel for vehicleType
-    const driverTxns = bucketTxns.filter((t) => t.driverId);
+    const busBookings = new Set(
+      bucketTxns
+        .filter((t) =>
+          (t.entries || []).some((e) => e.entityType === "BUS_OPERATOR")
+        )
+        .map((t) => t.bookingId)
+    );
+
+    const driverTxns = bucketTxns.filter((t) =>
+      (t.entries || []).some((e) => e.entityType === "DRIVER")
+    );
+
     const taxiBookings = new Set();
     const bikeBookings = new Set();
 
     for (const txn of driverTxns) {
       if (!txn.bookingId) continue;
+
       const ride = await RideBookingModel.findOne(
         { bookingId: txn.bookingId },
         { vehicleType: 1 }
       ).lean();
+
       if (!ride) continue;
 
       if (ride.vehicleType === "bike") bikeBookings.add(txn.bookingId);
@@ -188,53 +197,74 @@ async function analyticsSuperAdmin(filter) {
     const cancelled = new Set(
       bucketTxns.filter((t) => t.refund === true).map((t) => t.bookingId)
     );
+
     const completed = new Set(
       [...totalBookings].filter((id) => !cancelled.has(id))
     );
 
     // ---- Revenue ----
-    const calcRevenue = (txns, key) =>
-      txns
-        .filter((t) => t[key])
-        .reduce((sum, t) => {
-          if (t.type === "CREDIT") return sum + t.amount;
-          if (t.type === "DEBIT" && t.refund) return sum - t.amount;
-          return sum;
-        }, 0);
+    const calcRevenue = (txns, entityType) =>
+      txns.reduce((sum, t) => {
+        const entries = (t.entries || []).filter(
+          (e) => e.entityType === entityType
+        );
 
-    const hotelRevenue = calcRevenue(bucketTxns, "hotelManagerId");
-    const busRevenue = calcRevenue(bucketTxns, "busOperatorId");
+        for (const e of entries) {
+          if (e.type === "CREDIT") sum += e.amount;
+          if (e.type === "DEBIT" && t.refund) sum -= e.amount;
+        }
 
-    // Bike & Taxi revenues (driverId != null + check vehicleType)
+        return sum;
+      }, 0);
+
+    const hotelRevenue = calcRevenue(bucketTxns, "HOTEL");
+    const busRevenue = calcRevenue(bucketTxns, "BUS_OPERATOR");
+
     let bikeRevenue = 0;
     let taxiRevenue = 0;
 
     for (const txn of driverTxns) {
       if (!txn.bookingId) continue;
+
       const ride = await RideBookingModel.findOne(
         { bookingId: txn.bookingId },
         { vehicleType: 1 }
       ).lean();
+
       if (!ride) continue;
 
-      if (ride.vehicleType === "bike") {
-        if (txn.type === "CREDIT") bikeRevenue += txn.amount;
-        if (txn.type === "DEBIT" && txn.refund) bikeRevenue -= txn.amount;
-      }
-      if (ride.vehicleType === "taxi") {
-        if (txn.type === "CREDIT") taxiRevenue += txn.amount;
-        if (txn.type === "DEBIT" && txn.refund) taxiRevenue -= txn.amount;
+      const driverEntries = (txn.entries || []).filter(
+        (e) => e.entityType === "DRIVER"
+      );
+
+      for (const e of driverEntries) {
+        if (ride.vehicleType === "bike") {
+          if (e.type === "CREDIT") bikeRevenue += e.amount;
+          if (e.type === "DEBIT" && txn.refund) bikeRevenue -= e.amount;
+        }
+        if (ride.vehicleType === "taxi") {
+          if (e.type === "CREDIT") taxiRevenue += e.amount;
+          if (e.type === "DEBIT" && txn.refund) taxiRevenue -= e.amount;
+        }
       }
     }
 
-    const adminRevenue = bucketTxns
-      .filter((t) => t.adminId && t.type === "CREDIT")
-      .reduce((sum, t) => sum + t.amount, 0);
+    const adminRevenue = bucketTxns.reduce((sum, t) => {
+      const entries = (t.entries || []).filter(
+        (e) => e.entityType === "ADMIN" && e.type === "CREDIT"
+      );
+
+      for (const e of entries) {
+        sum += e.amount;
+      }
+
+      return sum;
+    }, 0);
 
     const totalRevenue =
       hotelRevenue + busRevenue + adminRevenue + bikeRevenue + taxiRevenue;
 
-    // ---- Previous values for trend ----
+    // ---- Previous values ----
     const prevHotel = results.hotel[i - 1]?.bookings || 0;
     const prevBus = results.bus[i - 1]?.bookings || 0;
     const prevTaxi = results.taxi[i - 1]?.bookings || 0;
@@ -249,67 +279,79 @@ async function analyticsSuperAdmin(filter) {
     const prevAdminRev = results.revenue.admin[i - 1]?.amount || 0;
     const prevTotalRev = results.revenue.totalRevenue[i - 1]?.amount || 0;
 
-    // ---- Push to results ----
+    // ---- Push ----
     results.hotel.push({
       filter: bucket,
       bookings: hotelBookings.size,
       ...calcTrend(hotelBookings.size, prevHotel),
     });
+
     results.bus.push({
       filter: bucket,
       bookings: busBookings.size,
       ...calcTrend(busBookings.size, prevBus),
     });
+
     results.taxi.push({
       filter: bucket,
       bookings: taxiBookings.size,
       ...calcTrend(taxiBookings.size, prevTaxi),
     });
+
     results.bike.push({
       filter: bucket,
       bookings: bikeBookings.size,
       ...calcTrend(bikeBookings.size, prevBike),
     });
+
     results.totalBookings.push({
       filter: bucket,
       bookings: totalBookings.size,
       ...calcTrend(totalBookings.size, prevTotal),
     });
+
     results.cancelled.push({
       filter: bucket,
       bookings: cancelled.size,
       ...calcTrend(cancelled.size, prevCancelled),
     });
+
     results.completed.push({
       filter: bucket,
       bookings: completed.size,
       ...calcTrend(completed.size, prevCompleted),
     });
+
     results.revenue.hotelManager.push({
       filter: bucket,
       amount: hotelRevenue,
       ...calcTrend(hotelRevenue, prevHotelRev),
     });
+
     results.revenue.busOperator.push({
       filter: bucket,
       amount: busRevenue,
       ...calcTrend(busRevenue, prevBusRev),
     });
+
     results.revenue.taxiDriver.push({
       filter: bucket,
       amount: taxiRevenue,
       ...calcTrend(taxiRevenue, prevTaxiRev),
     });
+
     results.revenue.bikeDriver.push({
       filter: bucket,
       amount: bikeRevenue,
       ...calcTrend(bikeRevenue, prevBikeRev),
     });
+
     results.revenue.admin.push({
       filter: bucket,
       amount: adminRevenue,
       ...calcTrend(adminRevenue, prevAdminRev),
     });
+
     results.revenue.totalRevenue.push({
       filter: bucket,
       amount: totalRevenue,
@@ -342,12 +384,12 @@ async function analyticsOthers(branchId, permissions, filter) {
     hotelManagers = hotelManagers.map((h) => h._id.toString());
   }
 
-  // ----------------- Step 2: Get Drivers (for Taxi & Bike) -----------------
+  // ----------------- Step 2: Get Drivers -----------------
   drivers = await DriverBasicDetailsModel.find(
     { branch: branchId },
     "driverId"
   ).lean();
-  drivers = drivers.map((d) => d.driverId); // NOTE: driverId is string
+  drivers = drivers.map((d) => d.driverId);
 
   // ----------------- Step 3: Date Range -----------------
   let startDate, endDate;
@@ -377,7 +419,6 @@ async function analyticsOthers(branchId, permissions, filter) {
   const completed = [];
   const cancelled = [];
 
-  // Cache for bookingId → vehicleType to avoid multiple DB calls
   const bookingVehicleMap = {};
 
   for (const bucket of buckets) {
@@ -391,11 +432,16 @@ async function analyticsOthers(branchId, permissions, filter) {
       const key = getBucketKey(txn.createdAt, filter);
       if (key !== bucket) continue;
 
+      const entries = txn.entries || [];
+
       // -------- Hotel ----------
       if (
         permissions.hotelManagement &&
-        txn.hotelManagerId &&
-        hotelManagers.includes(txn.hotelManagerId.toString())
+        entries.some(
+          (e) =>
+            e.entityType === "HOTEL" &&
+            hotelManagers.includes(e.entityId?.toString())
+        )
       ) {
         hotelBookings.add(txn.bookingId);
         if (txn.refund) cancelledBookings.add(txn.bookingId);
@@ -404,23 +450,32 @@ async function analyticsOthers(branchId, permissions, filter) {
       // -------- Bus ----------
       if (
         permissions.busManagement &&
-        txn.busOperatorId &&
-        busOperators.includes(txn.busOperatorId.toString())
+        entries.some(
+          (e) =>
+            e.entityType === "BUS_OPERATOR" &&
+            busOperators.includes(e.entityId?.toString())
+        )
       ) {
         busBookings.add(txn.bookingId);
         if (txn.refund) cancelledBookings.add(txn.bookingId);
       }
 
       // -------- Taxi / Bike ----------
-      if (txn.driverId && drivers.includes(txn.driverId)) {
+      const driverEntry = entries.find(
+        (e) => e.entityType === "DRIVER" && drivers.includes(e.entityId)
+      );
+
+      if (driverEntry) {
         let vehicleType = bookingVehicleMap[txn.bookingId];
+
         if (!vehicleType) {
           const booking = await RideBookingModel.findOne(
             { bookingId: txn.bookingId },
             "vehicleType"
           ).lean();
+
           vehicleType = booking?.vehicleType;
-          bookingVehicleMap[txn.bookingId] = vehicleType; // cache it
+          bookingVehicleMap[txn.bookingId] = vehicleType;
         }
 
         if (vehicleType === "taxi") {
@@ -437,6 +492,7 @@ async function analyticsOthers(branchId, permissions, filter) {
     const busCount = busBookings.size;
     const taxiCount = taxiBookings.size;
     const bikeCount = bikeBookings.size;
+
     const totalCount = new Set([
       ...hotelBookings,
       ...busBookings,
@@ -449,8 +505,10 @@ async function analyticsOthers(branchId, permissions, filter) {
 
     if (permissions.hotelManagement)
       hotel.push({ filter: bucket, bookings: hotelCount });
+
     if (permissions.busManagement)
       bus.push({ filter: bucket, bookings: busCount });
+
     taxi.push({ filter: bucket, bookings: taxiCount });
     bike.push({ filter: bucket, bookings: bikeCount });
 
@@ -462,6 +520,7 @@ async function analyticsOthers(branchId, permissions, filter) {
   // ----------------- Step 6: Trends -----------------
   function attachTrend(arr) {
     if (arr.length === 0) return;
+
     for (let i = 1; i < arr.length; i++) {
       const { trend, status } = calcTrendOthers(
         arr[i - 1].bookings,
@@ -470,6 +529,7 @@ async function analyticsOthers(branchId, permissions, filter) {
       arr[i].trend = trend;
       arr[i].status = status;
     }
+
     arr[0].trend = 0;
     arr[0].status = "nochange";
   }
@@ -484,6 +544,7 @@ async function analyticsOthers(branchId, permissions, filter) {
 
   // ----------------- Step 7: Response -----------------
   const response = {};
+
   if (permissions.hotelManagement) response.hotel = hotel;
   if (permissions.busManagement) response.bus = bus;
   if (permissions.taxiManagement) response.taxi = taxi;
