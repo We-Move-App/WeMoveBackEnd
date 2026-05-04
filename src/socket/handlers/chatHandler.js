@@ -4,8 +4,12 @@ const {
   sendPushNotification,
 } = require("../../controllers/firebase/fcm-token.controller");
 
+let globalMessageCounter = 0;
+
 const chatHandler = (socket, io) => {
   socket.on("chat:message", async (data, ack) => {
+    const eventId = `msg_${Date.now()}_${++globalMessageCounter}`;
+
     try {
       const { rideId, message } = data;
 
@@ -13,10 +17,10 @@ const chatHandler = (socket, io) => {
         return ack?.({ success: false, error: "Invalid data" });
       }
 
-      // 🔍 get ride details to fetch driverId and userId
       const ride = await RideModel.findOne({ bookingId: rideId }).select(
         "driverId userId bookingId"
       );
+
       if (!ride) {
         return ack?.({ success: false, error: "Ride not found" });
       }
@@ -25,12 +29,11 @@ const chatHandler = (socket, io) => {
 
       const sender = {
         id: socket.data.userId || socket.data.driverId,
-        role: socket.data.role, // "user" or "Driver"
+        role: socket.data.role,
       };
 
-      // 💾 save in DB
       const chatDoc = await saveChatMessage(
-        bookingId, // ✅ use bookingId
+        bookingId,
         driverId.toString(),
         userId.toString(),
         sender,
@@ -38,35 +41,33 @@ const chatHandler = (socket, io) => {
       );
 
       const chatPayload = {
+        eventId,
         rideId: bookingId,
-        from: {
-          id: sender.id,
-          role: sender.role,
-        },
+        from: sender,
         message,
         timestamp: new Date(),
       };
-      console.log(chatPayload);
 
-      // 📢 broadcast to ride room
-      io.to(bookingId).emit("chat:message", chatPayload);
+      let emitCount = 0;
 
-      // 📢 also emit directly to user & driver ID rooms (for reconnected clients)
+      // Emit to USER room
       io.to(userId.toString()).emit("chat:message", chatPayload);
-      io.to(driverId.toString()).emit("chat:message", chatPayload);
+      emitCount++;
 
-      // 🎯 target push notification to opposite party
+      // Emit to DRIVER room
+      io.to(driverId.toString()).emit("chat:message", chatPayload);
+      emitCount++;
+
       const targetUserId =
         sender.role === "user" ? driverId.toString() : userId.toString();
 
-      console.log("Chat Push Notifi...");
       await sendPushNotification(targetUserId, "New Message", message, {
         rideId: bookingId,
       });
 
       ack?.({ success: true, chat: chatPayload });
     } catch (err) {
-      console.error("❌ Chat error:", err);
+      console.error("Chat error:", err);
       ack?.({ success: false, error: "Failed to send message" });
     }
   });
