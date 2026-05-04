@@ -10,6 +10,7 @@ const {
   getAllUsersBookings,
   getAllBookingsByUserId,
   getWalletBalance,
+  updateUserByAdmin
 } = require("../../../controllers/admin-module/user-management/admin-users.controlllers");
 const { cacheMiddleware } = require("../../../middlewares/redisMiddleware");
 const adminUserManagementRoutes = express.Router();
@@ -39,6 +40,14 @@ adminUserManagementRoutes
     authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
     verifyUserProfile
   );
+
+  adminUserManagementRoutes
+    .route("/users/update/:userId")
+    .put(
+      isAdminAuthenticated,
+      authorizeRole(["SuperAdmin"]),
+      updateUserByAdmin
+    );
 
 adminUserManagementRoutes
   .route("/bookings")

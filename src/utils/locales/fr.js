@@ -457,4 +457,14 @@ module.exports = {
   TRANSACTION_WALLET: "Recharge portefeuille",
   ERROR_DUPLICATE_EMAIL_PHONE:
     "L'e-mail ou le numéro de téléphone est déjà utilisé par un autre opérateur",
+  ERROR_REQUIRED_CONTACT: "L'email ou le numéro de téléphone est requis",
+  ERROR_INVALID_EMAIL: "Format d'email invalide",
+  ERROR_INVALID_PHONE: "Format du numéro de téléphone invalide",
+  ERROR_SAME_EMAIL: "Le nouvel email doit être différent de l'actuel",
+  ERROR_SAME_PHONE: "Le nouveau numéro doit être différent de l'actuel",
+  ERROR_DUPLICATE_EMAIL_PHONE: "L'email ou le numéro existe déjà",
+  ERROR_EMAIL_USED_BEFORE: "Cet email a déjà été utilisé",
+  ERROR_PHONE_USED_BEFORE: "Ce numéro a déjà été utilisé",
+  ERROR_USER_NOT_FOUND: "Utilisateur non trouvé",
+  SUCCESS_UPDATE_CONTACT: "Détails de contact mis à jour avec succès",
 };
