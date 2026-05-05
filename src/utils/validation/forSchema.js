@@ -8,8 +8,8 @@ function validateFullName(fullName) {
 }
 
 function validateIfscCode() {
-  const regex = [/^[A-Z]{4}0[A-Z0-9]{6}$/, "Please provide a valid IFSC code"]
-  return regex
+  const regex = [/^[A-Z]{4}0[A-Z0-9]{6}$/, "Please provide a valid IFSC code"];
+  return regex;
 }
 
 // Validation for email
@@ -20,7 +20,7 @@ function validateEmail(email) {
 
 // Validation for phone number
 function validatePhoneNumber(phoneNumber) {
-  const regex = /^\+?[1-9]\d{8,14}$/;
+  const regex = /^\+?[1-9]\d{8}$/;
   return regex.test(phoneNumber);
 }
 
@@ -83,5 +83,5 @@ module.exports = {
   validateDOB,
   validateDOBForUser,
   ImageSchema,
-  validateIfscCode
+  validateIfscCode,
 };
