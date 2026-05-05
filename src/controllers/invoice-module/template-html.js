@@ -1,5 +1,6 @@
 const path = require("path");
 const { translateLn } = require("../../utils/services/translator.service");
+const { resolveGeneratedId } = require("../../utils/services/helper.service");
 
 const getHotelInvoiceHTML = (booking, logoDataUrl, ln) => {
   return `
@@ -247,7 +248,7 @@ const getHotelInvoiceHTML = (booking, logoDataUrl, ln) => {
 `;
 };
 
-const getTransactionReceiptHTML = (txn, logoDataUrl) => {
+const getTransactionReceiptHTML = async (txn, logoDataUrl) => {
   const receiptId = txn.transactionId || String(txn._id);
   const status = String(txn.status || "PENDING").toUpperCase();
 
@@ -260,18 +261,34 @@ const getTransactionReceiptHTML = (txn, logoDataUrl) => {
 
   const entries = Array.isArray(txn.entries) ? txn.entries : [];
 
-  // Helper: pick first entry by type/entityType
   const firstBy = (pred) => entries.find(pred);
 
-  // Determine payer (From): prefer meta.from, else any DEBIT entry
+  // helper to check ObjectId
+  const isObjectId = (id) => {
+    if (!id) return false;
+
+    const str = String(id); // 🔥 force convert
+    return /^[a-f\d]{24}$/i.test(str);
+  };
+
+  // Determine payer (From)
   const debitEntry = firstBy((e) => e.type === "DEBIT");
+
   const fromName =
     metaFrom?.name ||
     debitEntry?.name ||
     (debitEntry?.entityType ? `${debitEntry.entityType}` : "N/A");
-  const fromId = metaFrom?.id || debitEntry?.entityId || "N/A";
 
-  // Determine receiver (To): prefer meta.to, else first CREDIT that isn't ADMIN(SYSTEM) if possible
+  const rawFromId = metaFrom?.id || debitEntry?.entityId || "N/A";
+  const fromEntityType = metaFrom?.entityType || debitEntry?.entityType;
+
+  let fromId = rawFromId;
+
+  if (isObjectId(rawFromId)) {
+    fromId = await resolveGeneratedId(fromEntityType, rawFromId);
+  }
+
+  // Determine receiver (To)
   const creditNonSystem =
     firstBy(
       (e) =>
@@ -283,16 +300,20 @@ const getTransactionReceiptHTML = (txn, logoDataUrl) => {
     metaTo?.name ||
     creditNonSystem?.name ||
     (creditNonSystem?.entityType ? `${creditNonSystem.entityType}` : "N/A");
-  let toId = metaTo?.id || creditNonSystem?.entityId || "N/A";
 
-  // Preserve your older "override" behavior based on transactionType text
+  let rawToId = metaTo?.id || creditNonSystem?.entityId || "N/A";
+  let toEntityType = metaTo?.entityType || creditNonSystem?.entityType;
+
+  // override logic (same as your code)
   const txnTypeLower = String(txn.transactionType || "").toLowerCase();
+
   if (txnTypeLower.includes("hotel")) {
     const hotelCredit =
       firstBy((e) => e.type === "CREDIT" && e.entityType === "HOTEL") || null;
     if (hotelCredit) {
       toName = hotelCredit.name || toName;
-      toId = hotelCredit.entityId || toId;
+      rawToId = hotelCredit.entityId || rawToId;
+      toEntityType = hotelCredit.entityType;
     }
   } else if (txnTypeLower.includes("bus")) {
     const busCredit =
@@ -300,20 +321,27 @@ const getTransactionReceiptHTML = (txn, logoDataUrl) => {
       null;
     if (busCredit) {
       toName = busCredit.name || toName;
-      toId = busCredit.entityId || toId;
+      rawToId = busCredit.entityId || rawToId;
+      toEntityType = busCredit.entityType;
     }
   } else if (txnTypeLower.includes("ride")) {
     const driverCredit =
       firstBy((e) => e.type === "CREDIT" && e.entityType === "DRIVER") || null;
     if (driverCredit) {
       toName = driverCredit.name || toName;
-      toId = driverCredit.entityId || toId;
+      rawToId = driverCredit.entityId || rawToId;
+      toEntityType = driverCredit.entityType;
     }
+  }
+
+  let toId = rawToId;
+
+  if (isObjectId(rawToId)) {
+    toId = await resolveGeneratedId(toEntityType, rawToId);
   }
 
   const txnTypeText = txn.transactionType || "Transaction";
 
-  // Action text: if there is a USER debit, treat as Paid; if there is a USER credit topup/refund, treat as Received
   const userDebit = firstBy(
     (e) => e.type === "DEBIT" && e.entityType === "USER"
   );
@@ -431,13 +459,6 @@ const getTransactionReceiptHTML = (txn, logoDataUrl) => {
     .total {
       font-weight: 700;
       font-size: 16px;
-    }
-    .thank-you {
-      text-align: center;
-      color: #15803d;
-      font-weight: 600;
-      margin-top: 20px;
-      font-size: 14px;
     }
   </style>
 </head>
