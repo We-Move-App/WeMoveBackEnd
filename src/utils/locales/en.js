@@ -419,4 +419,18 @@ module.exports = {
   TRANSACTION_WALLET: "Wallet Top-up",
   ERROR_DUPLICATE_EMAIL_PHONE:
     "Email or phone number is already in use by another operator",
+
+  ERROR_REQUIRED_CONTACT: "Email or phone number is required",
+  ERROR_INVALID_EMAIL: "Invalid email format",
+  ERROR_INVALID_PHONE: "Invalid phone number format",
+  ERROR_SAME_EMAIL: "New email must be different from current email",
+  ERROR_SAME_PHONE:
+    "New phone number must be different from current phone number",
+  ERROR_DUPLICATE_EMAIL_PHONE: "Email or phone number already exists",
+  ERROR_EMAIL_USED_BEFORE:
+    "This email was used previously and cannot be reused",
+  ERROR_PHONE_USED_BEFORE:
+    "This phone number was used previously and cannot be reused",
+  ERROR_USER_NOT_FOUND: "User not found",
+  SUCCESS_UPDATE_CONTACT: "User contact details updated successfully",
 };

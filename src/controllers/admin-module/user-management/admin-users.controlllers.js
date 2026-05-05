@@ -27,6 +27,11 @@ const transactionModel = require("../../../models/transaction-module/transaction
 const walletsModel = require("../../../models/wallet-module/wallets.model");
 const { fetchAdminLn } = require("../../../utils/services/user.services");
 const { translateLn } = require("../../../utils/services/translator.service");
+const UserHistoryModel = require("../../../models/user-module/users/userHistory.model");
+const {
+  validateEmail,
+  validatePhoneNumber,
+} = require("../../../utils/validation/forSchema");
 
 const getAllUsers = catchAsyncError(async (req, res) => {
   const {
@@ -394,7 +399,6 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
   const { filter, search } = req.query;
   const ln = (req.headers["ln"] || "en").toLowerCase();
 
-
   const page = Math.max(parseInt(req.query.page || "1", 10), 1);
   const perPage = Math.min(
     Math.max(parseInt(req.query.limit || "20", 10), 1),
@@ -568,20 +572,20 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
         RideBookingDetail.find(rideQuery).sort({ createdAt: -1 }).lean(),
       ]);
 
-    const merged = [
-  ...busItems.map((d) => ({
-    ...d,
-    source: translateLn(ln, "SOURCE_BUS"),
-  })),
-  ...hotelItems.map((d) => ({
-    ...d,
-    source: translateLn(ln, "SOURCE_HOTEL"),
-  })),
-  ...rideItems.map((d) => ({
-    ...d,
-    source: translateLn(ln, "SOURCE_RIDE"),
-  })),
-].sort((a, b) => {
+      const merged = [
+        ...busItems.map((d) => ({
+          ...d,
+          source: translateLn(ln, "SOURCE_BUS"),
+        })),
+        ...hotelItems.map((d) => ({
+          ...d,
+          source: translateLn(ln, "SOURCE_HOTEL"),
+        })),
+        ...rideItems.map((d) => ({
+          ...d,
+          source: translateLn(ln, "SOURCE_RIDE"),
+        })),
+      ].sort((a, b) => {
         const ac = new Date(a.createdAt || 0).getTime();
         const bc = new Date(b.createdAt || 0).getTime();
         if (bc !== ac) return bc - ac;
@@ -640,6 +644,160 @@ const getWalletBalance = catchAsyncError(async (req, res) => {
   );
 });
 
+const updateUserByAdmin = catchAsyncError(async (req, res, next) => {
+  const { userId } = req.params;
+  let { email, phoneNumber } = req.body;
+
+  const adminId = req.user?._id;
+  const ln = (req.headers["ln"] || "en").toLowerCase();
+
+  if (!email && !phoneNumber) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "ERROR_REQUIRED_CONTACT")
+    );
+  }
+
+  if (email !== undefined) {
+    if (typeof email !== "string" || !email.trim()) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        translateLn(ln, "ERROR_INVALID_EMAIL")
+      );
+    }
+    email = email.trim().toLowerCase();
+    if (!validateEmail(email)) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        translateLn(ln, "ERROR_INVALID_PHONE")
+      );
+    }
+  }
+
+  if (phoneNumber !== undefined) {
+    phoneNumber = Array.isArray(phoneNumber)
+      ? phoneNumber.find((num) => typeof num === "string" && num.trim())
+      : phoneNumber;
+
+    if (!phoneNumber || typeof phoneNumber !== "string") {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "Phone number must be a valid string"
+      );
+    }
+
+    phoneNumber = phoneNumber.trim();
+
+    if (!validatePhoneNumber(phoneNumber)) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Invalid phone number format");
+    }
+  }
+
+  const existingUser = await UserModel.findById(userId);
+
+  if (!existingUser) {
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "ERROR_USER_NOT_FOUND")
+    );
+  }
+
+  if (email && email === existingUser.email) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "ERROR_SAME_EMAIL")
+    );
+  }
+
+  if (phoneNumber && phoneNumber === existingUser.phoneNumber) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "ERROR_SAME_PHONE")
+    );
+  }
+
+  const duplicateUser = await UserModel.findOne({
+    _id: { $ne: userId },
+    $or: [
+      ...(email ? [{ email }] : []),
+      ...(phoneNumber ? [{ phoneNumber }] : []),
+    ],
+  });
+
+  if (duplicateUser) {
+    throw new ApiError(
+      statusCode.CONFLICT,
+      translateLn(ln, "ERROR_DUPLICATE_EMAIL_PHONE")
+    );
+  }
+
+  if (email) {
+    const emailUsedBefore = await UserHistoryModel.findOne({
+      $or: [{ previousEmail: email }, { newEmail: email }],
+    });
+
+    if (emailUsedBefore) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        translateLn(ln, "ERROR_EMAIL_USED_BEFORE")
+      );
+    }
+  }
+
+  if (phoneNumber) {
+    const phoneUsedBefore = await UserHistoryModel.findOne({
+      $or: [
+        { previousPhoneNumber: phoneNumber },
+        { newPhoneNumber: phoneNumber },
+      ],
+    });
+
+    if (phoneUsedBefore) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        translateLn(ln, "ERROR_PHONE_USED_BEFORE")
+      );
+    }
+  }
+
+  const updateData = {};
+  const historyPayload = {
+    userId,
+    changedBy: adminId,
+  };
+
+  if (email) {
+    updateData.email = email;
+    updateData.emailVerified = false;
+    historyPayload.previousEmail = existingUser.email || null;
+    historyPayload.newEmail = email;
+  }
+
+  if (phoneNumber) {
+    updateData.phoneNumber = phoneNumber;
+    updateData.phoneVerified = false;
+    historyPayload.previousPhoneNumber = existingUser.phoneNumber || null;
+    historyPayload.newPhoneNumber = phoneNumber;
+  }
+
+  const updatedUser = await UserModel.findByIdAndUpdate(userId, updateData, {
+    new: true,
+    runValidators: true,
+  }).select("-password");
+
+  await UserHistoryModel.create(historyPayload);
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { user: updatedUser },
+        translateLn(ln, "SUCCESS_UPDATE_CONTACT")
+      )
+    );
+});
+
 module.exports = {
   getAllUsers,
   getSingleUser,
@@ -647,4 +805,5 @@ module.exports = {
   getAllUsersBookings,
   getAllBookingsByUserId,
   getWalletBalance,
+  updateUserByAdmin,
 };
