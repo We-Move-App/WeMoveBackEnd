@@ -73,7 +73,7 @@ const generateTransactionReceiptBase64 = async (txn) => {
   const logoBase64 = fs.readFileSync(logoPath).toString("base64");
   const logoDataUrl = `data:image/png;base64,${logoBase64}`;
 
-  const html = getTransactionReceiptHTML(txn, logoDataUrl);
+  const html = await getTransactionReceiptHTML(txn, logoDataUrl);
 
   await page.setContent(html, { waitUntil: "networkidle0" });
   await page.emulateMediaType("screen");
