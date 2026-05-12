@@ -135,9 +135,6 @@ const onboardUserByQR = catchAsyncError(async (req, res, next) => {
   const booking = await BusBookingModel.findById(bookingId);
   const driver =
     await BusDriverModel.findById(driverId).populate("assignedBus");
-  console.log("Booking:", booking);
-  console.log("Driver:", driver);
-  console.log("Driver.assignedBus:", driver?.assignedBus);
 
   if (!booking || !driver || !driver.assignedBus) {
     throw new ApiError(
@@ -145,7 +142,7 @@ const onboardUserByQR = catchAsyncError(async (req, res, next) => {
       "Driver or booking not found, or bus not assigned to driver"
     );
   }
-  // ✅ FIXED HERE:
+
   if (String(driver.assignedBus._id) !== String(booking.busId._id)) {
     throw new ApiError(
       statusCode.FORBIDDEN,
