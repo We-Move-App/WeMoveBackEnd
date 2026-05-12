@@ -8,6 +8,7 @@ const HotelBookingModel = require("../../models/hotel-module/hotel-bookings/hote
 const QRCode = require("qrcode");
 const Transaction = require("../../models/transaction-module/transaction.model");
 const BusModel = require("../../models/bus-module/buses/buses.model");
+const { translateLn } = require("./translator.service");
 
 const formatAmount = (amount) =>
   Number(amount || 0).toLocaleString("en-US", {
@@ -252,6 +253,7 @@ function roundedRect(ctx, x, y, w, h, r) {
 }
 
 const getBusInvoice = catchAsyncError(async (req, res, next) => {
+  const ln = req.get("ln") || "en";
   const { bookingId } = req.params;
 
   const booking =
@@ -264,7 +266,7 @@ const getBusInvoice = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
   }
 
-  const base64Pdf = await generateBusBookingInvoiceBase64(booking, busName);
+  const base64Pdf = await generateBusBookingInvoiceBase64(booking, busName, ln);
 
   return res
     .status(statusCode.OK)
@@ -351,7 +353,7 @@ const drawLabelValue = (page, { x, y, label, value, font, size = 14 }) => {
 };
 
 /* ---------- main ---------- */
-const generateBusBookingInvoiceBase64 = async (booking, busName) => {
+const generateBusBookingInvoiceBase64 = async (booking, busName, ln = "en") => {
   console.log("busName", busName);
 
   const pdfDoc = await PDFDocument.create();
@@ -418,8 +420,12 @@ const generateBusBookingInvoiceBase64 = async (booking, busName) => {
 
   // // Center ticket no
   const bookingId = String(booking?.bookingId || booking?._id || "").toString();
-  page.drawText(`Booking ID : ${bookingId}`, {
-    x: BORDER_X + BORDER_W / 2 - 80,
+  const bookingIdText = `${translateLn(ln, "BOOKING_ID")} : ${bookingId}`;
+
+  const textWidth = font.widthOfTextAtSize(bookingIdText, 13);
+
+  page.drawText(bookingIdText, {
+    x: BORDER_X + BORDER_W / 2 - textWidth / 2,
     y: BORDER_Y + BORDER_H - TOP_H + 20,
     size: 13,
     font,
@@ -427,7 +433,7 @@ const generateBusBookingInvoiceBase64 = async (booking, busName) => {
   });
 
   // Right "BUS TICKET"
-  page.drawText("BUS TICKET", {
+  page.drawText(`${translateLn(ln, "BUS_TICKET")}`, {
     x: BORDER_X + BORDER_W - rightBannerWidth + 18,
     y: BORDER_Y + BORDER_H - TOP_H + 18,
     size: 18,
@@ -452,7 +458,7 @@ const generateBusBookingInvoiceBase64 = async (booking, busName) => {
   y1 = drawLabelValue(page, {
     x: col1X,
     y: y1,
-    label: "Name",
+    label: `${translateLn(ln, "NAME")}`,
     value: firstPassenger?.name || booking?.bookingBy || "-",
     font,
   });
@@ -469,7 +475,7 @@ const generateBusBookingInvoiceBase64 = async (booking, busName) => {
   y1 = drawLabelValue(page, {
     x: col1X,
     y: y1,
-    label: "Time",
+    label: `${translateLn(ln, "TIME")}`,
     value: jTime,
     font,
   });
@@ -500,7 +506,7 @@ const generateBusBookingInvoiceBase64 = async (booking, busName) => {
   y1 = drawLabelValue(page, {
     x: col1X,
     y: y1,
-    label: "Seat",
+    label: `${translateLn(ln, "SEAT")}`,
     value: seatText,
     font,
   });
@@ -509,16 +515,19 @@ const generateBusBookingInvoiceBase64 = async (booking, busName) => {
   let y2 = contentTopY;
 
   page.drawText(
-    `From: ${booking?.from || booking?.route?.startLocation || "-"}`,
+    `${translateLn(ln, "FROM")}: ${booking?.from || booking?.route?.startLocation || "-"}`,
     { x: col2X, y: y2, size: 14, font }
   );
   y2 -= LINE;
-  page.drawText(`To:   ${booking?.to || booking?.route?.endLocation || "-"}`, {
-    x: col2X,
-    y: y2,
-    size: 14,
-    font,
-  });
+  page.drawText(
+    `${translateLn(ln, "TO")}:   ${booking?.to || booking?.route?.endLocation || "-"}`,
+    {
+      x: col2X,
+      y: y2,
+      size: 14,
+      font,
+    }
+  );
   y2 -= LINE / 2;
 
   // QR code (booking._id)
@@ -554,7 +563,7 @@ const generateBusBookingInvoiceBase64 = async (booking, busName) => {
     height: qrSize,
   });
 
-  page.drawText("Scan To Validate Ticket", {
+  page.drawText(`${translateLn(ln, "SCAN_TICKET")}`, {
     x: col2X + colW / 2 - 70,
     y: qrY - 16,
     size: 11,
@@ -590,7 +599,7 @@ const generateBusBookingInvoiceBase64 = async (booking, busName) => {
   y3 = drawLabelValue(page, {
     x: col3X,
     y: y3,
-    label: "Time",
+    label: `${translateLn(ln, "TIME")}`,
     value: arrTime,
     font,
   });
@@ -599,7 +608,7 @@ const generateBusBookingInvoiceBase64 = async (booking, busName) => {
   y3 = drawLabelValue(page, {
     x: col3X,
     y: y3,
-    label: "Price",
+    label: `${translateLn(ln, "PRICE")}`,
     value: `${booking?.price ?? "-"} ${currency}`.trim(),
     font,
   });
@@ -617,7 +626,7 @@ const generateBusBookingInvoiceBase64 = async (booking, busName) => {
   y3 = drawLabelValue(page, {
     x: col3X,
     y: y3,
-    label: "Class",
+    label: `${translateLn(ln, "CLASS")}`,
     value: klass,
     font,
   });
@@ -633,7 +642,7 @@ const generateBusBookingInvoiceBase64 = async (booking, busName) => {
     borderWidth: 1,
   });
 
-  page.drawText("GATES WILL CLOSE 25 MINUTES TO DEPARTURE TIME", {
+  page.drawText(`${translateLn(ln, "GATE_CLOSE")}`, {
     x: BORDER_X + 18,
     y: BORDER_Y + 16,
     size: 14,
@@ -647,7 +656,7 @@ const generateBusBookingInvoiceBase64 = async (booking, busName) => {
       ? fmtTime(booking.journeyDate)
       : "-";
 
-  page.drawText(`BOARDING TIME: ${boardingTime}`, {
+  page.drawText(`${translateLn(ln, "BOARDING_TIME")} : ${boardingTime}`, {
     x: BORDER_X + BORDER_W - 280,
     y: BORDER_Y + 16,
     size: 14,
