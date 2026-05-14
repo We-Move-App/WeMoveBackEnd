@@ -564,6 +564,8 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     createdBy,
   } = req.query;
 
+  console.log(req.query);
+
   page = parseInt(page);
   limit = parseInt(limit);
   const skip = (page - 1) * limit;
@@ -628,7 +630,7 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     },
 
     // ✅ Unwind passengers so we can search inside
-    { $unwind: { path: "$passengers", preserveNullAndEmptyArrays: true } },
+    // { $unwind: { path: "$passengers", preserveNullAndEmptyArrays: true } },
   ];
 
   if (search && search.trim() !== "") {
@@ -637,20 +639,34 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     }
 
     const regex = new RegExp(escapeRegex(search), "i");
+
     const isDate = !isNaN(Date.parse(search));
 
     bookingsPipeline.push({
       $match: {
         $or: [
-          { "passengers.name": regex },
-          { "passengers.contactNumber": regex },
-          { "passengers.email": regex },
+          {
+            passengers: {
+              $elemMatch: {
+                $or: [
+                  { name: regex },
+                  { contactNumber: regex },
+                  { email: regex },
+                ],
+              },
+            },
+          },
+
           { bookingId: regex },
+
           { paymentStatus: regex },
+
           { status: regex },
+
           { "bus.busRegNumber": regex },
-          isDate ? { journeyDate: new Date(search) } : null,
-        ].filter(Boolean),
+
+          ...(isDate ? [{ journeyDate: new Date(search) }] : []),
+        ],
       },
     });
   }
@@ -705,18 +721,20 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
       paymentStatus: booking.paymentStatus,
       status: booking.status,
       createdAt: booking.createdAt,
-      passengers: booking.passengers
-        ? [
-            {
-              name: booking.passengers.name,
-              age: booking.passengers.age,
-              gender: booking.passengers.gender,
-              contactNumber: booking.passengers.contactNumber,
-              seatNumber: booking.passengers.seatNumber,
-              email: booking.passengers.email,
-            },
-          ]
-        : [],
+
+      passengers: booking.passengers || [],
+      // passengers: booking.passengers
+      //   ? [
+      //       {
+      //         name: booking.passengers.name,
+      //         age: booking.passengers.age,
+      //         gender: booking.passengers.gender,
+      //         contactNumber: booking.passengers.contactNumber,
+      //         seatNumber: booking.passengers.seatNumber,
+      //         email: booking.passengers.email,
+      //       },
+      //     ]
+      //   : [],
     })),
   });
 });
