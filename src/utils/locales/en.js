@@ -417,6 +417,7 @@ module.exports = {
   TRANSACTION_BUS: "Bus Booking",
   TRANSACTION_HOTEL: "Hotel Booking",
   TRANSACTION_WALLET: "Wallet Top-up",
+  TRANSACTION_USER_TO_USER: "User to User Payment",
   ERROR_DUPLICATE_EMAIL_PHONE:
     "Email or phone number is already in use by another operator",
 

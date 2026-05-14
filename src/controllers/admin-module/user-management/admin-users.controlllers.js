@@ -304,8 +304,6 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
     usersByRideAppUserId.map((u) => [u.userId, u])
   );
 
-  // 3) Format outputs (no bookedBy.* access)
-
   const formattedBusBookings = busBookings.map((b) => {
     const u = b.bookedBy ? userByObjectId.get(String(b.bookedBy)) : null;
     return {
@@ -429,6 +427,9 @@ const getAllBookingsByUserId = catchAsyncError(async (req, res) => {
     if (t.includes("bus")) return "TRANSACTION_BUS";
     if (t.includes("hotel")) return "TRANSACTION_HOTEL";
     if (t.includes("wallet")) return "TRANSACTION_WALLET";
+    if (t.includes("user to user")) {
+      return "TRANSACTION_USER_TO_USER";
+    }
 
     return null;
   };
