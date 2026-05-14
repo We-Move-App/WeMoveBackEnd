@@ -455,6 +455,9 @@ module.exports = {
   TRANSACTION_BUS: "Réservation de bus",
   TRANSACTION_HOTEL: "Réservation d'hôtel",
   TRANSACTION_WALLET: "Recharge portefeuille",
+  TRANSACTION_USER_TO_USER: "Paiement d'utilisateur à utilisateur",
+
+  "User to User Payment": "User to User Payment",
   ERROR_DUPLICATE_EMAIL_PHONE:
     "L'e-mail ou le numéro de téléphone est déjà utilisé par un autre opérateur",
   ERROR_REQUIRED_CONTACT: "L'email ou le numéro de téléphone est requis",
