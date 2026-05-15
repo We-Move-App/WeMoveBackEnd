@@ -279,6 +279,9 @@ async function runListAggregate(match, skip, limit, wantTotals) {
 
 const getTransactionsSuperAdmin = catchAsyncError(async (req, res) => {
   assertSuperAdmin(req);
+  const ln = req.get("ln") || "en";
+
+  console.log(ln);
 
   const {
     page,
@@ -481,6 +484,14 @@ const getTransactionsSuperAdmin = catchAsyncError(async (req, res) => {
   const totalRecords = agg?.meta?.[0]?.totalRecords || 0;
   const totals = agg?.totals?.[0] || {};
 
+  const formattedData = data.map((txn) => ({
+    ...txn,
+    description:
+      typeof txn.description === "object"
+        ? txn.description?.[ln] || txn.description?.en || ""
+        : txn.description || "",
+  }));
+
   return res.status(statusCode.OK).json({
     page,
     limit,
@@ -488,7 +499,7 @@ const getTransactionsSuperAdmin = catchAsyncError(async (req, res) => {
     totalRecords,
     creditTotal: totals.creditTotal || 0,
     debitTotal: totals.debitTotal || 0,
-    data,
+    data: formattedData,
   });
 });
 
