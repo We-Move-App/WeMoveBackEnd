@@ -310,7 +310,10 @@ const getTransactionsSuperAdmin = catchAsyncError(async (req, res) => {
           amount: adminEntry?.amount,
           status: txn.status,
           date: txn.createdAt,
-          description: txn.description,
+          description:
+            typeof txn.description === "object"
+              ? txn.description?.[ln] || txn.description?.en || ""
+              : txn.description || "",
         },
         "Transaction details fetched successfully"
       )

@@ -623,7 +623,10 @@ const completeRide = catchAsyncError(async (req, res, next) => {
           status: PaymentStatusEnum.SUCCESS,
           currency: process.env.MOMO_CURRENCY,
           totalAmount: totalFare,
-          description: `${booking.vehicleType} Ride from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
+          description: {
+            en: `${booking.vehicleType} ride from ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
+            fr: `${booking.vehicleType} trajet de ${booking.pickupLocation.address} → ${booking.dropLocation.address}`,
+          },
           platformFee: platformFee,
           operatorShare: driverShare,
           entries: [

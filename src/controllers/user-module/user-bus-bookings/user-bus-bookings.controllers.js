@@ -324,6 +324,10 @@ const createBusBooking = catchAsyncError(async (req, res) => {
           bookingId: booking.bookingId,
           status: PaymentStatusEnum.SUCCESS,
           totalAmount: finalAmount,
+          description: {
+            en: `Bus booking from ${from} to ${to}`,
+            fr: `Réservation de bus de ${from} à ${to}`,
+          },
           platformFee: commission,
           operatorShare: finalAmount - commission,
           entries: [

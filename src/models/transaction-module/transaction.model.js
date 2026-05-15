@@ -93,7 +93,16 @@ const transactionSchema = new mongoose.Schema(
       min: 0,
     },
 
-    description: String,
+    description: {
+      en: {
+        type: String,
+        default: null,
+      },
+      fr: {
+        type: String,
+        default: null,
+      },
+    },
 
     /**
      * Ledger entries
