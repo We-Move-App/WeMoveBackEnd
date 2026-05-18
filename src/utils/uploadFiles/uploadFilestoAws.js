@@ -19,10 +19,10 @@ const {
 
 const s3 = new S3Client({
   region: "us-east-1", // any value works for DO Spaces
-  endpoint: do_spaces_endpoint,
+  endpoint: do_endpoint,
   credentials: {
-    accessKeyId: do_spaces_key,
-    secretAccessKey: do_spaces_secret,
+    accessKeyId: do_access_key,
+    secretAccessKey: do_secret_key,
   },
   forcePathStyle: false,
 });
@@ -54,7 +54,7 @@ const uploadImageOnAws = async (localFilePath, folderName = "wemove") => {
     }
 
     return {
-      secure_url: `${do_spaces_endpoint}/${fileName}`,
+      secure_url: `${do_endpoint}/${fileName}`,
       public_id: fileName,
     };
   } catch (error) {
