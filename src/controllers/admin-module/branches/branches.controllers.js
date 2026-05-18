@@ -38,16 +38,12 @@ const addBranch = catchAsyncError(async (req, res) => {
 
   const branch = await BranchModel.create({ name, location });
 
-  return res.status(statusCode.CREATED).json(
-    new ApiResponse(
-      statusCode.CREATED,
-      branch,
-      "Branch created successfully"
-    )
-  );
+  return res
+    .status(statusCode.CREATED)
+    .json(
+      new ApiResponse(statusCode.CREATED, branch, "Branch created successfully")
+    );
 });
-
-
 
 const getAllBranches = catchAsyncError(async (req, res, next) => {
   const page = parseInt(req.query.page) || 1;

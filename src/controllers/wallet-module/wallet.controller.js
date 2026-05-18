@@ -469,7 +469,6 @@ const getTransactions = catchAsyncError(async (req, res) => {
   console.log("JWT Token:", jwtToken);
 
   const decoded = decodeAccessToken(jwtToken);
-  console.log("Decoded Token null:", decoded);
 
   const {
     entity,
@@ -479,6 +478,8 @@ const getTransactions = catchAsyncError(async (req, res) => {
   } = req.query;
 
   const userId = decoded?._id;
+  console.log("userId", userId);
+
   const driverIdFromToken = decoded?.driverId;
 
   if (entity === "driver" && !driverIdFromToken) {
@@ -533,7 +534,10 @@ const getTransactions = catchAsyncError(async (req, res) => {
       status: tx.status,
       amount,
       currency: tx.currency,
-      description: tx.description,
+      description:
+        typeof tx.description === "object"
+          ? tx.description?.[ln] || tx.description?.en || ""
+          : tx.description || "",
 
       platformFee,
       operatorShare,
