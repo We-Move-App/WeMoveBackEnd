@@ -270,6 +270,7 @@ module.exports = {
   AMENITY_LAUNDRY_SERVICE: "Service de blanchisserie",
   AMENITY_SWIMMING_POOL: "Piscine",
   AMENITY_FREE_WIFI: "Wi-Fi gratuit",
+  AMENITIES_FETCHED_SUCCESSFULLY: "Équipements récupérés avec succès",
 
   HOTEL_FETCHED: "Détails de l'hôtel récupérés avec succès",
   HOTEL_NOT_FOUND: "Hôtel non trouvé",
