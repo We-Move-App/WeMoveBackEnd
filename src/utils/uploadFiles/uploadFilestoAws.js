@@ -60,7 +60,7 @@ const uploadImageOnAws = async (localFilePath, folderName = "wemove") => {
     }
 
     return {
-      secure_url: `${do_endpoint}/${fileName}`,
+      secure_url: `https://${bucketName}.blr1.digitaloceanspaces.com/${fileName}`,
       public_id: fileName,
     };
   } catch (error) {
