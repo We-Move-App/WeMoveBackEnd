@@ -284,6 +284,7 @@ module.exports = {
   AMENITY_TV: "TV",
   AMENITY_SWIMMING_POOL: "Swimming Pool",
   AMENITY_LAUNDRY_SERVICE: "Laundry Service",
+  AMENITIES_FETCHED_SUCCESSFULLY: "Amenities fetched successfully",
 
   HOTEL_FETCHED: "Hotel details fetched successfully",
   HOTEL_NOT_FOUND: "Hotel not found",
