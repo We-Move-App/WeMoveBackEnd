@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const { Schema } = mongoose;
+const { parsePhoneNumberFromString } = require("libphonenumber-js");
 
 // Validation for full name
 function validateFullName(fullName) {
@@ -20,8 +21,15 @@ function validateEmail(email) {
 
 // Validation for phone number
 function validatePhoneNumber(phoneNumber) {
-  const regex = /^[0-9]{9}$/;
-  return regex.test(phoneNumber);
+  try {
+    if (!phoneNumber) return false;
+
+    const parsed = parsePhoneNumberFromString(phoneNumber);
+
+    return parsed?.isValid() || false;
+  } catch (error) {
+    return false;
+  }
 }
 
 function securePinValidator(pin) {

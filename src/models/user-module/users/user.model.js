@@ -36,8 +36,15 @@ const userSchema = new mongoose.Schema(
     phoneNumber: {
       type: String,
       unique: true,
+      trim: true,
       validate: {
-        validator: validatePhoneNumber,
+        validator: function (value) {
+          if (!value) return true;
+
+          const cleanedPhone = value.replace(/[\s()-]/g, "");
+
+          return validatePhoneNumber(cleanedPhone);
+        },
         message: (props) => `${props.value} is not a valid phone number!`,
       },
       sparse: true,
