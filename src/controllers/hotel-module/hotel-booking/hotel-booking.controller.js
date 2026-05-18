@@ -274,6 +274,10 @@ const createBooking = catchAsyncError(async (req, res) => {
           bookingId: booking[0].bookingId,
           status: PaymentStatusEnum.SUCCESS,
           totalAmount: finalAmount,
+          description: {
+            en: `Hotel booking at ${hotelExists.hotelName}`,
+            fr: `Réservation d'hôtel à ${hotelExists.hotelName}`,
+          },
           platformFee,
           operatorShare,
           entries: [

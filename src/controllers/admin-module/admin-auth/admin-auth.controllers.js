@@ -1714,7 +1714,10 @@ const getTransactionHistory = async (req, res) => {
               : 0,
         date: txn.createdAt,
         status: txn.status,
-        description: txn.description ? translateLn(ln, txn.description) : "",
+        description:
+          typeof txn.description === "object"
+            ? txn.description?.[ln] || txn.description?.en || ""
+            : txn.description || "",
       });
     }
 
