@@ -10,42 +10,51 @@ const {
   aws_access_key_id,
   aws_secret_access_key,
   aws_bucket_name,
+
+  do_access_key,
+  do_bucket_name,
+  do_endpoint,
+  do_secret_key,
 } = require("../../config/config");
 
 const s3 = new S3Client({
-  region: aws_region,
+  region: "us-east-1", // any value works for DO Spaces
+  endpoint: do_spaces_endpoint,
   credentials: {
-    accessKeyId: aws_access_key_id,
-    secretAccessKey: aws_secret_access_key,
+    accessKeyId: do_spaces_key,
+    secretAccessKey: do_spaces_secret,
   },
+  forcePathStyle: false,
 });
 
-const awsBucketName = aws_bucket_name;
-const awsRegion = aws_region;
+const bucketName = do_bucket_name;
 
 const uploadImageOnAws = async (localFilePath, folderName = "wemove") => {
   try {
     if (!localFilePath) return null;
 
     const fileStream = fs.createReadStream(localFilePath);
-    const fileName = `${folderName}/${Date.now()}-${path.basename(localFilePath)}`;
+
+    const fileName = `${folderName}/${Date.now()}-${path.basename(
+      localFilePath
+    )}`;
 
     const uploadParams = {
-      Bucket: awsBucketName,
+      Bucket: bucketName,
       Key: fileName,
       Body: fileStream,
-      ContentType: "auto",
+      ACL: "public-read",
+      ContentType: mime.lookup(localFilePath) || "application/octet-stream",
     };
 
     await s3.send(new PutObjectCommand(uploadParams));
 
-    // Remove local file after upload
     if (fs.existsSync(localFilePath)) {
       fs.unlinkSync(localFilePath);
     }
 
     return {
-      secure_url: `https://${awsBucketName}.s3.${awsRegion}.amazonaws.com/${fileName}`,
+      secure_url: `${do_spaces_endpoint}/${fileName}`,
       public_id: fileName,
     };
   } catch (error) {
@@ -61,22 +70,31 @@ const uploadImageOnAws = async (localFilePath, folderName = "wemove") => {
 
 const deleteImageFromAws = async (fileKey) => {
   try {
-    if (!fileKey) throw new Error("File key is required to delete an image.");
+    if (!fileKey) {
+      throw new Error("File key is required");
+    }
 
-    
     const deleteParams = {
-      Bucket: awsBucketName,
+      Bucket: bucketName,
       Key: fileKey,
     };
 
     await s3.send(new DeleteObjectCommand(deleteParams));
 
-    console.log(`Image '${fileKey}' deleted successfully.`);
-    return { success: true, message: `Image '${fileKey}' deleted.` };
+    console.log(`Deleted: ${fileKey}`);
+
+    return {
+      success: true,
+      message: `Deleted ${fileKey}`,
+    };
   } catch (error) {
-    console.error("Error deleting image from S3:", error.message);
+    console.error("Delete Error:", error);
+
     return null;
   }
 };
 
-module.exports = { uploadImageOnAws, deleteImageFromAws };
+module.exports = {
+  uploadImageOnAws,
+  deleteImageFromAws,
+};
