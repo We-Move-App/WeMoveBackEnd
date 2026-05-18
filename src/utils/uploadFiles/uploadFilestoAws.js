@@ -1,5 +1,7 @@
 const fs = require("fs");
 const path = require("path");
+const mime = require("mime-types");
+
 const {
   S3Client,
   PutObjectCommand,
@@ -32,6 +34,10 @@ const bucketName = do_bucket_name;
 const uploadImageOnAws = async (localFilePath, folderName = "wemove") => {
   try {
     if (!localFilePath) return null;
+
+    if (!fs.existsSync(localFilePath)) {
+      throw new Error("File does not exist");
+    }
 
     const fileStream = fs.createReadStream(localFilePath);
 
