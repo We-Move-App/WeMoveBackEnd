@@ -16,9 +16,7 @@ const {
   verifyEmailOtp: verifyEmailOtpUtil,
 } = require("../../../utils/otpService/otpService");
 
-// ==============================
-// Send OTP (email or phone)
-// ==============================
+
 const sendOtpEmailOrPhoneNumber = catchAsyncError(async (req, res) => {
   const { emailOrPhone } = req.body;
 

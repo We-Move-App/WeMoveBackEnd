@@ -160,7 +160,7 @@ module.exports = {
   user: "User",
   "bus-operator": "Bus Operator",
   "hotel-manager": "Hotel Manager",
-  driver: "Driver",
+  Driver: "Driver",
   admin: "Admin",
   system: "System",
 

@@ -20,7 +20,7 @@ function validateEmail(email) {
 
 // Validation for phone number
 function validatePhoneNumber(phoneNumber) {
-  const regex = /^\+?[1-9]\d{8,14}$/;
+  const regex = /^[0-9]{9}$/;
   return regex.test(phoneNumber);
 }
 
