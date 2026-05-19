@@ -58,7 +58,15 @@ const generateOtp = () => {
 
 // =====================|| REGISTER HOTEL-MANAGER ||==========================
 const registerHotelManager = catchAsyncError(async (req, res, next) => {
-  let { email, fullName, password, address, phoneNumber, branch } = req.body;
+  let {
+    email,
+    fullName,
+    password,
+    address: companyAddress,
+    phoneNumber,
+    branch,
+    companyName,
+  } = req.body;
 
   const reqField = [
     "email",
@@ -67,6 +75,7 @@ const registerHotelManager = catchAsyncError(async (req, res, next) => {
     "address",
     "phoneNumber",
     "branch",
+    "companyName",
   ];
   validateRequestBody(reqField, req.body);
   email = email?.trim().toLowerCase();
@@ -150,9 +159,10 @@ const registerHotelManager = catchAsyncError(async (req, res, next) => {
     email,
     fullName,
     password,
-    address,
     phoneNumber,
     branch: branchDoc._id,
+    companyName,
+    companyAddress,
   });
   try {
     await newUser.save();
