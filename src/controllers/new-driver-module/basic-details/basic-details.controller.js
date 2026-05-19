@@ -313,6 +313,7 @@ const updatePin = catchAsyncError(async (req, res) => {
       "Access token is missing or invalid"
     );
   }
+  const ln = req.get("ln") || "en";
 
   const accessToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(accessToken);
@@ -325,13 +326,16 @@ const updatePin = catchAsyncError(async (req, res) => {
   // ----------------- Step 2: Fetch Driver -----------------
   const driver = await DriverBasicDetails.findOne({ driverId });
   if (!driver) {
-    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "DRIVER_NOT_FOUND")
+    );
   }
 
   if (!driver.isPinExist || !driver.pin) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "No existing pin found. Please create a pin first."
+      translateLn(ln, "SECURE_PIN_NOT_SET")
     );
   }
 
@@ -340,35 +344,38 @@ const updatePin = catchAsyncError(async (req, res) => {
   if (!oldPin || !newPin || !confirmPin) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "oldPin, newPin and confirmPin are required"
+      translateLn(ln, "ENTER_NEW_AND_CONFIRM_PIN")
     );
   }
 
   // ----------------- Step 4: Verify Old Pin -----------------
   const isMatch = await bcrypt.compare(oldPin, driver.pin);
   if (!isMatch) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Old pin is incorrect");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "OLD_SECURE_PIN_INCORRECT")
+    );
   }
 
   // ----------------- Step 5: Validate New Pin -----------------
   if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "New pin must be a 4-digit number"
+      translateLn(ln, "SECURE_PIN_LENGTH_INVALID")
     );
   }
 
   if (newPin !== confirmPin) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "New pin and confirm pin do not match"
+      translateLn(ln, "SECURE_PIN_MISMATCH")
     );
   }
 
   if (oldPin === newPin) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "New pin cannot be same as old pin"
+      translateLn(ln, "SECURE_PIN_SAME_AS_OLD")
     );
   }
 
@@ -382,7 +389,13 @@ const updatePin = catchAsyncError(async (req, res) => {
   // ----------------- Step 7: Response -----------------
   return res
     .status(statusCode.OK)
-    .json(new ApiResponse(statusCode.OK, {}, "Pin updated successfully"));
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        {},
+        translateLn(ln, "SECURE_PIN_UPDATED_SUCCESSFULLY")
+      )
+    );
 });
 
 const verifyPin = catchAsyncError(async (req, res) => {
