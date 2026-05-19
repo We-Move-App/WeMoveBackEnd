@@ -495,6 +495,7 @@ const resetSecurePin = catchAsyncError(async (req, res) => {
       "Access token is missing or invalid"
     );
   }
+  const ln = req.get("ln") || "en";
 
   const accessToken = authHeader.split(" ")[1];
   const decoded = decodeAccessToken(accessToken);
@@ -507,7 +508,10 @@ const resetSecurePin = catchAsyncError(async (req, res) => {
   // ----------------- Step 2: Fetch Driver -----------------
   const driver = await DriverBasicDetails.findOne({ driverId });
   if (!driver) {
-    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "DRIVER_NOT_FOUND")
+    );
   }
 
   // ----------------- Step 3: Extract Body -----------------
@@ -515,7 +519,7 @@ const resetSecurePin = catchAsyncError(async (req, res) => {
   if (!newPin || !confirmPin) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "newPin and confirmPin are required"
+      translateLn(ln, "ENTER_NEW_AND_CONFIRM_PIN")
     );
   }
 
@@ -523,14 +527,14 @@ const resetSecurePin = catchAsyncError(async (req, res) => {
   if (newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "New pin must be a 4-digit number"
+      translateLn(ln, "SECURE_PIN_LENGTH_INVALID")
     );
   }
 
   if (newPin !== confirmPin) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "New pin and confirm pin do not match"
+      translateLn(ln, "SECURE_PIN_MISMATCH")
     );
   }
 
@@ -549,7 +553,13 @@ const resetSecurePin = catchAsyncError(async (req, res) => {
   // ----------------- Step 7: Response -----------------
   return res
     .status(statusCode.OK)
-    .json(new ApiResponse(statusCode.OK, {}, "Pin reset successfully"));
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        {},
+        translateLn(ln, "SECURE_PIN_UPDATED_SUCCESSFULLY")
+      )
+    );
 });
 
 const deleteDriverProfile = catchAsyncError(async (req, res, next) => {

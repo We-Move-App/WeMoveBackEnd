@@ -426,8 +426,7 @@ const getTransactions = catchAsyncError(async (req, res) => {
     amount: tx.totalAmount,
     description: tx.description,
     status: tx.status,
-    date: tx.createdAt?.toISOString().split("T")[0],
-    time: tx.createdAt?.toISOString().split("T")[1].split(".")[0],
+    createdAt: tx.createdAt,
   }));
 
   return res.status(statusCode.OK).json(
