@@ -49,8 +49,11 @@ const momoStatus = catchAsyncError(async (req, res) => {
 
   const io = getIO();
 
+  const transactionObj = transaction.toObject();
+  const { description, ...transactionWithoutDescription } = transactionObj;
+
   io.to(String(userId)).emit("payment:status", {
-    ...transaction.toObject(),
+    ...transactionWithoutDescription,
     userId,
     amount,
     message:

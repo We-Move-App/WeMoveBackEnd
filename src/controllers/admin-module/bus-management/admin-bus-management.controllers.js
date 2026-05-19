@@ -564,8 +564,6 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     createdBy,
   } = req.query;
 
-  console.log(req.query);
-
   page = parseInt(page);
   limit = parseInt(limit);
   const skip = (page - 1) * limit;

@@ -2,7 +2,7 @@
   "BIKE": {
     "id": "001",
     "text": "Bike Ride",
-    "logo": "https://wemove-demo.s3.eu-north-1.amazonaws.com/wemove/1753331035381-103f5d728699ce5f97182931b183862f",
+    "logo": "https://wemoveallbucket.blr1.digitaloceanspaces.com/wemove/1779167600665-062eadcfd80f4d5806c1e7723b4af7e9",
     "baseFare": 25,
     "perKm": 5,
     "perMin": 1
@@ -10,7 +10,7 @@
   "TAXI": {
     "id": "002",
     "text": "Taxi Ride",
-    "logo": "https://wemove-demo.s3.eu-north-1.amazonaws.com/wemove/1753331062475-794a3011ff5207dfd3aed7bc31536797",
+    "logo": "https://wemoveallbucket.blr1.digitaloceanspaces.com/wemove/1779167253574-ec3f876705f9925bd62ffb28a97a6d5f",
     "baseFare": 35,
     "perKm": 7,
     "perMin": 1.5

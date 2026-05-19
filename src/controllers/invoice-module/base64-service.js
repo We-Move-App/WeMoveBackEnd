@@ -48,7 +48,7 @@ const generateHotelInvoiceBase64 = async (booking, ln) => {
   return Buffer.from(pdfBytes).toString("base64");
 };
 
-const generateTransactionReceiptBase64 = async (txn) => {
+const generateTransactionReceiptBase64 = async (txn, ln) => {
   const browser = await puppeteer.launch({
     headless: "new",
     executablePath: process.env.CHROME_PATH || "/usr/bin/chromium-browser",
@@ -73,7 +73,7 @@ const generateTransactionReceiptBase64 = async (txn) => {
   const logoBase64 = fs.readFileSync(logoPath).toString("base64");
   const logoDataUrl = `data:image/png;base64,${logoBase64}`;
 
-  const html = await getTransactionReceiptHTML(txn, logoDataUrl);
+  const html = await getTransactionReceiptHTML(txn, logoDataUrl, ln);
 
   await page.setContent(html, { waitUntil: "networkidle0" });
   await page.emulateMediaType("screen");

@@ -711,7 +711,6 @@ const updateBikeDriverByAdmin = catchAsyncError(async (req, res) => {
   if (!savedDriver)
     throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
   const branch = basicDriverDetails?.branch;
-  console.log("branch", branch);
   if (branch) {
     const branchDoc = await BranchModel.findById(branch);
 
@@ -1242,7 +1241,6 @@ const getTaxiDriverDetailsById = catchAsyncError(async (req, res) => {
   const { driverId } = req.params;
   const { vehicleType } = req.query;
   const ln = (req.headers["ln"] || "en").toLowerCase();
-  console.log(ln);
 
   if (!driverId || !vehicleType) {
     throw new ApiError(
