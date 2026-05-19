@@ -483,4 +483,9 @@ module.exports = {
   CLASS: "Classe",
   FROM: "De",
   TO: "À",
+
+  TRANSACTION_RECEIPT: "Reçu de transaction",
+  TRANSACTION_TYPE: "Type de transaction",
+  TRANSACTION_ID: "ID de transaction",
+  COMMISSION_DEDUCTED: "Commission déduite",
 };

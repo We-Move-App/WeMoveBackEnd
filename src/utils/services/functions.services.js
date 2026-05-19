@@ -454,9 +454,8 @@ const resendOtpFunc = async ({ req, res, reqModel }) => {
     isPhoneNumber = validatePhoneNumber(emailOrPhone);
 
     if (!isEmail && !isPhoneNumber) {
-      return new ApiResponse(
+      throw new ApiError(
         statusCode.BAD_REQUEST,
-        {},
         "Enter a valid email or phone number"
       );
     }

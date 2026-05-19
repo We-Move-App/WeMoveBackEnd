@@ -40,6 +40,7 @@ const getHotelInvoice = catchAsyncError(async (req, res, next) => {
 
 const getTransactionReceipt = catchAsyncError(async (req, res) => {
   const { transactionId } = req.params;
+  const ln = req.get("ln") || "en";
 
   // New model: no userId / hotelManagerId / busOperatorId fields to populate.
   // We just fetch the ledger transaction and use meta + entries to render receipt.
@@ -49,7 +50,7 @@ const getTransactionReceipt = catchAsyncError(async (req, res) => {
     throw new ApiError(statusCode.NOT_FOUND, "Transaction not found");
   }
 
-  const base64Pdf = await generateTransactionReceiptBase64(txn);
+  const base64Pdf = await generateTransactionReceiptBase64(txn, ln);
 
   return res
     .status(statusCode.OK)

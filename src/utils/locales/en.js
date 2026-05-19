@@ -447,4 +447,9 @@ module.exports = {
   CLASS: "Class",
   FROM: "From",
   TO: "To",
+
+  TRANSACTION_RECEIPT: "Transaction Receipt",
+  TRANSACTION_TYPE: "Transaction Type",
+  TRANSACTION_ID: "Transaction ID",
+  COMMISSION_DEDUCTED: "Commission deducted",
 };

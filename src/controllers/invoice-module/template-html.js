@@ -248,9 +248,31 @@ const getHotelInvoiceHTML = (booking, logoDataUrl, ln) => {
 `;
 };
 
-const getTransactionReceiptHTML = async (txn, logoDataUrl) => {
+const getTransactionReceiptHTML = async (txn, logoDataUrl, ln) => {
   const receiptId = txn.transactionId || String(txn._id);
+  const statusMap = {
+    en: {
+      PENDING: "Pending",
+      SUCCESS: "Success",
+      FAILED: "Failed",
+    },
+
+    fr: {
+      PENDING: "En attente",
+      SUCCESS: "Succès",
+      FAILED: "Échoué",
+    },
+  };
+
+  const statusColorMap = {
+    SUCCESS: "#15803d",
+    FAILED: "#dc2626",
+    PENDING: "#ca8a04",
+  };
+
   const status = String(txn.status || "PENDING").toUpperCase();
+  const statusText = statusMap[ln]?.[status] || status;
+  const statusColor = statusColorMap[status] || "#374151";
 
   const createdAt = txn.createdAt ? new Date(txn.createdAt) : new Date();
   const dateStr = createdAt.toLocaleDateString();
@@ -340,7 +362,28 @@ const getTransactionReceiptHTML = async (txn, logoDataUrl) => {
     toId = await resolveGeneratedId(toEntityType, rawToId);
   }
 
-  const txnTypeText = txn.transactionType || "Transaction";
+  const transactionTypeMap = {
+    en: {
+      "Ride Booking": "Ride Booking",
+      "Bus Booking": "Bus Booking",
+      "Hotel Booking": "Hotel Booking",
+      "Wallet Top-up": "Wallet Top-up",
+      "User to User Payment": "User to User Payment",
+    },
+
+    fr: {
+      "Ride Booking": "Réservation de trajet",
+      "Bus Booking": "Réservation de bus",
+      "Hotel Booking": "Réservation d'hôtel",
+      "Wallet Top-up": "Recharge portefeuille",
+      "User to User Payment": "Paiement utilisateur à utilisateur",
+    },
+  };
+
+  const txnTypeText =
+    transactionTypeMap[ln]?.[txn.transactionType] ||
+    txn.transactionType ||
+    "Transaction";
 
   const userDebit = firstBy(
     (e) => e.type === "DEBIT" && e.entityType === "USER"
@@ -367,7 +410,7 @@ const getTransactionReceiptHTML = async (txn, logoDataUrl) => {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Transaction Receipt</title>
+  <title>Transacriton Receipt</title>
   <style>
     body {
       font-family: Arial, Helvetica, sans-serif;
@@ -429,7 +472,6 @@ const getTransactionReceiptHTML = async (txn, logoDataUrl) => {
       margin-top: 2px;
     }
     .status {
-      color: #15803d;
       font-weight: 700;
       font-size: 14px;
       margin-top: 2px;
@@ -468,34 +510,34 @@ const getTransactionReceiptHTML = async (txn, logoDataUrl) => {
       <img src="${logoDataUrl}" alt="WeMove All" class="logo" />
       <div class="company-name">WeMove All.</div>
     </div>
-    <div class="title">Transaction Receipt</div>
+    <div class="title">${translateLn(ln, "TRANSACTION_RECEIPT")}</div>
     <div class="receipt-id">${receiptId}</div>
     <hr />
     <div class="two-column">
       <div>
-        <div class="section-title">To</div>
+        <div class="section-title">${translateLn(ln, "TO")}</div>
         <div class="value">ID: ${toId}</div>
-        <div class="value"><strong>${toName}</strong></div>
-        <div class="label">Status:</div>
-        <div class="status">${status}</div>
+        <div class="value">${translateLn(ln, "NAME")}: <strong>${toName}</strong></div>
+        <div class="label">${translateLn(ln, "STATUS")}: </div>
+        <div class="status" style="color:${statusColor}">${statusText}</div>
       </div>
       <div>
-        <div class="section-title">From</div>
+        <div class="section-title">${translateLn(ln, "FROM")}</div>
         <div class="value">ID: ${fromId}</div>
-        <div class="value"><strong>${fromName}</strong></div>
+        <div class="value">${translateLn(ln, "NAME")}: <strong>${fromName}</strong></div>
       </div>
     </div>
     <hr />
-    <div class="section-title">Transaction Type</div>
-    <div class="transaction-type">${txnTypeText} (${actionText})</div>
+    <div class="section-title">${translateLn(ln, "TRANSACTION_TYPE")}</div>
+    <div class="transaction-type">${txnTypeText}</div>
     <hr />
     <table class="info-table">
-      <tr><td>Transaction ID</td><td>${receiptId}</td></tr>
+      <tr><td>${translateLn(ln, "TRANSACTION_ID")}</td><td>${receiptId}</td></tr>
       <tr><td>Date</td><td>${dateStr}</td></tr>
-      <tr><td>Time</td><td>${timeStr}</td></tr>
-      <tr><td>Booking ID</td><td>${bookingId}</td></tr>
-      <tr><td>Commission deducted</td><td>${platformFee} ${currency}</td></tr>
-      <tr><td class="total">Total Amount</td><td class="total">${totalAmount} ${currency}</td></tr>
+      <tr><td>${translateLn(ln, "TIME")}</td><td>${timeStr}</td></tr>
+      <tr><td>${translateLn(ln, "BOOKING_ID")}</td><td>${bookingId}</td></tr>
+      <tr><td>${translateLn(ln, "COMMISSION_DEDUCTED")}</td><td>${platformFee} ${currency}</td></tr>
+      <tr><td class="total">${translateLn(ln, "TOTAL_AMOUNT")}</td><td class="total">${totalAmount} ${currency}</td></tr>
     </table>
   </div>
 </body>
