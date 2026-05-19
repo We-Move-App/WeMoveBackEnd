@@ -34,6 +34,8 @@ module.exports = {
   Hotel: "Hotel",
   Bus: "Bus",
   Bike: "Bike",
+  Taxi: "Taxi",
+  
   "All Services": "All Services",
   Active: "Active",
   Inactive: "Inactive",

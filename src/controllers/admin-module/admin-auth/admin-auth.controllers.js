@@ -152,7 +152,7 @@ const addAdmins = catchAsyncError(async (req, res, next) => {
     );
   }
 
-  const defaultPassword = "Admin@123";
+  const defaultPassword = "admin@123";
   const adminId = await generateCustomId(EntityCodeEnum.ADMIN, "A");
 
   const newUser = new AdminModel({

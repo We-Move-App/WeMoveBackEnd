@@ -338,7 +338,7 @@ const registerHotelManagerFromAdmin = catchAsyncError(
         ...profileInfo,
         managerId,
         email: profileInfo.email?.toLowerCase(),
-        password: "admin@123",
+        password: "hotelManager@123",
         createdBy: adminId,
         isverified: true,
         verificationStatus: "approved",

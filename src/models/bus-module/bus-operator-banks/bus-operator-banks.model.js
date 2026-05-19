@@ -36,7 +36,7 @@ const BusOperatorBankSchema = new mongoose.Schema(
     },
     phoneNumber: {
       type: String,
-      match: [/^\d{9}$/, "Phone number must be exactly 9 digits"],
+    
     },
     isPrimary: {
       type: Boolean,

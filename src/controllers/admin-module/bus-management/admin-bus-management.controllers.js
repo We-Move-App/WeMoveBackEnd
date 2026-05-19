@@ -198,7 +198,7 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
   const busOperatorData = {
     ...basicInfo,
     operatorId: busOperatorId,
-    password: "operator@123",
+    password: "busOperator@123",
     verificationStatus: "approved",
     termAndCondition: true,
     emailVerified: true,

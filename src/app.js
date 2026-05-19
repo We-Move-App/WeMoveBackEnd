@@ -292,7 +292,7 @@ app.use("/api/v1/admin/wallet", adminWalletRoute);
 // Global Routes
 app.use("/api/v1/google-search", googleSearchRoutes);
 app.use("/api/v1/verification", verificationRoutes);
-app.use("/api/v1/amenities", amenititesRoutes);
+app.use("/api/v1/admin/amenities", amenititesRoutes);
 
 // Fcm
 app.use("/api/v1/fcm", fcmRouter);
