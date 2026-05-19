@@ -191,7 +191,6 @@ const deleteUserPermanently = catchAsyncError(async (req, res, next) => {
 const getAllUsersBookings = catchAsyncError(async (req, res) => {
   const adminId = req.user._id;
   const ln = (req.headers["ln"] || "en").toLowerCase();
-  console.log(ln);
 
   const {
     page = 1,

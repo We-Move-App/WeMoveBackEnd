@@ -353,7 +353,6 @@ const addSubAdmins = catchAsyncError(async (req, res, next) => {
 
 const loginAdmin = catchAsyncError(async (req, res, next) => {
   const { username, password } = req.body;
-  console.log(req.body);
 
   if (!username?.trim() || !password?.trim()) {
     throw new ApiError(

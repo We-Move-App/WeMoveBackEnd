@@ -281,8 +281,6 @@ const getTransactionsSuperAdmin = catchAsyncError(async (req, res) => {
   assertSuperAdmin(req);
   const ln = req.get("ln") || "en";
 
-  console.log(ln);
-
   const {
     page,
     limit,
