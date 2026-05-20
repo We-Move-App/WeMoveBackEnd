@@ -43,6 +43,8 @@ const sendSms = async ({
       }
     );
 
+    console.log("SMS sent", response.data);
+
     return {
       success: true,
       messageId: response.data.messageId,

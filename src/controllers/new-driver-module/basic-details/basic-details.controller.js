@@ -611,7 +611,11 @@ const deleteDriverProfile = catchAsyncError(async (req, res, next) => {
     reason: "Driver requested account deletion",
   });
 
-  await DriverBasicDetails.findOneAndDelete({ driverId });
+  await Promise.all([
+    DriverBasicDetails.findOneAndDelete({ driverId }),
+    DriverBankDetails.findOneAndDelete({ driverId }),
+    VehicleDetails.findOneAndDelete({ driverId }),
+  ]);
 
   return res
     .status(statusCode.OK)

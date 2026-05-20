@@ -180,10 +180,10 @@ const requestTopay = catchAsyncError(async (req, res) => {
         transactionId: trx.transactionId,
         amount,
         status: PaymentStatusEnum.FAILED,
-        message: "Payment timed out after 350 seconds",
+        message: "Payment timed out",
       });
     }
-  }, 15000);
+  }, 5000);
 
   return res.status(statusCode.OK).json(
     new ApiResponse(

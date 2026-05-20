@@ -497,4 +497,9 @@ module.exports = {
   BOOKING_NOT_FOUND: "Réservation introuvable.",
   BOOKING_ALREADY_HAS_ASSIGNED_ROOMS:
     "La réservation a déjà {{assignedRooms}} chambre(s) attribuée(s), ce qui correspond au nombre requis de {{noOfRoom}}.",
+
+  VEHICLE_DETAILS_ADDED_SUCCESSFULLY:
+    "Les détails du véhicule ont été ajoutés avec succès",
+  VEHICLE_REGISTRATION_ALREADY_EXISTS:
+    "Un véhicule avec ce numéro d'immatriculation existe déjà",
 };
