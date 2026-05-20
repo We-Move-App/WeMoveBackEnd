@@ -183,7 +183,7 @@ const requestTopay = catchAsyncError(async (req, res) => {
         message: "Payment timed out",
       });
     }
-  }, 500);
+  }, 5000);
 
   return res.status(statusCode.OK).json(
     new ApiResponse(
