@@ -16,6 +16,7 @@ const {
   getVehicleDetailsWithDocs,
 } = require("../aggregations/vehicle-details.aggregations");
 const { DriverDocEnum } = require("../../../utils/constants/ENUM");
+const { translateLn } = require("../../../utils/services/translator.service");
 
 const validateDriver = async (authHeader) => {
   if (!authHeader?.startsWith("Bearer ")) {
@@ -57,99 +58,112 @@ const getVehicleImages = catchAsyncError(async (req, res) => {
 });
 
 const addVehicleDetails = catchAsyncError(async (req, res) => {
-  const { error, value } = addVehicleDetailsValidation.validate(req.body, {
-    abortEarly: false,
-  });
-  if (error) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      error.details.map((e) => e.message).join(", ")
-    );
-  }
+  const ln = req.get("ln") || "en";
 
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
-    throw new ApiError(
-      statusCode.UNAUTHORIZED,
-      "Access token is missing or invalid"
-    );
-  }
-
-  const accessToken = authHeader.split(" ")[1];
-  const decoded = decodeAccessToken(accessToken);
-  const driverId = decoded?.driverId;
-  if (!driverId) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
-  }
-
-  const vehicleUpdate = VehicleDetail.updateOne(
-    { driverId },
-    {
-      $set: {
-        ...value,
-        updatedAt: new Date(),
-      },
-    },
-    { upsert: true }
-  );
-
-  const existingDocEntry = await DriverDocDetails.findOne({ driverId });
-  let updatedDocuments = [];
-
-  if (!existingDocEntry) {
-    updatedDocuments = value.documents.map((doc) => ({
-      ...doc,
-      status: "pending",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }));
-
-    await Promise.all([
-      vehicleUpdate,
-      DriverDocDetails.create({ driverId, documents: updatedDocuments }),
-    ]);
-  } else {
-    const docMap = new Map();
-    existingDocEntry.documents.forEach((doc) =>
-      docMap.set(doc.documentType, doc)
-    );
-
-    value.documents.forEach((doc) => {
-      docMap.set(doc.documentType, {
-        ...docMap.get(doc.documentType),
-        documentType: doc.documentType,
-        fileUrl: doc.fileUrl,
-        status: "pending",
-        updatedAt: new Date(),
-      });
+  try {
+    const { error, value } = addVehicleDetailsValidation.validate(req.body, {
+      abortEarly: false,
     });
+    if (error) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        error.details.map((e) => e.message).join(", ")
+      );
+    }
 
-    updatedDocuments = Array.from(docMap.values());
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith("Bearer ")) {
+      throw new ApiError(
+        statusCode.UNAUTHORIZED,
+        "Access token is missing or invalid"
+      );
+    }
 
-    await Promise.all([
-      vehicleUpdate,
-      DriverDocDetails.updateOne(
-        { driverId },
-        { $set: { documents: updatedDocuments, updatedAt: new Date() } }
-      ),
-    ]);
-  }
+    const accessToken = authHeader.split(" ")[1];
+    const decoded = decodeAccessToken(accessToken);
+    const driverId = decoded?.driverId;
+    if (!driverId) {
+      throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+    }
 
-  const aggregatedData = await getVehicleDetailsWithDocs(driverId, [
-    DriverDocEnum.INSURANCE,
-    DriverDocEnum.REGISTRATION,
-    DriverDocEnum.VEHICLEPHOTO,
-  ]);
-
-  return res
-    .status(statusCode.CREATED)
-    .json(
-      new ApiResponse(
-        statusCode.CREATED,
-        aggregatedData,
-        "Vehicle details added successfully"
-      )
+    const vehicleUpdate = VehicleDetail.updateOne(
+      { driverId },
+      {
+        $set: {
+          ...value,
+          updatedAt: new Date(),
+        },
+      },
+      { upsert: true }
     );
+
+    const existingDocEntry = await DriverDocDetails.findOne({ driverId });
+    let updatedDocuments = [];
+
+    if (!existingDocEntry) {
+      updatedDocuments = value.documents.map((doc) => ({
+        ...doc,
+        status: "pending",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }));
+
+      await Promise.all([
+        vehicleUpdate,
+        DriverDocDetails.create({ driverId, documents: updatedDocuments }),
+      ]);
+    } else {
+      const docMap = new Map();
+      existingDocEntry.documents.forEach((doc) =>
+        docMap.set(doc.documentType, doc)
+      );
+
+      value.documents.forEach((doc) => {
+        docMap.set(doc.documentType, {
+          ...docMap.get(doc.documentType),
+          documentType: doc.documentType,
+          fileUrl: doc.fileUrl,
+          status: "pending",
+          updatedAt: new Date(),
+        });
+      });
+
+      updatedDocuments = Array.from(docMap.values());
+
+      await Promise.all([
+        vehicleUpdate,
+        DriverDocDetails.updateOne(
+          { driverId },
+          { $set: { documents: updatedDocuments, updatedAt: new Date() } }
+        ),
+      ]);
+    }
+
+    const aggregatedData = await getVehicleDetailsWithDocs(driverId, [
+      DriverDocEnum.INSURANCE,
+      DriverDocEnum.REGISTRATION,
+      DriverDocEnum.VEHICLEPHOTO,
+    ]);
+
+    return res
+      .status(statusCode.CREATED)
+      .json(
+        new ApiResponse(
+          statusCode.CREATED,
+          aggregatedData,
+          translateLn(ln, "VEHICLE_DETAILS_ADDED_SUCCESSFULLY")
+        )
+      );
+  } catch (err) {
+    if (err?.code === 11000 && err?.keyPattern?.registrationNo) {
+      throw new ApiError(
+        statusCode.CONFLICT,
+        translateLn(ln, "VEHICLE_REGISTRATION_ALREADY_EXISTS")
+      );
+    }
+
+    throw err;
+  }
 });
 
 const getDriverVehicleDetails = catchAsyncError(async (req, res) => {

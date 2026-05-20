@@ -50,4 +50,5 @@ module.exports = {
   do_secret_key: process.env.DO_SECRET_KEY,
   do_endpoint: process.env.DO_ENDPOINT,
   do_bucket_name: process.env.DO_BUCKET_NAME,
+  sms_sender: process.env.SMS_SENDER,
 };

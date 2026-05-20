@@ -461,5 +461,9 @@ module.exports = {
   BOOKING_ID_AND_ROOM_ID_REQUIRED: "Booking ID and room ID are required.",
   BOOKING_NOT_FOUND: "Booking not found.",
   BOOKING_ALREADY_HAS_ASSIGNED_ROOMS:
-  "Booking already has {{assignedRooms}} assigned room(s), which meets the required {{noOfRoom}}.",
+    "Booking already has {{assignedRooms}} assigned room(s), which meets the required {{noOfRoom}}.",
+
+  VEHICLE_DETAILS_ADDED_SUCCESSFULLY: "Vehicle details added successfully",
+  VEHICLE_REGISTRATION_ALREADY_EXISTS:
+    "Vehicle with this registration number already exists",
 };

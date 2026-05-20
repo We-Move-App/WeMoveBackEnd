@@ -2,6 +2,7 @@ const OtpModel = require("../../models/otp-module/otp.model");
 const sgMail = require("@sendgrid/mail");
 const { translateLn } = require("../../utils/services/translator.service");
 const { sendEmail } = require("../services/brevo-email.service");
+const { sendSms } = require("../services/brevo-sms.service");
 const {
   generateOtpEmailTemplate,
 } = require("../../templates/otpEmailTemplate");
@@ -23,8 +24,10 @@ const sendOtpToPhone = async (phoneNumber) => {
     { upsert: true, new: true }
   );
 
-  // Placeholder for future SMS integration
-  // e.g., await sendOtpToPhoneNumbers(phoneNumber, otp);
+  // await sendSms({
+  //   to: phoneNumber,
+  //   content: `Your OTP is ${otp}. It will expire in 5 minutes.`,
+  // });
 
   return { otp, expiresAt };
 };

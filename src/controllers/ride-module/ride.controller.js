@@ -1304,7 +1304,8 @@ const getTripHistory = catchAsyncError(async (req, res) => {
 
   let allTrips,
     totalTrips,
-    nameMap = {};
+    nameMap = {},
+    avatarMap = {};
 
   let baseConditions = {};
 
@@ -1355,11 +1356,15 @@ const getTripHistory = catchAsyncError(async (req, res) => {
 
     const users = await UserModel.find(
       { _id: { $in: userIds } },
-      { _id: 1, fullName: 1 }
+      { _id: 1, fullName: 1, avatar: 1 }
     ).lean();
 
     users.forEach((user) => {
-      nameMap[user._id.toString()] = user.fullName;
+      const userId = user._id.toString();
+
+      nameMap[userId] = user.fullName;
+
+      avatarMap[userId] = user.avatar?.url || null;
     });
   } else {
     const userExists = await UserModel.exists({ _id: entityId });
@@ -1408,6 +1413,8 @@ const getTripHistory = catchAsyncError(async (req, res) => {
     if (entity === "driver") {
       baseData.userName =
         nameMap[trip.userId?.toString()] || translateLn(ln, "UNKNOWN_USER");
+
+      baseData.userAvatar = avatarMap[trip.userId?.toString()] || null;
 
       if (
         trip.rideStatus === RideBookStatusEnum.COMPLETED &&
