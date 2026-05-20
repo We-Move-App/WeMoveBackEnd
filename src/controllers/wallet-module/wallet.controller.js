@@ -530,8 +530,8 @@ const getTransactions = catchAsyncError(async (req, res) => {
       driverId: entityType === "DRIVER" ? (entityId ?? null) : null,
 
       bookingId: tx.bookingId ?? null,
-      type,
-      status: tx.status,
+      type: translateLn(ln, `TYPE_${type}`),
+      status: translateLn(ln, `STATUS_${tx.status}`),
       amount,
       currency: tx.currency,
       description:
@@ -704,7 +704,7 @@ const getTransactions = catchAsyncError(async (req, res) => {
           limit,
         },
       },
-      "Transactions fetched successfully"
+      translateLn(ln, "TRANSACTIONS_FETCHED_SUCCESSFULLY")
     )
   );
 });
@@ -987,6 +987,312 @@ const getTransactionInvoice = catchAsyncError(async (req, res) => {
 //   });
 // });
 
+// const getAnalytics = catchAsyncError(async (req, res) => {
+//   const authHeader = req.headers.authorization;
+
+//   if (!authHeader?.startsWith("Bearer ")) {
+//     throw new ApiError(
+//       statusCode.UNAUTHORIZED,
+//       "Access token is missing or invalid"
+//     );
+//   }
+
+//   const jwtToken = authHeader.split(" ")[1];
+//   const decoded = decodeAccessToken(jwtToken);
+//   const userId = decoded?._id;
+
+//   if (!userId) {
+//     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid token");
+//   }
+
+//   const { entity, filter = "monthly" } = req.query;
+
+//   const ln = (req.headers["ln"] || "en").toLowerCase();
+
+//   // ✅ TRANSLATION MAP
+//   const translations = {
+//     en: {
+//       WEEK: "Week",
+//       JANUARY: "January",
+//       FEBRUARY: "February",
+//       MARCH: "March",
+//       APRIL: "April",
+//       MAY: "May",
+//       JUNE: "June",
+//       JULY: "July",
+//       AUGUST: "August",
+//       SEPTEMBER: "September",
+//       OCTOBER: "October",
+//       NOVEMBER: "November",
+//       DECEMBER: "December",
+//       ANALYTICS_FETCHED: "analytics fetched successfully",
+//     },
+//     fr: {
+//       WEEK: "Semaine",
+//       JANUARY: "Janvier",
+//       FEBRUARY: "Février",
+//       MARCH: "Mars",
+//       APRIL: "Avril",
+//       MAY: "Mai",
+//       JUNE: "Juin",
+//       JULY: "Juillet",
+//       AUGUST: "Août",
+//       SEPTEMBER: "Septembre",
+//       OCTOBER: "Octobre",
+//       NOVEMBER: "Novembre",
+//       DECEMBER: "Décembre",
+//       ANALYTICS_FETCHED: "analyses récupérées avec succès",
+//     },
+//   };
+
+//   const translateLn = (ln, key) => {
+//     return translations[ln]?.[key] || translations["en"][key] || key;
+//   };
+
+//   let Model;
+
+//   switch (entity) {
+//     case "busoperator":
+//       Model = BusOperatorModel;
+//       break;
+//     case "hotelManager":
+//       Model = HotelManagerModel;
+//       break;
+//     default:
+//       Model = UserModel;
+//   }
+
+//   const entityExists = await Model.findById(userId);
+//   if (!entityExists) {
+//     throw new ApiError(statusCode.NOT_FOUND, `${entity || "User"} not found`);
+//   }
+
+//   let ledgerEntityType = "USER";
+//   let ledgerEntityId = String(userId);
+
+//   if (entity === "busoperator") {
+//     ledgerEntityType = "BUS_OPERATOR";
+//     ledgerEntityId = String(entityExists._id);
+//   } else if (entity === "hotelManager") {
+//     ledgerEntityType = "HOTEL";
+//     ledgerEntityId = String(entityExists._id);
+//   }
+
+//   const now = new Date();
+//   let analytics = [];
+
+//   const baseMatch = {
+//     status: PaymentStatusEnum.SUCCESS,
+//   };
+
+//   const buildPipeline = (dateMatch, groupId) => [
+//     { $match: { ...baseMatch, ...dateMatch } },
+//     { $unwind: "$entries" },
+//     {
+//       $match: {
+//         "entries.entityType": ledgerEntityType,
+//         "entries.entityId": ledgerEntityId,
+//       },
+//     },
+//     {
+//       $group: {
+//         _id: groupId,
+//         incoming: {
+//           $sum: {
+//             $cond: [{ $eq: ["$entries.type", "CREDIT"] }, "$entries.amount", 0],
+//           },
+//         },
+//         refunded: {
+//           $sum: {
+//             $cond: [
+//               {
+//                 $and: [
+//                   { $eq: ["$entries.type", "DEBIT"] },
+//                   { $eq: ["$refund", true] },
+//                 ],
+//               },
+//               "$entries.amount",
+//               0,
+//             ],
+//           },
+//         },
+//         withdraw: {
+//           $sum: {
+//             $cond: [
+//               {
+//                 $and: [
+//                   { $eq: ["$entries.type", "DEBIT"] },
+//                   { $eq: ["$withdraw", true] },
+//                 ],
+//               },
+//               "$entries.amount",
+//               0,
+//             ],
+//           },
+//         },
+//       },
+//     },
+//   ];
+
+//   // ✅ DAILY
+//   if (filter === "daily") {
+//     const startOfDay = new Date(
+//       now.getFullYear(),
+//       now.getMonth(),
+//       now.getDate(),
+//       0,
+//       0,
+//       0
+//     );
+
+//     const endOfDay = new Date(
+//       now.getFullYear(),
+//       now.getMonth(),
+//       now.getDate(),
+//       23,
+//       59,
+//       59
+//     );
+
+//     const results = await TransactionModel.aggregate([
+//       ...buildPipeline(
+//         {
+//           createdAt: {
+//             $gte: startOfDay,
+//             $lte: endOfDay,
+//           },
+//         },
+//         null
+//       ),
+//       {
+//         $group: {
+//           _id: null,
+
+//           totalBookings: { $sum: 1 },
+
+//           incoming: {
+//             $sum: "$incoming",
+//           },
+
+//           refunded: {
+//             $sum: "$refunded",
+//           },
+
+//           withdraw: {
+//             $sum: "$withdraw",
+//           },
+//         },
+//       },
+//     ]);
+
+//     const dayData = results[0];
+
+//     analytics = [
+//       {
+//         date: now.toISOString().split("T")[0],
+//         totalBookings: dayData?.totalBookings || 0,
+//         incoming: dayData?.incoming || 0,
+//         refunded: dayData?.refunded || 0,
+//         withdraw: dayData?.withdraw || 0,
+//         profit: dayData ? dayData.incoming - dayData.refunded : 0,
+//       },
+//     ];
+//   }
+
+//   // ✅ WEEKLY
+//   if (filter === "weekly") {
+//     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+//     const endOfMonth = new Date(
+//       now.getFullYear(),
+//       now.getMonth() + 1,
+//       0,
+//       23,
+//       59,
+//       59
+//     );
+
+//     const results = await TransactionModel.aggregate([
+//       ...buildPipeline(
+//         { createdAt: { $gte: startOfMonth, $lte: endOfMonth } },
+//         {
+//           week: { $ceil: { $divide: [{ $dayOfMonth: "$createdAt" }, 7] } },
+//         }
+//       ),
+//       { $sort: { "_id.week": 1 } },
+//     ]);
+
+//     const totalWeeks = Math.ceil(endOfMonth.getDate() / 7);
+
+//     analytics = Array.from({ length: totalWeeks }, (_, i) => {
+//       const week = i + 1;
+//       const weekData = results.find((a) => a._id.week === week);
+
+//       return {
+//         week: `${translateLn(ln, "WEEK")} ${week}`,
+//         incoming: weekData?.incoming || 0,
+//         refunded: weekData?.refunded || 0,
+//         withdraw: weekData?.withdraw || 0,
+//         profit: weekData ? weekData.incoming - weekData.refunded : 0,
+//       };
+//     });
+//   }
+
+//   // ✅ MONTHLY
+//   else if (filter === "monthly") {
+//     const yearStart = new Date(now.getFullYear(), 0, 1);
+//     const yearEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59);
+
+//     const results = await TransactionModel.aggregate([
+//       ...buildPipeline(
+//         { createdAt: { $gte: yearStart, $lte: yearEnd } },
+//         {
+//           month: { $month: "$createdAt" },
+//           year: { $year: "$createdAt" },
+//         }
+//       ),
+//       { $sort: { "_id.month": 1 } },
+//     ]);
+
+//     const months = [
+//       "JANUARY",
+//       "FEBRUARY",
+//       "MARCH",
+//       "APRIL",
+//       "MAY",
+//       "JUNE",
+//       "JULY",
+//       "AUGUST",
+//       "SEPTEMBER",
+//       "OCTOBER",
+//       "NOVEMBER",
+//       "DECEMBER",
+//     ];
+
+//     analytics = months.map((key, i) => {
+//       const monthData = results.find(
+//         (a) => a._id.month === i + 1 && a._id.year === now.getFullYear()
+//       );
+
+//       return {
+//         month: translateLn(ln, key),
+//         incoming: monthData?.incoming || 0,
+//         refunded: monthData?.refunded || 0,
+//         withdraw: monthData?.withdraw || 0,
+//         profit: monthData ? monthData.incoming - monthData.refunded : 0,
+//       };
+//     });
+//   }
+
+//   return res.status(statusCode.OK).json({
+//     success: true,
+//     message: translateLn(ln, "ANALYTICS_FETCHED"),
+//     data: {
+//       entity,
+//       filter,
+//       analytics,
+//     },
+//   });
+// });
 const getAnalytics = catchAsyncError(async (req, res) => {
   const authHeader = req.headers.authorization;
 
@@ -1006,7 +1312,6 @@ const getAnalytics = catchAsyncError(async (req, res) => {
   }
 
   const { entity, filter = "monthly" } = req.query;
-
   const ln = (req.headers["ln"] || "en").toLowerCase();
 
   // ✅ TRANSLATION MAP
@@ -1097,11 +1402,19 @@ const getAnalytics = catchAsyncError(async (req, res) => {
     {
       $group: {
         _id: groupId,
+
+        totalBookings: {
+          $sum: {
+            $cond: [{ $eq: ["$entries.type", "CREDIT"] }, 1, 0],
+          },
+        },
+
         incoming: {
           $sum: {
             $cond: [{ $eq: ["$entries.type", "CREDIT"] }, "$entries.amount", 0],
           },
         },
+
         refunded: {
           $sum: {
             $cond: [
@@ -1116,6 +1429,7 @@ const getAnalytics = catchAsyncError(async (req, res) => {
             ],
           },
         },
+
         withdraw: {
           $sum: {
             $cond: [
@@ -1134,8 +1448,54 @@ const getAnalytics = catchAsyncError(async (req, res) => {
     },
   ];
 
+
+  if (filter === "daily") {
+    const startOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      0,
+      0,
+      0
+    );
+
+    const endOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      23,
+      59,
+      59
+    );
+
+    const results = await TransactionModel.aggregate([
+      ...buildPipeline(
+        {
+          createdAt: {
+            $gte: startOfDay,
+            $lte: endOfDay,
+          },
+        },
+        null
+      ),
+    ]);
+
+    const dayData = results[0];
+
+    analytics = [
+      {
+        date: now.toISOString().split("T")[0],
+        totalBookings: dayData?.totalBookings || 0,
+        incoming: dayData?.incoming || 0,
+        refunded: dayData?.refunded || 0,
+        withdraw: dayData?.withdraw || 0,
+        profit: dayData ? dayData.incoming - dayData.refunded : 0,
+      },
+    ];
+  }
+
   // ✅ WEEKLY
-  if (filter === "weekly") {
+  else if (filter === "weekly") {
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const endOfMonth = new Date(
       now.getFullYear(),
@@ -1164,6 +1524,7 @@ const getAnalytics = catchAsyncError(async (req, res) => {
 
       return {
         week: `${translateLn(ln, "WEEK")} ${week}`,
+        totalBookings: weekData?.totalBookings || 0,
         incoming: weekData?.incoming || 0,
         refunded: weekData?.refunded || 0,
         withdraw: weekData?.withdraw || 0,
@@ -1210,6 +1571,7 @@ const getAnalytics = catchAsyncError(async (req, res) => {
 
       return {
         month: translateLn(ln, key),
+        totalBookings: monthData?.totalBookings || 0,
         incoming: monthData?.incoming || 0,
         refunded: monthData?.refunded || 0,
         withdraw: monthData?.withdraw || 0,

@@ -343,6 +343,7 @@ module.exports = {
   WITHDRAW_SUCCESS: "Retrait effectué avec succès",
   TYPE_DEBIT: "Débit",
   TYPE_CREDIT: "Crédit",
+  TRANSACTIONS_FETCHED_SUCCESSFULLY: "Transactions récupérées avec succès",
   INVALID_ENTITY: "Entité invalide",
   TOKEN_INVALID: "Le jeton d'accès est manquant ou invalide",
   WALLET_NOT_FOUND: "Portefeuille introuvable",

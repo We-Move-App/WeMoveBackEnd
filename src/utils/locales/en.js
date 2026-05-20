@@ -35,7 +35,7 @@ module.exports = {
   Bus: "Bus",
   Bike: "Bike",
   Taxi: "Taxi",
-  
+
   "All Services": "All Services",
   Active: "Active",
   Inactive: "Inactive",
@@ -340,6 +340,7 @@ module.exports = {
   HOTEL_MANAGER_NOT_FOUND: "Hotel Manager not found",
   TRANSACTION_DETAILS_FETCHED_SUCCESSFULLY:
     "Transaction details fetched successfully",
+  TRANSACTIONS_FETCHED_SUCCESSFULLY: "Transactions fetched successfully",
   PHONE_NUMBER_ALREADY_REGISTERED:
     "This phone number is already registered with another driver",
   SAME_PHONE_NUMBER:
