@@ -1,6 +1,9 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
-const { ImageSchema } = require("../../../utils/validation/forSchema");
+const {
+  ImageSchema,
+  validatePhoneNumber,
+} = require("../../../utils/validation/forSchema");
 
 const busDriverSchema = new mongoose.Schema(
   {
@@ -22,9 +25,11 @@ const busDriverSchema = new mongoose.Schema(
     },
     phoneNumber: {
       type: String,
-      required: [true, "Phone number is required"],
       unique: true,
-
+      validate: {
+        validator: validatePhoneNumber,
+        message: (props) => `${props.value} is not a valid phone number!`,
+      },
       sparse: true,
     },
     assignedBus: { type: mongoose.Schema.Types.ObjectId, ref: "Bus" },
