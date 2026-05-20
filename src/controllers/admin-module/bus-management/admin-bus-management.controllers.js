@@ -637,32 +637,35 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     }
 
     const regex = new RegExp(escapeRegex(search), "i");
-
     const isDate = !isNaN(Date.parse(search));
 
     bookingsPipeline.push({
       $match: {
         $or: [
-          {
-            passengers: {
-              $elemMatch: {
-                $or: [
-                  { name: regex },
-                  { contactNumber: regex },
-                  { email: regex },
-                ],
-              },
-            },
-          },
+          // ✅ Passenger search
+          { "passengers.name": regex },
+          { "passengers.contactNumber": regex },
+          { "passengers.email": regex },
 
+          // ✅ Booking fields
           { bookingId: regex },
-
           { paymentStatus: regex },
-
           { status: regex },
 
+          // ✅ Bus fields
           { "bus.busRegNumber": regex },
 
+          // ✅ bookedBy user
+          { "bookedBy.fullName": regex },
+          { "bookedBy.email": regex },
+          { "bookedBy.phoneNumber": regex },
+
+          // ✅ bookedByOperator
+          { "bookedByOperator.fullName": regex },
+          { "bookedByOperator.email": regex },
+          { "bookedByOperator.phoneNumber": regex },
+
+          // ✅ Search date
           ...(isDate ? [{ journeyDate: new Date(search) }] : []),
         ],
       },
