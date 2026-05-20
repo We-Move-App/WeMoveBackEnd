@@ -478,12 +478,34 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
   const updatedRoutes = await Promise.all(
     findRoutes.map(async (route) => {
       // Calculate journey dates
+      // const startDate = new Date(dateOfJourney);
+      // const [depHour, depMin] = route.departureTime.split(":").map(Number);
+      // startDate.setHours(depHour, depMin, 0, 0);
+
+      // const [arrHour, arrMin] = route.arrivalTime.split(":").map(Number);
+      // let diffInMinutes = arrHour * 60 + arrMin - (depHour * 60 + depMin);
+      // if (diffInMinutes < 0) diffInMinutes += 24 * 60;
+
       const startDate = new Date(dateOfJourney);
-      const [depHour, depMin] = route.departureTime.split(":").map(Number);
+
+      // parse AM/PM time
+      const depDate = new Date(`2000-01-01 ${route.departureTime}`);
+      const arrDate = new Date(`2000-01-01 ${route.arrivalTime}`);
+
+      if (isNaN(depDate.getTime()) || isNaN(arrDate.getTime())) {
+        throw new ApiError(statusCode.BAD_REQUEST, "Invalid route time format");
+      }
+
+      const depHour = depDate.getHours();
+      const depMin = depDate.getMinutes();
+
+      const arrHour = arrDate.getHours();
+      const arrMin = arrDate.getMinutes();
+
       startDate.setHours(depHour, depMin, 0, 0);
 
-      const [arrHour, arrMin] = route.arrivalTime.split(":").map(Number);
       let diffInMinutes = arrHour * 60 + arrMin - (depHour * 60 + depMin);
+
       if (diffInMinutes < 0) diffInMinutes += 24 * 60;
 
       const endDate = new Date(startDate);
