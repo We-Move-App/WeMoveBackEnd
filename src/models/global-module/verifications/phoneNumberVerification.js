@@ -6,12 +6,6 @@ const phoneNumberVerifySchema = new Schema({
     type: String,
     required: true,
     trim: true,
-    validate: {
-      validator: function (value) {
-        return /^[0-9]{9}$/.test(value);
-      },
-      message: "Phone number must be exactly 9 digits",
-    },
   },
   verified: {
     type: Boolean,

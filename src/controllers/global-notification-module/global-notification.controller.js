@@ -44,7 +44,7 @@ async function createNotification(ownerId, title, subTitle) {
 }
 
 const getNotifications = catchAsyncError(async (req, res, next) => {
-  console.log("HEEREE ");
+ 
 
   const role = req.user.role;
   let ownerId = req.user._id;

@@ -24,15 +24,10 @@ const busDriverSchema = new mongoose.Schema(
       type: String,
       required: [true, "Phone number is required"],
       unique: true,
-      validate: {
-        validator: function (v) {
-          return /^[0-9]{9}$/.test(v);
-        },
-        message: "Phone number must be exactly 9 digits",
-      },
+
       sparse: true,
     },
-   assignedBus: { type: mongoose.Schema.Types.ObjectId, ref: "Bus" },
+    assignedBus: { type: mongoose.Schema.Types.ObjectId, ref: "Bus" },
 
     status: {
       type: String,
