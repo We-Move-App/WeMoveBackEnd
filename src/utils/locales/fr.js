@@ -489,4 +489,12 @@ module.exports = {
   TRANSACTION_TYPE: "Type de transaction",
   TRANSACTION_ID: "ID de transaction",
   COMMISSION_DEDUCTED: "Commission déduite",
+
+  //Hotel-Booking
+
+  BOOKING_ID_AND_ROOM_ID_REQUIRED:
+    "L’identifiant de réservation et l’identifiant de la chambre sont requis.",
+  BOOKING_NOT_FOUND: "Réservation introuvable.",
+  BOOKING_ALREADY_HAS_ASSIGNED_ROOMS:
+    "La réservation a déjà {{assignedRooms}} chambre(s) attribuée(s), ce qui correspond au nombre requis de {{noOfRoom}}.",
 };

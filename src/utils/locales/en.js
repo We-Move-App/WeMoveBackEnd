@@ -455,4 +455,11 @@ module.exports = {
   TRANSACTION_TYPE: "Transaction Type",
   TRANSACTION_ID: "Transaction ID",
   COMMISSION_DEDUCTED: "Commission deducted",
+
+  //Hotel-Booking
+
+  BOOKING_ID_AND_ROOM_ID_REQUIRED: "Booking ID and room ID are required.",
+  BOOKING_NOT_FOUND: "Booking not found.",
+  BOOKING_ALREADY_HAS_ASSIGNED_ROOMS:
+  "Booking already has {{assignedRooms}} assigned room(s), which meets the required {{noOfRoom}}.",
 };
