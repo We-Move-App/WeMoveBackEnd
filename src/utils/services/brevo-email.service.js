@@ -43,6 +43,8 @@ const sendEmail = async ({
       }
     );
 
+    console.log("Email sent", response.data);
+
     return {
       success: true,
       messageId: response.data.messageId,
