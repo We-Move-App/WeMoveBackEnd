@@ -232,10 +232,51 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
   }
 
   // Step 3: Create Bank Details
+  // Step 3: Create Bank Details
   let bankDetailDoc = null;
-  if (bankDetails) {
+
+  // Safe if bankDetails is missing
+  const cleanBankDetails = { ...(bankDetails || {}) };
+
+  // Remove empty values
+  Object.keys(cleanBankDetails).forEach((key) => {
+    if (
+      cleanBankDetails[key] === "" ||
+      cleanBankDetails[key] === null ||
+      cleanBankDetails[key] === undefined
+    ) {
+      delete cleanBankDetails[key];
+    }
+  });
+
+  // Remove empty bankDocs object (if any)
+  if (
+    cleanBankDetails.bankDocs &&
+    typeof cleanBankDetails.bankDocs === "object" &&
+    Object.keys(cleanBankDetails.bankDocs).length === 0
+  ) {
+    delete cleanBankDetails.bankDocs;
+  }
+
+  // Safely handle accountNumber
+  if (
+    cleanBankDetails.accountNumber === undefined ||
+    cleanBankDetails.accountNumber === null ||
+    typeof cleanBankDetails.accountNumber !== "string" ||
+    cleanBankDetails.accountNumber.trim() === ""
+  ) {
+    delete cleanBankDetails.accountNumber;
+  }
+
+  // Only create bank record if actual bank data exists
+  if (
+    cleanBankDetails.accountNumber ||
+    cleanBankDetails.bankName ||
+    cleanBankDetails.accountHolderName ||
+    cleanBankDetails.bankDocs
+  ) {
     bankDetailDoc = await BusOperatorBankModel.create({
-      ...bankDetails,
+      ...cleanBankDetails,
       userId: operatorId,
     });
   }

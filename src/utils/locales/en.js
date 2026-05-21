@@ -112,6 +112,11 @@ module.exports = {
   STATUS_PENDING: "Pending",
   TYPE_DEBIT: "Debit",
   TYPE_CREDIT: "Credit",
+  "Bus Booking": "Bus Booking",
+  "Hotel Booking": "Hotel Booking",
+  "Ride Booking": "Ride Booking",
+  "Wallet Top-up": "Wallet Top-up",
+  "User to User Payment": "User to User Payment",
 
   // Sent
   NO_BUS_ROUTES_FOUND: "No matching bus routes found",
