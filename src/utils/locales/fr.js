@@ -470,7 +470,6 @@ module.exports = {
   "Ride Booking": "Réservation de trajet",
   "Wallet Top-up": "Recharge portefeuille",
   "User to User Payment": "Paiement d'utilisateur à utilisateur",
-
   "User to User Payment": "User to User Payment",
   ERROR_DUPLICATE_EMAIL_PHONE:
     "L'e-mail ou le numéro de téléphone est déjà utilisé par un autre opérateur",
