@@ -487,6 +487,7 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
   });
 
   // ---------------- FORMAT RIDE BOOKINGS ----------------
+  // ---------------- FORMAT RIDE BOOKINGS ----------------
   const formattedRideBookings = rideBookings.map((r) => {
     const key = typeof r.userId === "string" ? r.userId.trim() : r.userId;
 
@@ -500,7 +501,10 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
       email: u?.email || null,
       phone: u?.phoneNumber || null,
       serviceType: translateLn(ln, "MODULE_RIDE"),
-      bookingDate: r.timestamps?.completedAt || null,
+
+      // FIXED
+      bookingDate: r.createdAt || null,
+
       amount: r.fare ?? 0,
       paymentStatus: r.paymentStatus || "PENDING",
       createdAt: r.createdAt,
