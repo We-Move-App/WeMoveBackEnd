@@ -105,7 +105,10 @@ const addDocument = catchAsyncError(async (req, res, next) => {
   for (const key of keys) {
     const imgFile = docsToUpload[key][0];
     // const cloudImage = await uploadImageOnCloudinary(imgFile.path);
-    const cloudImage = await uploadImageOnAws(imgFile.path);
+    const cloudImage = await uploadImageOnAws(
+      imgFile.path,
+      imgFile.originalname
+    );
 
     const uploadedDoc = await DocumentsModel.create({
       documentName: key,
@@ -223,7 +226,10 @@ const editDocuments = catchAsyncError(async (req, res, next) => {
       if (newFile?.path) {
         // Upload new file to Cloudinary
         // const cloudImage = await uploadImageOnCloudinary(newFile.path);
-        const cloudImage = await uploadImageOnAws(newFile.path);
+        const cloudImage = await uploadImageOnAws(
+          newFile.path,
+          newFile.originalname
+        );
         await deleteImageFromAws(docToEdit.file?.public_id);
         // Update document in database
         docToEdit.file = {
@@ -296,7 +302,10 @@ const editSingleDocument = catchAsyncError(async (req, res, next) => {
   }
 
   const documentKey = keys[0];
-  const uploadedFile = await uploadImageOnAws(docToEdit[documentKey][0].path);
+  const uploadedFile = await uploadImageOnAws(
+    docToEdit[documentKey][0].path,
+    docToEdit[documentKey][0].originalname
+  );
 
   if (!uploadedFile) {
     throw new ApiError(

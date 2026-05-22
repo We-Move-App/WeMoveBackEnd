@@ -84,7 +84,7 @@ const createHotelPolicy = catchAsyncError(async (req, res, next) => {
   const hotelimage = req.files.hotel_license[0];
   const uploadResult = await uploadImageOnAws(
     hotelimage.path,
-    "hotel-documents"
+    hotelimage.originalname
   );
 
   const newPolicy = new HotelPolicyModel({
@@ -237,7 +237,7 @@ const updateHotelPolicy = catchAsyncError(async (req, res, next) => {
       const oldFilePath = hotelPolicy.uploadDocuments[0].fileUrl;
       await deleteImageFromAws(oldFilePath);
     }
-    const uploadResult = await uploadImageOnAws(file.path, "hotel-documents");
+    const uploadResult = await uploadImageOnAws(file.path, file.originalname);
     if (!uploadResult) {
       return next(
         new ApiError(
