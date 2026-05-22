@@ -221,7 +221,7 @@ const createBookingByHotelManager = catchAsyncError(async (req, res) => {
     checkOutTime: checkOutDateTime,
     assignedRooms: [],
     totalAmount,
-    paymentStatus,
+    paymentStatus: "OFFLINE",
     noOfAdults: adultsCount,
     noOfKids: kidsCount,
     noOfRoom,
