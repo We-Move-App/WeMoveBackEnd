@@ -25,79 +25,105 @@ const {
 const { AccessTokenModel } = require("../../../models/token/token.model");
 
 const addMemberUnderUser = catchAsyncError(async (req, res, next) => {
-  const { name, email, password, confirmPassword, accessForView } = req.body;
-  const { _id: parentId } = req.user;
+  try {
+    const { name, email, password, confirmPassword, accessForView } = req.body;
 
-  // ✅ Validate required fields
-  const requiredFields = ["name", "email", "password", "confirmPassword"];
-  validateRequestBody(requiredFields, req.body);
+    const { _id: parentId } = req.user;
 
-  if (password !== confirmPassword) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Passwords do not match");
+    // Validate required fields
+    const requiredFields = ["name", "email", "password", "confirmPassword"];
+
+    validateRequestBody(requiredFields, req.body);
+
+    if (password !== confirmPassword) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Passwords do not match");
+    }
+
+    // Normalize email
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const existingUser = await UserModel.findOne({
+      email: normalizedEmail,
+    });
+
+    if (existingUser) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "User already exists with this email"
+      );
+    }
+
+    const parentUser = await UserModel.findById(parentId);
+
+    if (!parentUser) {
+      throw new ApiError(statusCode.NOT_FOUND, "Parent user not found");
+    }
+
+    if (parentUser.role === "user-member") {
+      throw new ApiError(
+        statusCode.FORBIDDEN,
+        "User-members are not allowed to add members"
+      );
+    }
+
+    const existingMembersCount = await UserModel.countDocuments({
+      parentUserId: parentId,
+      role: "user-member",
+    });
+
+    if (existingMembersCount >= 5) {
+      throw new ApiError(
+        statusCode.FORBIDDEN,
+        "You can add a maximum of 5 user-members only"
+      );
+    }
+
+    // Generate custom member ID
+    const memberId = await generateCustomId(EntityCodeEnum.USER_MEMBER, "UM");
+
+    const newMember = new UserModel({
+      userId: memberId,
+      fullName: name,
+      email: normalizedEmail,
+      password,
+      role: "user-member",
+      parentUserId: parentId,
+      branch: parentUser.branch,
+      createdBy: parentId,
+      verificationStatus: "approved",
+      emailVerified: true,
+      phoneVerified: true,
+      termAndConditions: true,
+      accessForView: accessForView ?? false,
+    });
+
+    const savedMember = await newMember.save();
+
+    await savedMember.populate({
+      path: "parentUserId",
+      select: "fullName email role branch",
+    });
+
+    return res
+      .status(statusCode.CREATED)
+      .json(
+        new ApiResponse(
+          statusCode.CREATED,
+          { member: savedMember },
+          "Member added successfully under same branch"
+        )
+      );
+  } catch (error) {
+    if (error.code === 11000) {
+      const field = Object.keys(error.keyPattern || {})[0] || "Field";
+
+      return next(
+        new ApiError(statusCode.BAD_REQUEST, `${field} already exists`)
+      );
+    }
+
+    return next(error);
   }
-  const existingUser = await UserModel.findOne({ email });
-  if (existingUser) {
-    throw new ApiError(
-      statusCode.BAD_REQUEST,
-      "User already exists with this email"
-    );
-  }
-  const parentUser = await UserModel.findById(parentId);
-  if (!parentUser) {
-    throw new ApiError(statusCode.NOT_FOUND, "Parent user not found");
-  }
-  if (parentUser.role === "user-member") {
-    throw new ApiError(
-      statusCode.FORBIDDEN,
-      "User-members are not allowed to add members"
-    );
-  }
-  const existingMembersCount = await UserModel.countDocuments({
-    parentUserId: parentId,
-    role: "user-member",
-  });
-  if (existingMembersCount >= 5) {
-    throw new ApiError(
-      statusCode.FORBIDDEN,
-      "You can add a maximum of 5 user-members only"
-    );
-  }
-
-  // ✅ Generate custom member ID
-  const memberId = await generateCustomId(EntityCodeEnum.USER_MEMBER, "UM");
-  const newMember = new UserModel({
-    userId: memberId,
-    fullName: name,
-    email,
-    password,
-    role: "user-member",
-    parentUserId: parentId,
-    branch: parentUser.branch, // 👈 assign same branch
-    createdBy: parentId,
-    verificationStatus: "approved", // ✅ Approved immediately
-    emailVerified: true, // ✅ Email verified
-    phoneVerified: true, // ✅ Phone verified
-    termAndConditions: true,
-    accessForView: accessForView ?? false,
-  });
-
-  const savedMember = await newMember.save();
-
-  // ✅ Populate parent info for response
-  await savedMember.populate({
-    path: "parentUserId",
-    select: "fullName email role branch",
-  });
-
-  return res
-    .status(statusCode.CREATED)
-    .json(
-      new ApiResponse(
-        statusCode.CREATED,
-        { member: savedMember },
-        "Member added successfully under same branch"
-      )
-    );
 });
 
 const loginUser = catchAsyncError(async (req, res, next) => {
