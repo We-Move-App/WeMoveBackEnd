@@ -31,7 +31,11 @@ const s3 = new S3Client({
 
 const bucketName = do_bucket_name;
 
-const uploadImageOnAws = async (localFilePath, folderName = "wemove") => {
+const uploadImageOnAws = async (
+  localFilePath,
+  originalFileName,
+  folderName = "wemove"
+) => {
   try {
     if (!localFilePath) return null;
 
@@ -41,16 +45,18 @@ const uploadImageOnAws = async (localFilePath, folderName = "wemove") => {
 
     const fileStream = fs.createReadStream(localFilePath);
 
-    const fileName = `${folderName}/${Date.now()}-${path.basename(
-      localFilePath
-    )}`;
+    // GET EXTENSION
+    const ext = path.extname(originalFileName);
+
+    // CREATE FILE NAME WITH EXTENSION
+    const fileName = `${folderName}/${Date.now()}${ext}`;
 
     const uploadParams = {
       Bucket: bucketName,
       Key: fileName,
       Body: fileStream,
       ACL: "public-read",
-      ContentType: mime.lookup(localFilePath) || "application/octet-stream",
+      ContentType: mime.lookup(originalFileName) || "application/octet-stream",
     };
 
     await s3.send(new PutObjectCommand(uploadParams));
