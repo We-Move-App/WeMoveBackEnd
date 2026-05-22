@@ -1,4 +1,5 @@
 const fs = require("fs");
+const fsPromises = require("fs").promises;
 const path = require("path");
 const mime = require("mime-types");
 
@@ -31,6 +32,19 @@ const s3 = new S3Client({
 
 const bucketName = do_bucket_name;
 
+const deleteLocalFile = async (filePath) => {
+  try {
+    await fsPromises.access(filePath);
+    await fsPromises.unlink(filePath);
+
+    console.log(`Deleted local file: ${filePath}`);
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      console.error("Delete local file error:", error.message);
+    }
+  }
+};
+
 const uploadImageOnAws = async (
   localFilePath,
   originalFileName,
@@ -61,9 +75,7 @@ const uploadImageOnAws = async (
 
     await s3.send(new PutObjectCommand(uploadParams));
 
-    if (fs.existsSync(localFilePath)) {
-      fs.unlinkSync(localFilePath);
-    }
+    await deleteLocalFile(localFilePath);
 
     return {
       secure_url: `https://${bucketName}.blr1.digitaloceanspaces.com/${fileName}`,
@@ -72,9 +84,7 @@ const uploadImageOnAws = async (
   } catch (error) {
     console.error("Upload Error:", error);
 
-    if (fs.existsSync(localFilePath)) {
-      fs.unlinkSync(localFilePath);
-    }
+    await deleteLocalFile(localFilePath);
 
     return null;
   }
