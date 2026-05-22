@@ -53,7 +53,10 @@ const getAllBusBookings = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Unauthorized");
   }
 
-  const busOperator = loggedInUser._id;
+  const busOperator =
+    loggedInUser.role === "bus-operator-member"
+      ? loggedInUser.parentUserId
+      : loggedInUser._id;
 
   // const ln = await fetchBusOperatorLn(loggedInUser._id);
 
@@ -280,6 +283,11 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
 
     const bookingId = await generateCustomId(EntityCodeEnum.BUS_BOOKING, "BB");
 
+    console.log("Booking create payload:", {
+      bookingBy: "busOperator",
+      paymentStatus: PaymentStatus["OFFLINE"],
+    });
+
     // Create a new booking entry
     const newBooking = await BusBookingModel.create(
       [
@@ -293,7 +301,7 @@ const createBusBooking = catchAsyncError(async (req, res, next) => {
           price,
           journeyDate: journeyDateNormalized,
           termAndConditions: true,
-          paymentStatus: PaymentStatus["PENDING"],
+          paymentStatus: PaymentStatus["OFFLINE"],
           from,
           to,
           seatNumbers: assignedSeats,
