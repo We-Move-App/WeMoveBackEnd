@@ -117,6 +117,7 @@ module.exports = {
   "Ride Booking": "Ride Booking",
   "Wallet Top-up": "Wallet Top-up",
   "User to User Payment": "User to User Payment",
+  "Wallet Withdrawal": "Wallet Withdrawal",
 
   // Sent
   NO_BUS_ROUTES_FOUND: "No matching bus routes found",
