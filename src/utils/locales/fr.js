@@ -449,6 +449,11 @@ module.exports = {
   DATA_FOUND_SUCCESS: "Données trouvées avec succès",
   HOTEL_MANAGER_DATA_FETCHED_SUCCESS:
     "Les données du gestionnaire d'hôtel ont été récupérées avec succès",
+  "Bus Booking": "Bus Booking",
+  "Hotel Booking": "Hotel Booking",
+  "Ride Booking": "Ride Booking",
+  "Wallet Top-up": "Wallet Top-up",
+  "User to User Payment": "User to User Payment",
 
   SOURCE_BUS: "Bus",
   SOURCE_HOTEL: "Hôtel",
@@ -458,7 +463,13 @@ module.exports = {
   TRANSACTION_HOTEL: "Réservation d'hôtel",
   TRANSACTION_WALLET: "Recharge portefeuille",
   TRANSACTION_USER_TO_USER: "Paiement d'utilisateur à utilisateur",
-
+  "Bus Booking": "Réservation de bus",
+  "Hotel Booking": "Réservation d'hôtel",
+  "Bus Booking": "Réservation de bus",
+  "Hotel Booking": "Réservation d'hôtel",
+  "Ride Booking": "Réservation de trajet",
+  "Wallet Top-up": "Recharge portefeuille",
+  "User to User Payment": "Paiement d'utilisateur à utilisateur",
   "User to User Payment": "User to User Payment",
   ERROR_DUPLICATE_EMAIL_PHONE:
     "L'e-mail ou le numéro de téléphone est déjà utilisé par un autre opérateur",

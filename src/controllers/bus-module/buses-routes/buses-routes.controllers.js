@@ -376,25 +376,23 @@ const getPickUpAndDrops = catchAsyncError(async (req, res, next) => {
 });
 
 const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
-  const { _id } = req.user;
+  const { _id, parentUserId, role } = req.user;
+
+  const operatorId =
+    role === "bus-operator-member" && parentUserId ? parentUserId : _id;
+
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const startIndex = (page - 1) * limit;
 
-
   let { status, search, filter, date, from, to } = req.query;
-
- 
-
-  console.log("Query Params:", req.query);
 
   status = status || "active";
 
   const query = {
-    createdBy: _id,
-    status
+    createdBy: operatorId,
+    status,
   };
-
   if (search) {
     query.$or = [
       { startLocation: { $regex: search, $options: "i" } },
@@ -403,7 +401,6 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
       { "drops.name": { $regex: search, $options: "i" } },
     ];
   }
-
 
   if (from) {
     query.startLocation = { $regex: from, $options: "i" };
@@ -414,11 +411,9 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
   }
 
   if (date) {
-    const day = moment(date, 'DD-MM-YYYY').format("dddd");
+    const day = moment(date, "DD-MM-YYYY").format("dddd");
     query.runningDays = day;
   }
-
-
 
   const [routes, totalBus] = await Promise.all([
     BusRouteModel.find(query)

@@ -349,30 +349,71 @@ const registerHotelManagerFromAdmin = catchAsyncError(
       });
       createdDocs.push({ model: HotelManagerModel, id: manager._id });
 
-      // if (!bankInfo?.accountNumber) {
-      //   throw new ApiError(400, "Account number is required");
-      // }
-      const cleanBankInfo = { ...bankInfo };
+      // Bank account creation
+      let bankAccount = null;
 
-      if (!cleanBankInfo.accountNumber || cleanBankInfo.accountNumber === "") {
-        delete cleanBankInfo.accountNumber;
-      }
-      const bankAccount = await HotelManagerBankModel.create({
-        ...bankInfo,
-        ...cleanBankInfo,
-        userId: manager._id,
-        createdBy: adminId,
-        bankDocs: bankInfo.bankDocs
-          ? {
-              public_id: bankInfo.bankDocs.public_id || null,
-              url: bankInfo.bankDocs.url || bankInfo.bankDocs.fileUrl || null,
-              fileName: bankInfo.bankDocs.fileName || null,
-              fileType: bankInfo.bankDocs.fileType || null,
-            }
-          : null,
+      // Safe if bankInfo is missing
+      const cleanBankInfo = { ...(bankInfo || {}) };
+
+      // Remove empty values
+      Object.keys(cleanBankInfo).forEach((key) => {
+        if (
+          cleanBankInfo[key] === "" ||
+          cleanBankInfo[key] === null ||
+          cleanBankInfo[key] === undefined
+        ) {
+          delete cleanBankInfo[key];
+        }
       });
 
-      createdDocs.push({ model: HotelManagerBankModel, id: bankAccount._id });
+      // Remove empty bankDocs object
+      if (
+        cleanBankInfo.bankDocs &&
+        typeof cleanBankInfo.bankDocs === "object" &&
+        Object.keys(cleanBankInfo.bankDocs).length === 0
+      ) {
+        delete cleanBankInfo.bankDocs;
+      }
+
+      // Safely handle accountNumber
+      if (
+        cleanBankInfo.accountNumber === undefined ||
+        cleanBankInfo.accountNumber === null ||
+        typeof cleanBankInfo.accountNumber !== "string" ||
+        cleanBankInfo.accountNumber.trim() === ""
+      ) {
+        delete cleanBankInfo.accountNumber;
+      }
+
+      // Only create bank document if actual bank data exists
+      if (
+        cleanBankInfo.accountNumber ||
+        cleanBankInfo.bankName ||
+        cleanBankInfo.accountHolderName ||
+        cleanBankInfo.bankDocs
+      ) {
+        bankAccount = await HotelManagerBankModel.create({
+          ...cleanBankInfo,
+          userId: manager._id,
+          createdBy: adminId,
+          bankDocs: cleanBankInfo.bankDocs
+            ? {
+                public_id: cleanBankInfo.bankDocs.public_id || null,
+                url:
+                  cleanBankInfo.bankDocs.url ||
+                  cleanBankInfo.bankDocs.fileUrl ||
+                  null,
+                fileName: cleanBankInfo.bankDocs.fileName || null,
+                fileType: cleanBankInfo.bankDocs.fileType || null,
+              }
+            : null,
+        });
+
+        createdDocs.push({
+          model: HotelManagerBankModel,
+          id: bankAccount._id,
+        });
+      }
 
       // Wallet
       const wallet = await Wallet.create({
@@ -656,9 +697,6 @@ const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
     );
 
     // 2) Update Bank Info
-    // Fetch existing bank account
-    // 2) Update Bank Info (defensive)
-
     let bankAccount = null;
 
     if (bankInfo && typeof bankInfo === "object") {
@@ -666,40 +704,73 @@ const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
         userId: manager._id,
       });
 
+      const cleanBankInfo = { ...(bankInfo || {}) };
+
+      // Remove empty values
+      Object.keys(cleanBankInfo).forEach((key) => {
+        if (
+          cleanBankInfo[key] === "" ||
+          cleanBankInfo[key] === null ||
+          cleanBankInfo[key] === undefined
+        ) {
+          delete cleanBankInfo[key];
+        }
+      });
+
+      // Remove empty bankDocs object
+      if (
+        cleanBankInfo.bankDocs &&
+        typeof cleanBankInfo.bankDocs === "object" &&
+        Object.keys(cleanBankInfo.bankDocs).length === 0
+      ) {
+        delete cleanBankInfo.bankDocs;
+      }
+
+      // Safely handle accountNumber
+      if (!String(cleanBankInfo.accountNumber || "").trim()) {
+        delete cleanBankInfo.accountNumber;
+      }
+
       if (existingBank) {
         const updateBankData = {
-          bankName: bankInfo.bankName || existingBank.bankName,
-          accountHolderName:
-            bankInfo.accountHolderName || existingBank.accountHolderName,
-          accountNumber: bankInfo.accountNumber || existingBank.accountNumber,
-          isPrimary:
-            bankInfo.isPrimary !== undefined
-              ? bankInfo.isPrimary
-              : existingBank.isPrimary,
+          ...(cleanBankInfo.bankName && { bankName: cleanBankInfo.bankName }),
+          ...(cleanBankInfo.accountHolderName && {
+            accountHolderName: cleanBankInfo.accountHolderName,
+          }),
+          ...(cleanBankInfo.accountNumber && {
+            accountNumber: cleanBankInfo.accountNumber,
+          }),
+          ...(cleanBankInfo.isPrimary !== undefined && {
+            isPrimary: cleanBankInfo.isPrimary,
+          }),
         };
 
-        // Replace bankDocs if provided
-        if (bankInfo.bankDocs?.url) {
+        if (cleanBankInfo.bankDocs) {
           if (existingBank.bankDocs?.public_id) {
             await deleteImageFromAws(existingBank.bankDocs.public_id);
           }
 
           updateBankData.bankDocs = {
-            public_id: bankInfo.bankDocs.public_id || null,
-            url: bankInfo.bankDocs.url,
-            fileName: bankInfo.bankDocs.fileName || null,
-            fileType: bankInfo.bankDocs.fileType || null,
+            public_id: cleanBankInfo.bankDocs.public_id || null,
+            url:
+              cleanBankInfo.bankDocs.url ||
+              cleanBankInfo.bankDocs.fileUrl ||
+              null,
+            fileName: cleanBankInfo.bankDocs.fileName || null,
+            fileType: cleanBankInfo.bankDocs.fileType || null,
           };
         }
 
-        // Update bank account
-        bankAccount = await HotelManagerBankModel.findOneAndUpdate(
-          { userId: manager._id },
-          { ...updateBankData, updatedBy: adminId },
-          { new: true }
-        );
+        if (Object.keys(updateBankData).length > 0) {
+          bankAccount = await HotelManagerBankModel.findOneAndUpdate(
+            { userId: manager._id },
+            { ...updateBankData, updatedBy: adminId },
+            { new: true }
+          );
+        } else {
+          bankAccount = existingBank;
+        }
       }
-      // if no existing bank → skip silently (no error)
     }
 
     // 3) Update Hotel Info

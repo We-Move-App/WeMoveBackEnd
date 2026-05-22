@@ -536,7 +536,7 @@ const getTransactions = catchAsyncError(async (req, res) => {
     return {
       _id: tx._id,
       transactionId: tx.transactionId,
-      transactionType: tx.transactionType,
+      transactionType: translateLn(ln, tx.transactionType),
       momoRefId: tx.momoRefId ?? null,
 
       userId: entityType === "USER" ? (entityId ?? null) : null,
