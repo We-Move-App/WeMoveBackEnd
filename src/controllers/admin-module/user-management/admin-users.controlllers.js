@@ -32,6 +32,8 @@ const {
   validateEmail,
   validatePhoneNumber,
 } = require("../../../utils/validation/forSchema");
+const BusOperatorModel = require("../../../models/bus-module/bus-operator/bus-operator.model");
+const HotelManagerModel = require("../../../models/hotel-module/hotel-manager/hotel-manager.model");
 
 const getAllUsers = catchAsyncError(async (req, res) => {
   const {
@@ -206,75 +208,154 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
   const skip = (pageNum - 1) * limitNum;
   const sortOrder = order.toLowerCase() === "asc" ? 1 : -1;
 
-  // Base filter applied to each collection (no populated-path filters)
+  // ---------------- FILTER ----------------
   const buildFilter = (extra = {}) => {
     const filter = { ...extra };
+
     if (paymentStatus && paymentStatus.trim() !== "") {
       filter.paymentStatus = new RegExp(`^${paymentStatus.trim()}$`, "i");
     }
+
     if (search && search.trim() !== "") {
       const regex = new RegExp(search.trim(), "i");
+
       filter.$or = [
         { bookingId: regex },
-        { email: regex }, // in case models store it at root (hotel/bus)
-        { phoneNumber: regex }, // in case models store it at root (hotel/bus)
+        { email: regex },
+        { phoneNumber: regex },
         { userId: regex },
-
-        // ride.userId (string) or any model exposing userId at root
       ];
     }
+
     return filter;
   };
 
-  // 1) Fetch raw bookings (no populate)
+  // ---------------- FETCH BOOKINGS ----------------
   const [busBookings, hotelBookings, rideBookings] = await Promise.all([
     BusBookingModel.find(
       buildFilter(),
-      "bookingId bookedBy journeyDate price paymentStatus createdAt"
+      `
+      bookingId
+      bookedBy
+      bookedByOperator
+      bookingBy
+      passengers
+      email
+      phoneNumber
+      journeyDate
+      price
+      paymentStatus
+      createdAt
+    `
     ).lean(),
 
     HotelBookingModel.find(
       buildFilter(),
-      "bookingId bookedBy checkInDate totalAmount paymentStatus createdAt"
+      `
+      bookingId
+      bookedBy
+      bookingBy
+      user
+      checkInDate
+      totalAmount
+      paymentStatus
+      createdAt
+    `
     ).lean(),
 
     RideBookingDetail.find(
       buildFilter(),
-      "bookingId userId timestamps.completedAt fare paymentStatus createdAt"
+      `
+      bookingId
+      userId
+      timestamps.completedAt
+      fare
+      paymentStatus
+      createdAt
+    `
     ).lean(),
   ]);
 
-  // 2) Build user lookup maps for each type (manual joins)
-
-  // Bus/Hotel: bookedBy is an ObjectId -> map by _id
+  // ---------------- USER IDS ----------------
   const busHotelUserIds = [
     ...new Set(
       [
-        ...busBookings.map((b) => b.bookedBy).filter(Boolean),
-        ...hotelBookings.map((h) => h.bookedBy).filter(Boolean),
+        ...busBookings
+          .filter((b) => b.bookingBy !== "busOperator")
+          .map((b) => b.bookedBy)
+          .filter(Boolean),
+
+        ...hotelBookings
+          .filter((h) => h.bookingBy !== "Hotel-Manager")
+          .map((h) => h.bookedBy)
+          .filter(Boolean),
       ].map((id) => String(id))
     ),
   ];
+
   const busHotelObjectIds = busHotelUserIds
     .filter((id) => mongoose.isValidObjectId(id))
     .map((id) => new mongoose.Types.ObjectId(id));
 
   const busHotelUsers = busHotelObjectIds.length
-    ? await UserModel.find({ _id: { $in: busHotelObjectIds } })
+    ? await UserModel.find({
+        _id: { $in: busHotelObjectIds },
+      })
         .select("_id userId fullName email phoneNumber")
         .lean()
     : [];
+
   const userByObjectId = new Map(busHotelUsers.map((u) => [String(u._id), u]));
 
-  // Ride: userId is a STRING (could be app userId OR _id string)
+  // ---------------- BUS OPERATORS ----------------
+  const busOperatorIds = [
+    ...new Set(
+      busBookings
+        .filter((b) => b.bookingBy === "busOperator" && b.bookedByOperator)
+        .map((b) => String(b.bookedByOperator))
+    ),
+  ];
+
+  const busOperators = busOperatorIds.length
+    ? await BusOperatorModel.find({
+        _id: { $in: busOperatorIds },
+      })
+        .select("_id operatorId")
+        .lean()
+    : [];
+
+  const busOperatorMap = new Map(busOperators.map((o) => [String(o._id), o]));
+
+  // ---------------- HOTEL MANAGERS ----------------
+  const hotelManagerIds = [
+    ...new Set(
+      hotelBookings
+        .filter((h) => h.bookingBy === "Hotel-Manager" && h.bookedBy)
+        .map((h) => String(h.bookedBy))
+    ),
+  ];
+
+  const hotelManagers = hotelManagerIds.length
+    ? await HotelManagerModel.find({
+        _id: { $in: hotelManagerIds },
+      })
+        .select("_id managerId")
+        .lean()
+    : [];
+
+  const hotelManagerMap = new Map(hotelManagers.map((m) => [String(m._id), m]));
+
+  // ---------------- RIDE USERS ----------------
   const rawRideIds = rideBookings
     .map((r) => (typeof r.userId === "string" ? r.userId.trim() : r.userId))
     .filter(Boolean);
+
   const uniqueRideIds = [...new Set(rawRideIds)];
 
   const rideObjectIdStrings = uniqueRideIds.filter((id) =>
     mongoose.isValidObjectId(id)
   );
+
   const rideAppUserIds = uniqueRideIds.filter(
     (id) => !mongoose.isValidObjectId(id)
   );
@@ -285,12 +366,17 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
 
   const [usersByRideObjectId, usersByRideAppUserId] = await Promise.all([
     rideObjectIds.length
-      ? UserModel.find({ _id: { $in: rideObjectIds } })
+      ? UserModel.find({
+          _id: { $in: rideObjectIds },
+        })
           .select("_id userId fullName email phoneNumber")
           .lean()
       : Promise.resolve([]),
+
     rideAppUserIds.length
-      ? UserModel.find({ userId: { $in: rideAppUserIds } })
+      ? UserModel.find({
+          userId: { $in: rideAppUserIds },
+        })
           .select("_id userId fullName email phoneNumber")
           .lean()
       : Promise.resolve([]),
@@ -299,19 +385,51 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
   const rideMapByObjectId = new Map(
     usersByRideObjectId.map((u) => [String(u._id), u])
   );
+
   const rideMapByUserId = new Map(
     usersByRideAppUserId.map((u) => [u.userId, u])
   );
 
+  // ---------------- FORMAT BUS BOOKINGS ----------------
   const formattedBusBookings = busBookings.map((b) => {
-    const u = b.bookedBy ? userByObjectId.get(String(b.bookedBy)) : null;
+    let userId = null;
+    let fullName = null;
+    let email = null;
+    let phone = null;
+    let _id = null;
+
+    // Offline booking by operator
+    if (b.bookingBy === "busOperator") {
+      const passenger = b.passengers?.[0];
+
+      const operator = b.bookedByOperator
+        ? busOperatorMap.get(String(b.bookedByOperator))
+        : null;
+
+      _id = operator?._id || null;
+      userId = operator?.operatorId || null;
+
+      fullName = passenger?.name || null;
+      email = passenger?.email || b.email || null;
+      phone = passenger?.contactNumber || b.phoneNumber || null;
+    } else {
+      // App user booking
+      const u = b.bookedBy ? userByObjectId.get(String(b.bookedBy)) : null;
+
+      _id = u?._id || null;
+      userId = u?.userId || null;
+      fullName = u?.fullName || null;
+      email = u?.email || null;
+      phone = u?.phoneNumber || null;
+    }
+
     return {
-      _id: u?._id || null, // user ObjectId
+      _id,
       bookingId: b.bookingId || null,
-      userId: u?.userId || null, // user's userId
-      fullName: u?.fullName || null,
-      email: u?.email || null,
-      phone: u?.phoneNumber || null,
+      userId,
+      fullName,
+      email,
+      phone,
       serviceType: translateLn(ln, "MODULE_BUS"),
       bookingDate: b.journeyDate || null,
       amount: b.price ?? 0,
@@ -320,15 +438,46 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
     };
   });
 
+  // ---------------- FORMAT HOTEL BOOKINGS ----------------
   const formattedHotelBookings = hotelBookings.map((h) => {
-    const u = h.bookedBy ? userByObjectId.get(String(h.bookedBy)) : null;
+    let userId = null;
+    let fullName = null;
+    let email = null;
+    let phone = null;
+    let _id = null;
+
+    // Offline booking by hotel manager
+    if (h.bookingBy === "Hotel-Manager") {
+      const passenger = h.user?.[0];
+
+      const manager = h.bookedBy
+        ? hotelManagerMap.get(String(h.bookedBy))
+        : null;
+
+      _id = manager?._id || null;
+      userId = manager?.managerId || null;
+
+      fullName = passenger?.name || null;
+      email = passenger?.email || null;
+      phone = passenger?.phoneNumber || null;
+    } else {
+      // App user booking
+      const u = h.bookedBy ? userByObjectId.get(String(h.bookedBy)) : null;
+
+      _id = u?._id || null;
+      userId = u?.userId || null;
+      fullName = u?.fullName || null;
+      email = u?.email || null;
+      phone = u?.phoneNumber || null;
+    }
+
     return {
-      _id: u?._id || null, // user ObjectId
+      _id,
       bookingId: h.bookingId || null,
-      userId: u?.userId || null, // user's userId
-      fullName: u?.fullName || null,
-      email: u?.email || null,
-      phone: u?.phoneNumber || null,
+      userId,
+      fullName,
+      email,
+      phone,
       serviceType: translateLn(ln, "MODULE_HOTEL"),
       bookingDate: h.checkInDate || null,
       amount: h.totalAmount ?? 0,
@@ -337,40 +486,52 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
     };
   });
 
+  // ---------------- FORMAT RIDE BOOKINGS ----------------
+  // ---------------- FORMAT RIDE BOOKINGS ----------------
   const formattedRideBookings = rideBookings.map((r) => {
     const key = typeof r.userId === "string" ? r.userId.trim() : r.userId;
+
     const u = rideMapByUserId.get(key) || rideMapByObjectId.get(key);
+
     return {
-      _id: u?._id || null, // user ObjectId
+      _id: u?._id || null,
       bookingId: r.bookingId || null,
-      userId: u?.userId || key || null, // prefer user's userId; else raw key
+      userId: u?.userId || key || null,
       fullName: u?.fullName || null,
       email: u?.email || null,
       phone: u?.phoneNumber || null,
       serviceType: translateLn(ln, "MODULE_RIDE"),
-      bookingDate: r.timestamps?.completedAt || null,
+
+      // FIXED
+      bookingDate: r.createdAt || null,
+
       amount: r.fare ?? 0,
       paymentStatus: r.paymentStatus || "PENDING",
       createdAt: r.createdAt,
     };
   });
 
-  // 4) Merge → sort → paginate
+  // ---------------- MERGE ----------------
   const allBookings = [
     ...formattedBusBookings,
     ...formattedHotelBookings,
     ...formattedRideBookings,
   ];
 
+  // ---------------- SORT ----------------
   const sortedBookings = allBookings.sort((a, b) => {
     const aVal = a[sortBy] || 0;
     const bVal = b[sortBy] || 0;
+
     if (aVal > bVal) return sortOrder;
     if (aVal < bVal) return -sortOrder;
+
     return 0;
   });
 
+  // ---------------- PAGINATION ----------------
   const total = sortedBookings.length;
+
   const paginatedBookings = sortedBookings.slice(skip, skip + limitNum);
 
   return res.status(200).json({
@@ -387,6 +548,7 @@ const getAllUsersBookings = catchAsyncError(async (req, res) => {
     order,
     search,
     filter: paymentStatus || null,
+
     data: paginatedBookings,
   });
 });
