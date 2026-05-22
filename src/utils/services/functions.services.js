@@ -92,6 +92,13 @@ const registerUserWithEmailAndPhoneNumber = async ({
     phoneNumber,
   });
 
+  if (!validatePhoneNumber(phoneNumber)) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "Please enter a valid phone number"
+    );
+  }
+
   if (!createdByAdmin) {
     // only verify email/phone if NOT created by admin
     const isEmailVerified = await emailVerifyModel.findOne({
