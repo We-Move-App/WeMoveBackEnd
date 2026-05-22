@@ -430,7 +430,6 @@ module.exports = {
   TRANSACTION_USER_TO_USER: "User to User Payment",
   ERROR_DUPLICATE_EMAIL_PHONE:
     "Email or phone number is already in use by another operator",
-
   ERROR_REQUIRED_CONTACT: "Email or phone number is required",
   ERROR_INVALID_EMAIL: "Invalid email format",
   ERROR_INVALID_PHONE: "Invalid phone number format",
@@ -472,4 +471,29 @@ module.exports = {
   VEHICLE_DETAILS_ADDED_SUCCESSFULLY: "Vehicle details added successfully",
   VEHICLE_REGISTRATION_ALREADY_EXISTS:
     "Vehicle with this registration number already exists",
+  //////HotelBooking////////
+  BOOKING_ID_AND_ROOM_ID_REQUIRED: "Booking ID and Room ID are required.",
+
+  BOOKING_NOT_FOUND: "Booking not found.",
+
+  BOOKING_ALREADY_STATUS: "Booking is already {{status}}.",
+
+  PAYMENT_STATUS_INVALID: "Payment is {{status}}.",
+
+  INVALID_CHECKIN_CHECKOUT_DATES: "Invalid check-in/check-out dates.",
+
+  ROOMS_ALREADY_FULLY_ASSIGNED:
+    "Booking already has {{assigned}} assigned room(s), which meets the required {{required}}.",
+
+  ROOM_NOT_FOUND_OR_INVALID:
+    "Room not found or does not belong to the same hotel/room type.",
+
+  ROOM_NOT_AVAILABLE: "Room is not available.",
+
+  ROOM_ALREADY_ASSIGNED: "Room {{roomId}} is already assigned to this booking.",
+
+  ROOM_ALREADY_BOOKED_FOR_PERIOD:
+    "Room {{roomId}} is already booked in the selected time period.",
+
+  ROOM_ASSIGNED_SUCCESSFULLY: "Room assigned successfully",
 };

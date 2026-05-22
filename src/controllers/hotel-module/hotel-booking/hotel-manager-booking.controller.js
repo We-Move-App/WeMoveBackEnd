@@ -518,18 +518,23 @@ const allotRoomToBooking = catchAsyncError(async (req, res) => {
   if (!room) {
     throw new ApiError(
       statusCode.NOT_FOUND,
-      "Room not found or does not belong to the same hotel/room type."
+      translateLn(ln, "ROOM_NOT_FOUND_OR_INVALID")
     );
   }
 
   if (room.status === "booked" || room.isAvailable === false) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Room is not available.");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "ROOM_NOT_AVAILABLE")
+    );
   }
 
   if (assignedRooms.includes(roomId)) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      `Room ${roomId} is already assigned to this booking.`
+      translateLn(ln, "ROOM_ALREADY_ASSIGNED", {
+        roomId,
+      })
     );
   }
 
@@ -543,7 +548,9 @@ const allotRoomToBooking = catchAsyncError(async (req, res) => {
   if (overlapping) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      `Room ${roomId} is already booked in the selected time period.`
+      translateLn(ln, "ROOM_ALREADY_BOOKED_FOR_PERIOD", {
+        roomId,
+      })
     );
   }
 
@@ -564,7 +571,11 @@ const allotRoomToBooking = catchAsyncError(async (req, res) => {
   return res
     .status(statusCode.OK)
     .json(
-      new ApiResponse(statusCode.OK, booking, "Room assigned successfully")
+      new ApiResponse(
+        statusCode.OK,
+        booking,
+        translateLn(ln, "ROOM_ASSIGNED_SUCCESSFULLY")
+      )
     );
 });
 
