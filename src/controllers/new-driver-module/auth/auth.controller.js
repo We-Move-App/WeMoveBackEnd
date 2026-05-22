@@ -92,7 +92,7 @@ const sendotpToUpdatephone = catchAsyncError(async (req, res) => {
   if (existingDriver && existingDriver.driverId !== driverId) {
     throw new ApiError(
       statusCode.CONFLICT,
-      translateLn(ln, "SAME_PHONE_NUMBER")
+      translateLn(ln, "PHONE_NUMBER_ALREADY_REGISTERED")
     );
   }
   // ✅ Step 5: Send OTP
@@ -179,6 +179,7 @@ const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
     )
   );
 });
+
 const verifyPhoneOtpFPin = catchAsyncError(async (req, res) => {
   const { phoneNo, otp } = req.body;
 
@@ -357,6 +358,34 @@ const refreshAccessTokenHandler = catchAsyncError(async (req, res) => {
     );
 });
 
+const driverLogout = catchAsyncError(async (req, res) => {
+  try {
+    const driverId = req.user.driverId;
+
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      throw new ApiError(
+        statusCode.UNAUTHORIZED,
+        "Access token is missing or invalid"
+      );
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    await AccessTokenModel.findOneAndDelete({
+      user: driverId,
+      token,
+    });
+
+    return res
+      .status(statusCode.OK)
+      .json(new ApiResponse(statusCode.OK, null, "Logout successful"));
+  } catch (error) {
+    throw error;
+  }
+});
+
 module.exports = {
   sendotpToUpdatephone,
   sendOtpToPhoneHandler,
@@ -365,4 +394,5 @@ module.exports = {
   verifyEmailOtpHandler,
   refreshAccessTokenHandler,
   verifyPhoneOtpFPin,
+  driverLogout,
 };
