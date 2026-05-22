@@ -359,7 +359,7 @@ const createBusBooking = catchAsyncError(async (req, res) => {
               name: bus?.busName,
               id: bus?.ownerId,
             },
-            ride: {
+            bus: {
               bookingId: booking.bookingId,
             },
           },

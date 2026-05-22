@@ -126,9 +126,18 @@ const requestTopay = catchAsyncError(async (req, res) => {
       },
     ],
     meta: {
-      topup: true,
-      externalId: `wallet_topup_${userId}`,
-      phoneNumber,
+      from: {
+        name: "MTN",
+      },
+      to: {
+        name: "WeMove Wallet",
+      },
+      additional: {
+        momorefId: referenceId,
+        topup: true,
+        externalId: `wallet_topup_${userId}`,
+        phoneNumber,
+      },
     },
   });
 

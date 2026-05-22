@@ -309,7 +309,7 @@ const createBooking = catchAsyncError(async (req, res) => {
               name: hotelExists?.hotelName,
               id: hotelExists?.ownerId,
             },
-            ride: {
+            hotel: {
               bookingId: booking[0].bookingId,
             },
           },
