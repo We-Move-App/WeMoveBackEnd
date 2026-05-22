@@ -10,28 +10,24 @@ const {
   getAllUsersBookings,
   getAllBookingsByUserId,
   getWalletBalance,
-  updateUserByAdmin
+  updateUserByAdmin,
 } = require("../../../controllers/admin-module/user-management/admin-users.controlllers");
 const { cacheMiddleware } = require("../../../middlewares/redisMiddleware");
 const adminUserManagementRoutes = express.Router();
 
-adminUserManagementRoutes
-  .route("/users")
-  .get(
-    isAdminAuthenticated,
-    authorizeRole(["SuperAdmin", "Admin"]),
-    cacheMiddleware(120),
-    getAllUsers
-  );
+adminUserManagementRoutes.route("/users").get(
+  isAdminAuthenticated,
+  authorizeRole(["SuperAdmin", "Admin"]),
+  // cacheMiddleware(120),
+  getAllUsers
+);
 
-adminUserManagementRoutes
-  .route("/users/:_id")
-  .get(
-    isAdminAuthenticated,
-    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
-    cacheMiddleware(120),
-    getSingleUser 
-  );
+adminUserManagementRoutes.route("/users/:_id").get(
+  isAdminAuthenticated,
+  authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+  // cacheMiddleware(120),
+  getSingleUser
+);
 
 adminUserManagementRoutes
   .route("/users/verify/:userId")
@@ -41,22 +37,16 @@ adminUserManagementRoutes
     verifyUserProfile
   );
 
-  adminUserManagementRoutes
-    .route("/users/update/:userId")
-    .put(
-      isAdminAuthenticated,
-      authorizeRole(["SuperAdmin"]),
-      updateUserByAdmin
-    );
-
 adminUserManagementRoutes
-  .route("/bookings")
-  .get(
-    isAdminAuthenticated,
-    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
-    cacheMiddleware(120),
-    getAllUsersBookings
-  );
+  .route("/users/update/:userId")
+  .put(isAdminAuthenticated, authorizeRole(["SuperAdmin"]), updateUserByAdmin);
+
+adminUserManagementRoutes.route("/bookings").get(
+  isAdminAuthenticated,
+  authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+  // cacheMiddleware(120),
+  getAllUsersBookings
+);
 
 adminUserManagementRoutes.route("/bookings/:userId").get(
   isAdminAuthenticated,
@@ -65,14 +55,12 @@ adminUserManagementRoutes.route("/bookings/:userId").get(
   getAllBookingsByUserId
 );
 
-adminUserManagementRoutes
-  .route("/wallet/:userId")
-  .get(
-    isAdminAuthenticated,
-    authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
-    cacheMiddleware(60),
-    getWalletBalance
-  );
+adminUserManagementRoutes.route("/wallet/:userId").get(
+  isAdminAuthenticated,
+  authorizeRole(["SuperAdmin", "Admin", "SubAdmin"]),
+  // cacheMiddleware(60),
+  getWalletBalance
+);
 
 module.exports = {
   adminUserManagementRoutes,
