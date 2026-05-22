@@ -513,4 +513,31 @@ module.exports = {
     "Les détails du véhicule ont été ajoutés avec succès",
   VEHICLE_REGISTRATION_ALREADY_EXISTS:
     "Un véhicule avec ce numéro d'immatriculation existe déjà",
+
+  BOOKING_ID_AND_ROOM_ID_REQUIRED:
+    "L'identifiant de réservation et l'identifiant de chambre sont requis.",
+
+  BOOKING_NOT_FOUND: "Réservation introuvable.",
+
+  BOOKING_ALREADY_STATUS: "La réservation est déjà {{status}}.",
+
+  PAYMENT_STATUS_INVALID: "Le paiement est {{status}}.",
+
+  INVALID_CHECKIN_CHECKOUT_DATES: "Dates d’arrivée/de départ invalides.",
+
+  ROOMS_ALREADY_FULLY_ASSIGNED:
+    "La réservation a déjà {{assigned}} chambre(s) attribuée(s), ce qui correspond au nombre requis de {{required}}.",
+
+  ROOM_NOT_FOUND_OR_INVALID:
+    "La chambre est introuvable ou n'appartient pas au même hôtel/type de chambre.",
+
+  ROOM_NOT_AVAILABLE: "La chambre n'est pas disponible.",
+
+  ROOM_ALREADY_ASSIGNED:
+    "La chambre {{roomId}} est déjà attribuée à cette réservation.",
+
+  ROOM_ALREADY_BOOKED_FOR_PERIOD:
+    "La chambre {{roomId}} est déjà réservée pour cette période.",
+
+  ROOM_ASSIGNED_SUCCESSFULLY: "Chambre attribuée avec succès",
 };

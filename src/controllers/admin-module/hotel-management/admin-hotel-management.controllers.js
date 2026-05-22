@@ -348,44 +348,66 @@ const registerHotelManagerFromAdmin = catchAsyncError(
         branch: branchDoc._id,
       });
       createdDocs.push({ model: HotelManagerModel, id: manager._id });
-
       // Bank account creation
       let bankAccount = null;
 
-      // Safe if bankInfo is missing
       const cleanBankInfo = { ...(bankInfo || {}) };
 
-      // Remove empty values
+      // Clean top-level fields except bankDocs
       Object.keys(cleanBankInfo).forEach((key) => {
         if (
-          cleanBankInfo[key] === "" ||
-          cleanBankInfo[key] === null ||
-          cleanBankInfo[key] === undefined
+          key !== "bankDocs" &&
+          (cleanBankInfo[key] === "" ||
+            cleanBankInfo[key] === null ||
+            cleanBankInfo[key] === undefined ||
+            (typeof cleanBankInfo[key] === "string" &&
+              cleanBankInfo[key].trim() === ""))
         ) {
           delete cleanBankInfo[key];
         }
       });
 
-      // Remove empty bankDocs object
+      // Clean nested bankDocs
       if (
         cleanBankInfo.bankDocs &&
-        typeof cleanBankInfo.bankDocs === "object" &&
-        Object.keys(cleanBankInfo.bankDocs).length === 0
+        typeof cleanBankInfo.bankDocs === "object"
       ) {
-        delete cleanBankInfo.bankDocs;
+        const docs = { ...cleanBankInfo.bankDocs };
+
+        Object.keys(docs).forEach((key) => {
+          if (
+            docs[key] === "" ||
+            docs[key] === null ||
+            docs[key] === undefined ||
+            (typeof docs[key] === "string" && docs[key].trim() === "")
+          ) {
+            delete docs[key];
+          }
+        });
+
+        // if no valid url, remove whole bankDocs
+        if (!docs.url && !docs.fileUrl) {
+          delete cleanBankInfo.bankDocs;
+        } else {
+          cleanBankInfo.bankDocs = {
+            public_id: docs.public_id || null,
+            url: docs.url || docs.fileUrl,
+            fileName: docs.fileName || null,
+            fileType: docs.fileType || null,
+          };
+        }
       }
 
-      // Safely handle accountNumber
+      // Clean account number
       if (
-        cleanBankInfo.accountNumber === undefined ||
-        cleanBankInfo.accountNumber === null ||
+        !cleanBankInfo.accountNumber ||
         typeof cleanBankInfo.accountNumber !== "string" ||
         cleanBankInfo.accountNumber.trim() === ""
       ) {
         delete cleanBankInfo.accountNumber;
       }
 
-      // Only create bank document if actual bank data exists
+      // Create bank account only if real data exists
       if (
         cleanBankInfo.accountNumber ||
         cleanBankInfo.bankName ||
@@ -396,17 +418,6 @@ const registerHotelManagerFromAdmin = catchAsyncError(
           ...cleanBankInfo,
           userId: manager._id,
           createdBy: adminId,
-          bankDocs: cleanBankInfo.bankDocs
-            ? {
-                public_id: cleanBankInfo.bankDocs.public_id || null,
-                url:
-                  cleanBankInfo.bankDocs.url ||
-                  cleanBankInfo.bankDocs.fileUrl ||
-                  null,
-                fileName: cleanBankInfo.bankDocs.fileName || null,
-                fileType: cleanBankInfo.bankDocs.fileType || null,
-              }
-            : null,
         });
 
         createdDocs.push({
@@ -658,14 +669,42 @@ const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
     if (profileInfo?.branch && !branchDoc) {
       throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
     }
+const updateManagerData = {};
 
-    const updateManagerData = {};
-    if (profileInfo?.fullName)
-      updateManagerData.fullName = profileInfo.fullName;
-    if (profileInfo?.email)
-      updateManagerData.email = profileInfo.email.toLowerCase();
-    if (profileInfo?.phoneNumber)
-      updateManagerData.phoneNumber = profileInfo.phoneNumber;
+if (profileInfo?.fullName) updateManagerData.fullName = profileInfo.fullName;
+
+// Email duplicate check
+if (profileInfo?.email) {
+  const email = profileInfo.email.toLowerCase();
+
+  const existingEmail = await HotelManagerModel.findOne({
+    email: email,
+    _id: { $ne: managerId },
+  });
+
+  if (existingEmail) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Email already exists");
+  }
+
+  updateManagerData.email = email;
+}
+
+// Phone duplicate check
+if (profileInfo?.phoneNumber) {
+  const existingPhone = await HotelManagerModel.findOne({
+    phoneNumber: profileInfo.phoneNumber,
+    _id: { $ne: managerId },
+  });
+
+  if (existingPhone) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Phone number already exists");
+  }
+
+  updateManagerData.phoneNumber = profileInfo.phoneNumber;
+}
+
+if (profileInfo?.companyName)
+  updateManagerData.companyName = profileInfo.companyName;
     if (profileInfo?.companyName)
       updateManagerData.companyName = profileInfo.companyName;
     if (profileInfo?.companyAddress)
@@ -697,6 +736,8 @@ const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
     );
 
     // 2) Update Bank Info
+
+    // 2) Update Bank Info
     let bankAccount = null;
 
     if (bankInfo && typeof bankInfo === "object") {
@@ -706,73 +747,123 @@ const updateHotelManagerFromAdmin = catchAsyncError(async (req, res, next) => {
 
       const cleanBankInfo = { ...(bankInfo || {}) };
 
-      // Remove empty values
+      // Clean top-level fields except bankDocs
       Object.keys(cleanBankInfo).forEach((key) => {
         if (
-          cleanBankInfo[key] === "" ||
-          cleanBankInfo[key] === null ||
-          cleanBankInfo[key] === undefined
+          key !== "bankDocs" &&
+          (cleanBankInfo[key] === "" ||
+            cleanBankInfo[key] === null ||
+            cleanBankInfo[key] === undefined ||
+            (typeof cleanBankInfo[key] === "string" &&
+              cleanBankInfo[key].trim() === ""))
         ) {
           delete cleanBankInfo[key];
         }
       });
 
-      // Remove empty bankDocs object
+      // Clean nested bankDocs
       if (
         cleanBankInfo.bankDocs &&
-        typeof cleanBankInfo.bankDocs === "object" &&
-        Object.keys(cleanBankInfo.bankDocs).length === 0
+        typeof cleanBankInfo.bankDocs === "object"
       ) {
-        delete cleanBankInfo.bankDocs;
+        const docs = { ...cleanBankInfo.bankDocs };
+
+        Object.keys(docs).forEach((key) => {
+          if (
+            docs[key] === "" ||
+            docs[key] === null ||
+            docs[key] === undefined ||
+            (typeof docs[key] === "string" && docs[key].trim() === "")
+          ) {
+            delete docs[key];
+          }
+        });
+
+        // Remove whole bankDocs if no valid url
+        if (!docs.url && !docs.fileUrl) {
+          delete cleanBankInfo.bankDocs;
+        } else {
+          cleanBankInfo.bankDocs = {
+            public_id: docs.public_id || null,
+            url: docs.url || docs.fileUrl,
+            fileName: docs.fileName || null,
+            fileType: docs.fileType || null,
+          };
+        }
       }
 
-      // Safely handle accountNumber
-      if (!String(cleanBankInfo.accountNumber || "").trim()) {
-        delete cleanBankInfo.accountNumber;
+      // Clean accountNumber
+      if (
+        cleanBankInfo.accountNumber !== undefined &&
+        cleanBankInfo.accountNumber !== null
+      ) {
+        cleanBankInfo.accountNumber = String(
+          cleanBankInfo.accountNumber
+        ).trim();
+
+        if (!cleanBankInfo.accountNumber) {
+          delete cleanBankInfo.accountNumber;
+        }
       }
 
+      // UPDATE existing bank
       if (existingBank) {
         const updateBankData = {
-          ...(cleanBankInfo.bankName && { bankName: cleanBankInfo.bankName }),
+          ...(cleanBankInfo.bankName && {
+            bankName: cleanBankInfo.bankName,
+          }),
+
           ...(cleanBankInfo.accountHolderName && {
             accountHolderName: cleanBankInfo.accountHolderName,
           }),
+
           ...(cleanBankInfo.accountNumber && {
             accountNumber: cleanBankInfo.accountNumber,
           }),
+
           ...(cleanBankInfo.isPrimary !== undefined && {
             isPrimary: cleanBankInfo.isPrimary,
           }),
+
+          ...(cleanBankInfo.bankDocs && {
+            bankDocs: cleanBankInfo.bankDocs,
+          }),
         };
 
-        if (cleanBankInfo.bankDocs) {
-          if (existingBank.bankDocs?.public_id) {
+        if (Object.keys(updateBankData).length > 0) {
+          // Delete old AWS file only if file changed
+          if (
+            cleanBankInfo.bankDocs &&
+            existingBank.bankDocs?.public_id &&
+            (cleanBankInfo.bankDocs.public_id !==
+              existingBank.bankDocs.public_id ||
+              cleanBankInfo.bankDocs.url !== existingBank.bankDocs.url)
+          ) {
             await deleteImageFromAws(existingBank.bankDocs.public_id);
           }
 
-          updateBankData.bankDocs = {
-            public_id: cleanBankInfo.bankDocs.public_id || null,
-            url:
-              cleanBankInfo.bankDocs.url ||
-              cleanBankInfo.bankDocs.fileUrl ||
-              null,
-            fileName: cleanBankInfo.bankDocs.fileName || null,
-            fileType: cleanBankInfo.bankDocs.fileType || null,
-          };
-        }
-
-        if (Object.keys(updateBankData).length > 0) {
           bankAccount = await HotelManagerBankModel.findOneAndUpdate(
             { userId: manager._id },
-            { ...updateBankData, updatedBy: adminId },
+            {
+              ...updateBankData,
+              updatedBy: adminId,
+            },
             { new: true }
           );
         } else {
           bankAccount = existingBank;
         }
       }
-    }
 
+      // CREATE bank if no existing bank
+      else if (Object.keys(cleanBankInfo).length > 0) {
+        bankAccount = await HotelManagerBankModel.create({
+          ...cleanBankInfo,
+          userId: manager._id,
+          createdBy: adminId,
+        });
+      }
+    }
     // 3) Update Hotel Info
     const existingHotel = await Hotel.findOne({ ownerId: manager._id });
     if (!existingHotel) throw new ApiError(404, "Hotel not found");
