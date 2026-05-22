@@ -57,6 +57,7 @@ const bookingSchema = new Schema(
         "REFUND_REQUESTED",
         "REFUND_PROCESSING",
         "REFUNDED",
+        "OFFLINE",
       ],
       default: "PENDING",
     },
