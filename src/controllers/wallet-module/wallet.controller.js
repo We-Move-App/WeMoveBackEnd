@@ -92,7 +92,10 @@ const deductfromUserWallet = catchAsyncError(async (req, res) => {
     status: PaymentStatusEnum.SUCCESS,
     currency: currency || userWallet.currency || process.env.MOMO_CURRENCY,
     totalAmount: Number(amount),
-    description: description || "Wallet deduction",
+    description: {
+      en: "Wallet deduction",
+      fr: "Déduction du portefeuille",
+    },
     platformFee: 0,
     operatorShare: 0,
     entries: [
@@ -174,7 +177,10 @@ const refundToUserWallet = catchAsyncError(async (req, res) => {
     status: PaymentStatusEnum.SUCCESS,
     currency: currency || userWallet.currency || process.env.MOMO_CURRENCY,
     totalAmount: Number(amount),
-    description: description || "Wallet refund",
+    description: {
+      en: "Wallet refund",
+      fr: "Remboursement du portefeuille",
+    },
     platformFee: 0,
     operatorShare: 0,
     refund: true,
@@ -304,7 +310,10 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
             status: PaymentStatusEnum.FAILED,
             currency,
             totalAmount: totalDebit,
-            description: "Transfer failed - insufficient balance",
+            description: {
+              en: "Transfer failed due to insufficient balance",
+              fr: "Le transfert a échoué en raison d’un solde insuffisant",
+            },
             platformFee,
             operatorShare: amt,
             entries: [
@@ -407,10 +416,17 @@ const userInternalTransaction = catchAsyncError(async (req, res) => {
           status: PaymentStatusEnum.SUCCESS,
           currency,
           totalAmount: totalDebit,
-          description:
-            platformFee > 0
-              ? `Sent ${amt} to ${receiver.fullName} (includes commission ${platformFee})`
-              : `Sent ${amt} to ${receiver.fullName}`,
+          description: {
+            en:
+              platformFee > 0
+                ? `Sent ${amt} to ${receiver.fullName} (includes commission ${platformFee})`
+                : `Sent ${amt} to ${receiver.fullName}`,
+
+            fr:
+              platformFee > 0
+                ? `Envoyé ${amt} à ${receiver.fullName} (commission incluse : ${platformFee})`
+                : `Envoyé ${amt} à ${receiver.fullName}`,
+          },
           platformFee,
           operatorShare: amt,
           entries,
@@ -1447,7 +1463,6 @@ const getAnalytics = catchAsyncError(async (req, res) => {
       },
     },
   ];
-
 
   if (filter === "daily") {
     const startOfDay = new Date(

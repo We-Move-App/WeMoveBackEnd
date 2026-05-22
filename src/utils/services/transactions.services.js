@@ -69,14 +69,17 @@ const isTransactionProcess = async ({
     const transaction = await TransactionModel.create(
       [
         {
-          sender:senderId,
+          sender: senderId,
           recipient: finalRecipientId,
           senderWallet: senderWallet._id,
           recipientWallet: recipientWallet._id,
           amount: amount,
           type: type,
           currency: process.env.MOMO_CURRENCY,
-          description: description[type] || "Transaction",
+          description: {
+            en: "Transaction",
+            fr: "Transaction",
+          },
           status: "completed",
           referenceId: refId,
         },

@@ -102,7 +102,10 @@ const requestTopay = catchAsyncError(async (req, res) => {
     status: PaymentStatusEnum.PENDING,
     currency,
     totalAmount: Number(amount),
-    description: description || "Wallet Top-up",
+    description: {
+      en: "Wallet Top-up",
+      fr: "Rechargement du portefeuille",
+    },
     platformFee: 0,
     operatorShare: 0,
     entries: [
@@ -364,7 +367,10 @@ const withdrawFunds = catchAsyncError(async (req, res) => {
         status: PaymentStatusEnum.SUCCESS,
         currency,
         totalAmount: amt,
-        description: description || "Withdraw via MoMo",
+        description: {
+          en: `Wallet Withdrawal`,
+          fr: `Retrait du portefeuille`,
+        },
         platformFee: 0,
         operatorShare: 0,
         withdraw: true,

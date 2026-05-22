@@ -738,7 +738,10 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
       type: TransactionTypeEnum.CREDIT,
       amount: refundAmount,
       currency: userWallet.currency,
-      description: `50% refund for cancelled booking ${bookingId}`,
+      description: {
+        en: `50% refund for cancelled booking ${bookingId}`,
+        fr: `Remboursement de 50 % pour la réservation annulée ${bookingId}`,
+      },
       status: PaymentStatusEnum.SUCCESS,
       refund: true,
     });
@@ -767,7 +770,10 @@ const cancelBusBooking = catchAsyncError(async (req, res, next) => {
       type: TransactionTypeEnum.DEBIT,
       amount: refundAmount,
       currency: operatorWallet.currency,
-      description: `Deduction for 50% refund of cancelled booking ${bookingId}`,
+      description: {
+        en: `Deduction for 50% refund of cancelled booking ${bookingId}`,
+        fr: `Déduction pour le remboursement de 50 % de la réservation annulée ${bookingId}`,
+      },
       status: PaymentStatusEnum.SUCCESS,
       refund: true,
     });
