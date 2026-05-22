@@ -14,7 +14,7 @@ const uploadMultipleImagesToAws = async (files) => {
   const uploadedImages = [];
 
   for (let file of files) {
-    const uploadedImage = await uploadImageOnAws(file.path);
+    const uploadedImage = await uploadImageOnAws(file.path, file.originalname);
 
     if (uploadedImage) {
       uploadedImages.push({
