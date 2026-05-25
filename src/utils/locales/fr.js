@@ -540,4 +540,24 @@ module.exports = {
     "La chambre {{roomId}} est déjà réservée pour cette période.",
 
   ROOM_ASSIGNED_SUCCESSFULLY: "Chambre attribuée avec succès",
+
+  //BUS-DRIVERS-
+  DRIVER_ALREADY_ASSIGNED: "Ce chauffeur est déjà affecté à ce bus.",
+  // DRIVER_ALREADY_ASSIGNED_TO_BUS: "Ce chauffeur est déjà affecté à ce bus.",
+  BUS_NOT_FOUND: "Bus introuvable",
+  DRIVER_NOT_FOUND: "Chauffeur introuvable",
+  DRIVER_BUS_OPERATOR_MISMATCH:
+    "Le chauffeur et le bus doivent appartenir au même opérateur de bus",
+  DRIVER_ASSIGNED_SUCCESSFULLY: "Chauffeur affecté avec succès",
+
+  //ONBoarded User
+
+  DRIVER_OR_BOOKING_NOT_FOUND:
+    "Chauffeur ou réservation introuvable, ou aucun bus n'est affecté au chauffeur",
+  DRIVER_NOT_ASSIGNED_TO_BUS: "Le chauffeur n'est pas affecté à ce bus",
+  USER_ALREADY_ONBOARDED: "L'utilisateur est déjà embarqué",
+  USER_ONBOARDED_SUCCESSFULLY: "Utilisateur embarqué avec succès",
+  DRIVER_ASSIGNED_BUS_NOT_FOUND: "Chauffeur ou bus assigné introuvable",
+  ONBOARDED_USERS_FETCHED_SUCCESSFULLY:
+    "Utilisateurs embarqués récupérés avec succès",
 };

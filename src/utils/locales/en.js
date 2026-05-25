@@ -496,4 +496,22 @@ module.exports = {
     "Room {{roomId}} is already booked in the selected time period.",
 
   ROOM_ASSIGNED_SUCCESSFULLY: "Room assigned successfully",
+
+  //BUS-DRIVER-TRANSLATE
+  DRIVER_ALREADY_ASSIGNED: "Driver is already assigned to this bus.",
+  // DRIVER_ALREADY_ASSIGNED_TO_BUS: "This driver is already assigned to this bus.",
+  BUS_NOT_FOUND: "Bus not found",
+  DRIVER_NOT_FOUND: "Driver not found",
+  DRIVER_BUS_OPERATOR_MISMATCH:
+    "Driver and Bus must belong to the same Bus Operator",
+  DRIVER_ASSIGNED_SUCCESSFULLY: "Driver assigned successfully",
+  //OnBoard///
+
+  DRIVER_OR_BOOKING_NOT_FOUND:
+    "Driver or booking not found, or bus not assigned to driver",
+  DRIVER_NOT_ASSIGNED_TO_BUS: "Driver is not assigned to this bus",
+  USER_ALREADY_ONBOARDED: "User is already onboarded",
+  USER_ONBOARDED_SUCCESSFULLY: "User onboarded successfully",
+  DRIVER_ASSIGNED_BUS_NOT_FOUND: "Driver or assigned bus not found",
+  ONBOARDED_USERS_FETCHED_SUCCESSFULLY: "Onboarded users fetched successfully",
 };
