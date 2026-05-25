@@ -540,4 +540,10 @@ module.exports = {
     "La chambre {{roomId}} est déjà réservée pour cette période.",
 
   ROOM_ASSIGNED_SUCCESSFULLY: "Chambre attribuée avec succès",
+
+  //BUS-DRIVERS-
+  DRIVER_ALREADY_ASSIGNED: "Ce chauffeur est déjà affecté à ce bus.",
+  // DRIVER_ALREADY_ASSIGNED_TO_BUS: "Ce chauffeur est déjà affecté à ce bus.",
+  BUS_NOT_FOUND: "Bus introuvable",
+  DRIVER_NOT_FOUND: "Chauffeur introuvable",
 };

@@ -496,4 +496,10 @@ module.exports = {
     "Room {{roomId}} is already booked in the selected time period.",
 
   ROOM_ASSIGNED_SUCCESSFULLY: "Room assigned successfully",
+
+  //BUS-DRIVER-TRANSLATE
+  DRIVER_ALREADY_ASSIGNED: "Driver is already assigned to this bus.",
+  // DRIVER_ALREADY_ASSIGNED_TO_BUS: "This driver is already assigned to this bus.",
+  BUS_NOT_FOUND: "Bus not found",
+  DRIVER_NOT_FOUND: "Driver not found",
 };

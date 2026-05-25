@@ -128,11 +128,12 @@ const BusActivityLogModel = require("../../../models/bus-module/busActivityonBoa
 //     passengerDetails: booking.passengers,
 //   });
 // });
+
 const onboardUserByQR = catchAsyncError(async (req, res, next) => {
   const driverId = req.user_id;
   const { bookingId } = req.body;
 
-  const booking = await BusBookingModel.findById(bookingId);
+  const booking = await BusBookingModel.findById(bookingId).populate("busId");
   const driver =
     await BusDriverModel.findById(driverId).populate("assignedBus");
 

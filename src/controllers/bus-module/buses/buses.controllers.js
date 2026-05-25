@@ -26,6 +26,7 @@ const { getFinalPrice } = require("../../../utils/services/prices.services");
 const UserRecentSearchModel = require("../../../models/user-module/user-recent-search/user-recent-search.model");
 const { fetchLn } = require("../../../utils/services/user.services");
 const { translateLn } = require("../../../utils/services/translator.service");
+const BusDriverModel = require("../../../models/bus-module/bus-drivers/bus-drivers.model");
 
 // =================|| ADD BUS ||==================
 const addBus = catchAsyncError(async (req, res, next) => {
@@ -588,6 +589,31 @@ const deletePermanentBus = catchAsyncError(async (req, res, next) => {
   }
 
   // Delete all associated routes directly
+  // Handle drivers from bus.assignedDriver array
+  if (Array.isArray(bus.assignedDriver) && bus.assignedDriver.length > 0) {
+    for (const driverId of bus.assignedDriver) {
+      const driver = await BusDriverModel.findById(driverId);
+
+      if (!driver) continue;
+
+      const otherBus = await BusModel.findOne({
+        _id: { $ne: bus._id },
+        assignedDriver: driver._id,
+      });
+
+      if (otherBus) {
+        // Driver exists in another bus
+        driver.assignedBus = otherBus._id;
+        driver.status = "assigned";
+      } else {
+        // No other bus
+        driver.assignedBus = null;
+        driver.status = "unassigned";
+      }
+
+      await driver.save();
+    }
+  } 
   await BusRouteModel.deleteMany({ busId });
   await BusSeatsLayoutModel.deleteMany({ busId });
 
