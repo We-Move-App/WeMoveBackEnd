@@ -4,7 +4,7 @@ const statusCode = require("../../../utils/constants/statusCode");
 const logger = require("../../../utils/logger/logger");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const BusOperatorModel = require("../../../models/bus-module/bus-operator/bus-operator.model");
-const Wallet = require('../../../models/wallet-module/wallets.model')
+const Wallet = require("../../../models/wallet-module/wallets.model");
 const {
   validateRequestBody,
 } = require("../../../utils/reqFunctions/reqFunction");
@@ -70,7 +70,6 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
 
   return res.status(statusCode.OK).json(result);
 });
-
 
 // =====================|| LOGIN USER ||=====================================
 const loginBusOperator = catchAsyncError(async (req, res, next) => {
@@ -140,7 +139,10 @@ const verificationBusOperator = catchAsyncError(async (req, res, next) => {
   for (const key of keys) {
     const imgFile = docsToUpload[key][0];
 
-    const cloudImage = await uploadImageOnAws(imgFile.path);
+    const cloudImage = await uploadImageOnAws(
+      imgFile.path,
+      imgFile.originalname
+    );
 
     const uploadedDoc = await DocumentsModel.create({
       documentName: key,
@@ -256,7 +258,10 @@ const updateVerificationDetails = catchAsyncError(async (req, res, next) => {
         }
 
         // Upload new image
-        const cloudImage = await uploadImageOnAws(imgFile.path);
+        const cloudImage = await uploadImageOnAws(
+          imgFile.path,
+          imgFile.originalname
+        );
         existingDoc.file = {
           public_id: cloudImage?.public_id,
           url: cloudImage?.secure_url,
@@ -356,7 +361,7 @@ const addEmailOrPhone = catchAsyncError(async (req, res, next) => {
     res,
     reqModel: BusOperatorModel,
     historyModel: busOperatorHistoryModel,
-    req
+    req,
   });
   return res.status(statusCode.OK).json(result);
 });

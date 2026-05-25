@@ -1,4 +1,5 @@
 const fs = require("fs");
+const fsPromises = require("fs").promises;
 const path = require("path");
 const mime = require("mime-types");
 
@@ -31,7 +32,24 @@ const s3 = new S3Client({
 
 const bucketName = do_bucket_name;
 
-const uploadImageOnAws = async (localFilePath, folderName = "wemove") => {
+const deleteLocalFile = async (filePath) => {
+  try {
+    await fsPromises.access(filePath);
+    await fsPromises.unlink(filePath);
+
+    console.log(`Deleted local file: ${filePath}`);
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      console.error("Delete local file error:", error.message);
+    }
+  }
+};
+
+const uploadImageOnAws = async (
+  localFilePath,
+  originalFileName,
+  folderName = "wemove"
+) => {
   try {
     if (!localFilePath) return null;
 
@@ -41,23 +59,23 @@ const uploadImageOnAws = async (localFilePath, folderName = "wemove") => {
 
     const fileStream = fs.createReadStream(localFilePath);
 
-    const fileName = `${folderName}/${Date.now()}-${path.basename(
-      localFilePath
-    )}`;
+    // GET EXTENSION
+    const ext = path.extname(originalFileName);
+
+    // CREATE FILE NAME WITH EXTENSION
+    const fileName = `${folderName}/${Date.now()}${ext}`;
 
     const uploadParams = {
       Bucket: bucketName,
       Key: fileName,
       Body: fileStream,
       ACL: "public-read",
-      ContentType: mime.lookup(localFilePath) || "application/octet-stream",
+      ContentType: mime.lookup(originalFileName) || "application/octet-stream",
     };
 
     await s3.send(new PutObjectCommand(uploadParams));
 
-    if (fs.existsSync(localFilePath)) {
-      fs.unlinkSync(localFilePath);
-    }
+    await deleteLocalFile(localFilePath);
 
     return {
       secure_url: `https://${bucketName}.blr1.digitaloceanspaces.com/${fileName}`,
@@ -66,9 +84,7 @@ const uploadImageOnAws = async (localFilePath, folderName = "wemove") => {
   } catch (error) {
     console.error("Upload Error:", error);
 
-    if (fs.existsSync(localFilePath)) {
-      fs.unlinkSync(localFilePath);
-    }
+    await deleteLocalFile(localFilePath);
 
     return null;
   }

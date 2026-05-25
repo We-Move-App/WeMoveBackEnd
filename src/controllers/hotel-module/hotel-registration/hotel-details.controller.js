@@ -14,15 +14,20 @@ const {
 } = require("../../../utils/uploadFiles/uploadFilestoAws");
 
 const createHotelDetails = catchAsyncError(async (req, res, next) => {
-  const { hotelName, businessLicense, totalRoom, termsAndConditions, description } =
-    req.body;
+  const {
+    hotelName,
+    businessLicense,
+    totalRoom,
+    termsAndConditions,
+    description,
+  } = req.body;
   const { _id } = req.user;
   if (!_id) {
     throw new ApiError(statusCode.UNAUTHORIZED, "User not authenticated.");
   }
   if (!hotelName || !businessLicense || !totalRoom || !termsAndConditions) {
     throw new ApiError(statusCode.BAD_REQUEST, "Missing required fields.");
-  } 
+  }
   const hotelImages = req.files?.hotelImages;
 
   if (!hotelImages || hotelImages.length < 3) {
@@ -111,7 +116,7 @@ const getAllHotels = catchAsyncError(async (req, res, next) => {
 
 const getHotelById = catchAsyncError(async (req, res, next) => {
   const { hotelId } = req.params;
-  const userId = req.user._id; 
+  const userId = req.user._id;
 
   if (!hotelId) {
     throw new ApiError(statusCode.BAD_REQUEST, "Hotel ID is required.");
@@ -122,20 +127,24 @@ const getHotelById = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
   }
 
-  
   if (hotel.ownerId.toString() !== userId.toString()) {
-    throw new ApiError(statusCode.FORBIDDEN, "You are not authorized owner to view this hotel.");
+    throw new ApiError(
+      statusCode.FORBIDDEN,
+      "You are not authorized owner to view this hotel."
+    );
   }
 
   const images = await HotelImage.find({ hotelId }).lean();
 
-  res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      { ...hotel, images: images?.length > 0 ? images[0].images : [] },
-      "Hotel retrieved."
-    )
-  );
+  res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        { ...hotel, images: images?.length > 0 ? images[0].images : [] },
+        "Hotel retrieved."
+      )
+    );
 });
 
 // const updateHotelById = catchAsyncError(async (req, res) => {
@@ -208,7 +217,6 @@ const getHotelById = catchAsyncError(async (req, res, next) => {
 //     deletedImage: deleteimages,
 //   });
 // });
-
 
 // const updateHotelById = catchAsyncError(async (req, res) => {
 //   const { hotelId } = req.params;
@@ -289,33 +297,33 @@ const updateHotelById = catchAsyncError(async (req, res) => {
   const { hotelId } = req.params;
   const userId = req.user._id;
   if (!hotelId) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Hotel ID is required");     
+    throw new ApiError(statusCode.BAD_REQUEST, "Hotel ID is required");
   }
   const hotel = await Hotel.findById(hotelId);
-  if (!hotel) {     
+  if (!hotel) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found");
   }
 
-
-
-   if (hotel.ownerId.toString() !== userId.toString()) {
-    throw new ApiError(statusCode.FORBIDDEN, "You are not authorized owner to update this hotel.");
+  if (hotel.ownerId.toString() !== userId.toString()) {
+    throw new ApiError(
+      statusCode.FORBIDDEN,
+      "You are not authorized owner to update this hotel."
+    );
   }
-let imageId = req.body.imageId;
-if (typeof imageId === "string") {
-  try {
-    imageId = JSON.parse(imageId);
-  } catch (error) {
-    console.error("Invalid imageId format", error);
-    return res.status(400).json({ message: "Invalid imageId format" });
+  let imageId = req.body.imageId;
+  if (typeof imageId === "string") {
+    try {
+      imageId = JSON.parse(imageId);
+    } catch (error) {
+      console.error("Invalid imageId format", error);
+      return res.status(400).json({ message: "Invalid imageId format" });
+    }
   }
-}
   if (!Array.isArray(imageId)) {
-    imageId = [imageId];    
+    imageId = [imageId];
   }
- 
-  const newImageFiles = req.files?.hotelImages; 
-  
+
+  const newImageFiles = req.files?.hotelImages;
 
   const updatedHotel = await Hotel.findByIdAndUpdate(
     hotelId,
@@ -334,11 +342,10 @@ if (typeof imageId === "string") {
   if (!updatedHotel) {
     throw new ApiError(404, "Hotel not found");
   }
-  
 
   let newlyUploadedImages = [];
   let deletedImages = [];
- 
+
   const hotelImageDoc = await HotelImage.findOne({ hotelId });
 
   if (!hotelImageDoc) {
@@ -373,7 +380,7 @@ if (typeof imageId === "string") {
   // Step 2: Upload and push new images
   if (newImageFiles && Array.isArray(newImageFiles)) {
     for (const file of newImageFiles) {
-      const uploaded = await uploadImageOnAws(file.path);
+      const uploaded = await uploadImageOnAws(file.path, file.originalname);
       if (!uploaded) {
         throw new ApiError(500, "Failed to upload new image");
       }
@@ -397,8 +404,7 @@ if (typeof imageId === "string") {
     success: true,
     statusCode: 200,
     message: "Hotel details and images updated successfully",
-    
-   
+
     hotel: updatedHotel,
     updatedImages: newlyUploadedImages,
     deletedImages: deletedImages,
@@ -406,34 +412,25 @@ if (typeof imageId === "string") {
   });
 });
 
-
-
-
 const deleteHotelById = catchAsyncError(async (req, res, next) => {
   const { hotelId } = req.params;
 
- const userId = req.user._id;
+  const userId = req.user._id;
 
   if (!hotelId) {
     throw new ApiError(400, "Hotel ID is required");
   }
- const hotel = await Hotel.findById(hotelId);
+  const hotel = await Hotel.findById(hotelId);
   if (!hotel) {
     throw new ApiError(statusCode.NOT_FOUND, "Hotel not found.");
   }
- 
 
-  
   if (hotel.ownerId.toString() !== userId.toString()) {
     throw new ApiError(
       statusCode.FORBIDDEN,
       " You are not authorized owner to delete this hotel this hotel."
     );
   }
-
- 
-
- 
 
   const hotelImages = await HotelImage.find({ hotelId });
 
@@ -469,7 +466,6 @@ const deleteHotelById = catchAsyncError(async (req, res, next) => {
 
 const getHotelByToken = catchAsyncError(async (req, res, next) => {
   const id = req.user._id;
-
 
   const hotel = await Hotel.findOne({ ownerId: id });
   if (!hotel) {

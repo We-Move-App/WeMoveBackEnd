@@ -300,6 +300,19 @@ const createBooking = catchAsyncError(async (req, res) => {
               amount: platformFee,
             },
           ],
+          meta: {
+            from: {
+              name: userExists?.fullName,
+              id: userExists?.userId,
+            },
+            to: {
+              name: hotelExists?.hotelName,
+              id: hotelExists?.ownerId,
+            },
+            hotel: {
+              bookingId: booking[0].bookingId,
+            },
+          },
         },
       ],
       { session }

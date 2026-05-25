@@ -480,7 +480,7 @@ const allotRoomToBooking = catchAsyncError(async (req, res) => {
     );
   }
 
-  if (booking.paymentStatus !== "PAID") {
+  if (!["PAID", "OFFLINE"].includes(booking.paymentStatus)) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
       `Payment is ${booking.paymentStatus}.`

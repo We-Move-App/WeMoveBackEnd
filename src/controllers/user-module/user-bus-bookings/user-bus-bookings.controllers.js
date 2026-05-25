@@ -350,6 +350,19 @@ const createBusBooking = catchAsyncError(async (req, res) => {
               amount: commission,
             },
           ],
+          meta: {
+            from: {
+              name: user?.fullName,
+              id: user?.userId,
+            },
+            to: {
+              name: bus?.busName,
+              id: bus?.ownerId,
+            },
+            bus: {
+              bookingId: booking.bookingId,
+            },
+          },
         },
       ],
       { session }

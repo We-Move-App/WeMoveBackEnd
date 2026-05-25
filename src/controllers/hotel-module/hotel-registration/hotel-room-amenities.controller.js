@@ -438,7 +438,7 @@ const updateRoomByHotelAndType = catchAsyncError(async (req, res, next) => {
 
   //Upload the oimages
   for (const file of roomImageFiles) {
-    const uploaded = await uploadImageOnAws(file.path);
+    const uploaded = await uploadImageOnAws(file.path, file.originalname);
     const newImg = {
       url: uploaded.secure_url,
       public_id: uploaded.public_id,

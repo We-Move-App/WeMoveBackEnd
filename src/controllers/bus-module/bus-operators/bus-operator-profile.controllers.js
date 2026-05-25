@@ -109,7 +109,10 @@ const updateYourProfile = catchAsyncError(async (req, res, next) => {
   if (Object.keys(docsToUpload).length > 0) {
     for (const key of keys) {
       const imgFile = docsToUpload[key][0];
-      const cloudImage = await uploadImageOnAws(imgFile.path);
+      const cloudImage = await uploadImageOnAws(
+        imgFile.path,
+        imgFile.originalname
+      );
 
       const uploadedDoc = await DocumentsModel.create({
         documentName: key,

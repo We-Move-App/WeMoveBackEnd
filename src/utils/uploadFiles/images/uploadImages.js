@@ -14,7 +14,7 @@ const uploadMultipleImagesToAws = async (files) => {
   const uploadedImages = [];
 
   for (let file of files) {
-    const uploadedImage = await uploadImageOnAws(file.path);
+    const uploadedImage = await uploadImageOnAws(file.path, file.originalname);
 
     if (uploadedImage) {
       uploadedImages.push({
@@ -39,7 +39,7 @@ const uploadSingleImageToAws = async (files) => {
     throw new ApiError(statusCode.BAD_REQUEST, "File path is missing");
   }
 
-  const uploadedImage = await uploadImageOnAws(file.path);
+  const uploadedImage = await uploadImageOnAws(file.path, file.originalname);
 
   if (!uploadedImage) {
     throw new ApiError(statusCode.INTERNAL_SERVER_ERROR, "Image upload failed");

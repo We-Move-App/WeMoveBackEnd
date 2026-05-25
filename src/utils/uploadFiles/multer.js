@@ -27,8 +27,6 @@ const storage = multer.diskStorage({
   },
 });
 
-
-
 const uploads = multer({ storage: storage });
 const uploadAvatar = uploads.fields([{ name: "avatar", maxCount: 1 }]);
 
@@ -48,8 +46,7 @@ const uploadBusImages = uploads.fields([
   { name: "bus_license_back", maxCount: 1 },
 ]);
 
-
-const uploadAmenityImages = uploads.array("amenityImages", 20); 
+const uploadAmenityImages = uploads.array("amenityImages", 20);
 
 const uploadDocuments = uploads.fields([
   { name: "driver_license", maxCount: 1 },
@@ -99,16 +96,19 @@ const uploadDriverDetailsDocs = uploads.fields([
 
 const deleteFileFromDisk = async (filePath) => {
   try {
-    if (fs.existsSync(filePath)) {
-      await fs.unlinkSync(filePath);
-    }
+    await fs.access(filePath);
+    await fs.unlink(filePath);
+
     console.log(`Deleted file: ${filePath}`);
   } catch (error) {
-    console.error(
-      `Failed to delete file: ${filePath}, Error: ${error.message}`
-    );
+    if (error.code !== "ENOENT") {
+      console.error(
+        `Failed to delete file: ${filePath}, Error: ${error.message}`
+      );
+    }
   }
 };
+
 const uploadHotelManagerFiles = uploads.fields([
   { name: "avatar", maxCount: 1 },
   { name: "hotelImages", maxCount: 10 },
@@ -129,7 +129,6 @@ const uploadHotelManagerFiles = uploads.fields([
   { name: "driver_license_back", maxCount: 1 },
 ]);
 
-
 module.exports = {
   uploadAvatar,
   uploadAmenityImages,
@@ -141,5 +140,5 @@ module.exports = {
   uploadHotelImages,
   uploadRoomImages,
   uploadDriverDetailsDocs,
-  uploadHotelManagerFiles
+  uploadHotelManagerFiles,
 };
