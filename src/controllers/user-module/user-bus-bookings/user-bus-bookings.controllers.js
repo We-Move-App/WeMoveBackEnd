@@ -513,7 +513,7 @@ const calculateBusBooking = catchAsyncError(async (req, res) => {
     if (
       coupon &&
       coupon.expiryDate >= new Date() &&
-      basePrice >= coupon.minOrderAmount &&
+      basePrice >= (coupon.minOrderAmount || 0) &&
       !coupon.usageHistory.some(
         (u) => u.userId.toString() === userId.toString()
       )
@@ -552,11 +552,11 @@ const calculateBusBooking = catchAsyncError(async (req, res) => {
     data: {
       journeyDate: journeyDateNormalized,
       noOfPassengers,
-      pricePerSeat,
-      basePrice,
-      discountApplied,
-      finalAmount: finalAmount + commission,
-      commission,
+      pricePerSeat: Number(pricePerSeat.toFixed(2)),
+      basePrice: Number(basePrice.toFixed(2)),
+      discountApplied: Number(discountApplied.toFixed(2)),
+      finalAmount: Number((finalAmount + commission).toFixed(2)),
+      commission: Number(commission.toFixed(2)),
       coupon: appliedCoupon
         ? {
             couponId: appliedCoupon._id,
