@@ -37,6 +37,7 @@ const BusTravellerModel = require("../../../models/bus-module/bus-traveller/bus-
 const {
   createNotification,
 } = require("../../global-notification-module/global-notification.controller");
+const BusOperatorModel = require("../../../models/bus-module/bus-operator/bus-operator.model");
 
 const getUserBusBookings = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
@@ -315,6 +316,8 @@ const createBusBooking = catchAsyncError(async (req, res) => {
       { session, upsert: true }
     );
 
+    const busOperator = await BusOperatorModel.findById(bus.ownerId);
+
     /* ---------- TRANSACTION ---------- */
     await TransactionModel.create(
       [
@@ -339,7 +342,7 @@ const createBusBooking = catchAsyncError(async (req, res) => {
             },
             {
               entityType: "BUS_OPERATOR",
-              entityId: bus.ownerId,
+              entityId: busOperator?.operatorId || bus?.ownerId,
               type: "CREDIT",
               amount: operatorAmount,
             },
@@ -357,7 +360,7 @@ const createBusBooking = catchAsyncError(async (req, res) => {
             },
             to: {
               name: bus?.busName,
-              id: bus?.ownerId,
+              id: busOperator?.operatorId || bus?.ownerId,
             },
             bus: {
               bookingId: booking.bookingId,
