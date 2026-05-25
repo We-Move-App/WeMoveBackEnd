@@ -552,11 +552,11 @@ const calculateBusBooking = catchAsyncError(async (req, res) => {
     data: {
       journeyDate: journeyDateNormalized,
       noOfPassengers,
-      pricePerSeat,
-      basePrice,
-      discountApplied,
-      finalAmount: finalAmount + commission,
-      commission,
+      pricePerSeat: Number(pricePerSeat.toFixed(2)),
+      basePrice: Number(basePrice.toFixed(2)),
+      discountApplied: Number(discountApplied.toFixed(2)),
+      finalAmount: Number((finalAmount + commission).toFixed(2)),
+      commission: Number(commission.toFixed(2)),
       coupon: appliedCoupon
         ? {
             couponId: appliedCoupon._id,
