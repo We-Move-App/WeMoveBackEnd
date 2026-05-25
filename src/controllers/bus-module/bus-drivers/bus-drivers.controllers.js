@@ -171,48 +171,6 @@ const updateBusDriverDetails = catchAsyncError(async (req, res, next) => {
     );
 });
 
-// =============================||ASSIGN DRIVER TO BUS|================================================
-// const assignDriverToBus = catchAsyncError(async (req, res, next) => {
-//   const { busRegNumber, driverPhoneNumber } = req.body;
-
-//   const reqField = ["busRegNumber", "driverPhoneNumber"];
-//   validateRequestBody(reqField, req.body);
-
-//   // Find the bus
-//   const findBus = await BusModel.findOne({
-//     busRegNumber,
-//     status: "active",
-//   });
-
-//   if (!findBus) {
-//     throw new ApiError(statusCode.NOT_FOUND, "Bus not found");
-//   }
-
-//   // Find the driver
-//   const findDriver = await BusDriverModel.findOne({
-//     phoneNumber: driverPhoneNumber,
-//   });
-
-//   if (!findDriver) {
-//     throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
-//   }
-
-//   // Check if the driver is already assigned to a bus
-//   if (findDriver.assignedBus) {
-//     // Remove the driver from the previous bus
-//     await BusModel.findByIdAndUpdate(findDriver.assignedBus, {
-//       assignedDriver: null,
-//     });
-//   }
-
-//   // Assign the driver to the new bus
-//   await findDriver.updateOne({ assignedBus: findBus._id });
-//   await findBus.updateOne({ assignedDriver: findDriver._id });
-
-//   return res
-//     .status(statusCode.OK)
-//     .json(new ApiResponse(statusCode.OK, "Driver assigned successfully"));
-// });
 
 const assignDriverToBus = catchAsyncError(async (req, res, next) => {
   const { busRegNumber, driverPhoneNumber } = req.body;
@@ -228,7 +186,7 @@ const assignDriverToBus = catchAsyncError(async (req, res, next) => {
   }).populate("ownerId");
 
   if (!findBus) {
-    throw new ApiError(statusCode.NOT_FOUND, "Bus not found");
+    throw new ApiError(statusCode.NOT_FOUND, translateLn(ln, "BUS_NOT_FOUND"));
   }
 
   // Find Driver
@@ -242,7 +200,10 @@ const assignDriverToBus = catchAsyncError(async (req, res, next) => {
     });
 
   if (!findDriver) {
-    throw new ApiError(statusCode.NOT_FOUND, "Driver not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "DRIVER_NOT_FOUND")
+    );
   }
 
   // Validate same operator
@@ -253,7 +214,7 @@ const assignDriverToBus = catchAsyncError(async (req, res, next) => {
       String(findDriver.busOperator._id || findDriver.busOperator)
   ) {
     return next(
-      new ApiError(401, "Driver and Bus must belong to the same Bus Operator")
+      new ApiError(401, translateLn(ln, "DRIVER_BUS_OPERATOR_MISMATCH"))
     );
   }
 
@@ -268,9 +229,7 @@ const assignDriverToBus = catchAsyncError(async (req, res, next) => {
   );
 
   if (alreadyAssigned) {
-    return next(
-      new ApiError(400, "This driver is already assigned to this bus.")
-    );
+    return next(new ApiError(400, translateLn(ln, "DRIVER_ALREADY_ASSIGNED")));
   }
 
   // HARD FIX: remove driver from ALL other buses
@@ -302,7 +261,12 @@ const assignDriverToBus = catchAsyncError(async (req, res, next) => {
 
   return res
     .status(statusCode.OK)
-    .json(new ApiResponse(statusCode.OK, "Driver assigned successfully"));
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        translateLn(ln, "DRIVER_ASSIGNED_SUCCESSFULLY")
+      )
+    );
 });
 
 const getBusDrivers = catchAsyncError(async (req, res, next) => {

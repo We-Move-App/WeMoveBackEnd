@@ -15,123 +15,13 @@ const mongoose = require("mongoose");
 const moment = require("moment");
 const BusSeatsLayoutModel = require("../../../models/bus-module/bus-seats-management/buses-seats.model");
 const BusActivityLogModel = require("../../../models/bus-module/busActivityonBoardModel/busActivityModel");
-
-// const onboardUserByQR = catchAsyncError(async (req, res, next) => {
-//   const { bookingId, phoneNo } = req.body;
-
-//   if (!bookingId || !phoneNo) {
-//     return res.status(400).json({
-//       success: false,
-//       message: "Booking ID and Driver Phone Number are required",
-//     });
-//   }
-
-//   const driver = await BusDriverModel.findOne({ phoneNumber: phoneNo }).populate("assignedBus");
-
-//   if (!driver || !driver.assignedBus) {
-//     return res.status(404).json({
-//       success: false,
-//       message: "Driver not found or not assigned to any bus",
-//     });
-//   }
-
-//   const booking = await BusBookingModel.findById(bookingId).populate("busId");
-
-//   if (!booking) {
-//     return res.status(404).json({
-//       success: false,
-//       message: "Booking not found",
-//     });
-//   }
-
-//   if (booking.busId._id.toString() !== driver.assignedBus._id.toString()) {
-//     return res.status(403).json({
-//       success: false,
-//       message: "This booking does not belong to the driver's assigned bus",
-//     });
-//   }
-
-//   booking.isUseronboarded = true;
-//   await booking.save();
-
-//   return res.status(200).json({
-//     success: true,
-//     message: "User onboarded successfully",
-//     userDetails: {
-//       bookingId: booking._id,
-//       from: booking.from,
-//       to: booking.to,
-//       journeyDate: booking.journeyDate,
-//       passengers: booking.passengers,
-//       seatNumbers: booking.seatNumbers,
-//     },
-//   });
-// });
-
-// const onboardUserByQR = catchAsyncError(async (req, res) => {
-//   const driverId = req.user_id;
-//   const { bookingId } = req.body;
-
-//   if (!driverId) {
-//     throw new ApiError(statusCode.UNAUTHORIZED, "Driver not authenticated");
-//   }
-
-//   if (!bookingId) {
-//     throw new ApiError(statusCode.BAD_REQUEST, "Booking ID is required");
-//   }
-
-//   // Fetch driver and assigned bus
-//   const driver = await BusDriverModel.findById(driverId).populate("assignedBus");
-
-//   if (!driver || !driver.assignedBus) {
-//     throw new ApiError(statusCode.FORBIDDEN, "Driver is not assigned to any bus");
-//   }
-
-//   // Fetch booking
-//   const booking = await BusBookingModel.findById(bookingId).populate("bookedBy");
-
-//   if (!booking) {
-//     throw new ApiError(statusCode.NOT_FOUND, "Booking not found");
-//   }
-
-//   // Allow only 'Booked' status
-//   if (booking.status !== "Booked") {
-//     throw new ApiError(
-//       statusCode.BAD_REQUEST,
-//       `Cannot onboard. Current booking status: ${booking.status}`
-//     );
-//   }
-
-//   // Prevent duplicate onboarding
-//   if (booking.isUseronboarded) {
-//     throw new ApiError(statusCode.BAD_REQUEST, "User is already onboarded");
-//   }
-
-//   // Check bus ID and operator match
-//   if (
-//     booking.busId.toString() !== driver.assignedBus._id.toString() ||
-//     booking.bookedByOperator.toString() !== driver.busOperator.toString()
-//   ) {
-//     throw new ApiError(
-//       statusCode.FORBIDDEN,
-//       "Booking does not match driver’s assigned bus or operator"
-//     );
-//   }
-
-//   // Onboard passenger
-//   booking.isUseronboarded = true;
-//   await booking.save();
-
-//   // Send only passenger details
-//   return res.status(statusCode.OK).json({
-//     message: "Passenger onboarded successfully",
-//     passengerDetails: booking.passengers,
-//   });
-// });
+const { fetchLn } = require("../../../utils/services/user.services");
+const { translateLn } = require("../../../utils/services/translator.service");
 
 const onboardUserByQR = catchAsyncError(async (req, res, next) => {
   const driverId = req.user_id;
   const { bookingId } = req.body;
+  const ln = (req.headers["ln"] || "en").toLowerCase();
 
   const booking = await BusBookingModel.findById(bookingId).populate("busId");
   const driver =
@@ -140,19 +30,22 @@ const onboardUserByQR = catchAsyncError(async (req, res, next) => {
   if (!booking || !driver || !driver.assignedBus) {
     throw new ApiError(
       statusCode.NOT_FOUND,
-      "Driver or booking not found, or bus not assigned to driver"
+      translateLn(ln, "DRIVER_OR_BOOKING_NOT_FOUND")
     );
   }
 
   if (String(driver.assignedBus._id) !== String(booking.busId._id)) {
     throw new ApiError(
       statusCode.FORBIDDEN,
-      "Driver is not assigned to this bus"
+      translateLn(ln, "DRIVER_NOT_ASSIGNED_TO_BUS")
     );
   }
 
   if (booking.isUseronboarded) {
-    throw new ApiError(statusCode.BAD_REQUEST, "User is already onboarded");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "USER_ALREADY_ONBOARDED")
+    );
   }
 
   booking.isUseronboarded = true;
@@ -168,15 +61,14 @@ const onboardUserByQR = catchAsyncError(async (req, res, next) => {
 
   res.status(statusCode.OK).json({
     success: true,
-    message: "User onboarded successfully",
+    message: translateLn(ln, "USER_ONBOARDED_SUCCESSFULLY"),
     passenger: booking.passengers,
   });
 });
 
 const getOnboardedUsersSummary = catchAsyncError(async (req, res, next) => {
-  console.log("Fetching onboarded users summary for driver...");
   const driverId = req.user_id;
-  console.log("Driver ID:", driverId);
+  const ln = (req.headers["ln"] || "en").toLowerCase();
 
   const driver =
     await BusDriverModel.findById(driverId).populate("assignedBus");
@@ -184,7 +76,7 @@ const getOnboardedUsersSummary = catchAsyncError(async (req, res, next) => {
   if (!driver || !driver.assignedBus) {
     throw new ApiError(
       statusCode.NOT_FOUND,
-      "Driver or assigned bus not found"
+      translateLn(ln, "DRIVER_ASSIGNED_BUS_NOT_FOUND")
     );
   }
 
@@ -229,6 +121,7 @@ const getOnboardedUsersSummary = catchAsyncError(async (req, res, next) => {
     success: true,
     totalPassengers: total,
     currentPage: page,
+    message: translateLn(ln, "ONBOARDED_USERS_FETCHED_SUCCESSFULLY"),
     totalPages: Math.ceil(total / limit),
     passengers: allPassengers,
   });
