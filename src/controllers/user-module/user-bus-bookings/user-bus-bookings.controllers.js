@@ -513,7 +513,7 @@ const calculateBusBooking = catchAsyncError(async (req, res) => {
     if (
       coupon &&
       coupon.expiryDate >= new Date() &&
-      basePrice >= coupon.minOrderAmount &&
+      basePrice >= (coupon.minOrderAmount || 0) &&
       !coupon.usageHistory.some(
         (u) => u.userId.toString() === userId.toString()
       )
