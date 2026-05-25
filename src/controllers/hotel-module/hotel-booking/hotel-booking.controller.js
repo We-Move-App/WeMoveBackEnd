@@ -265,6 +265,8 @@ const createBooking = catchAsyncError(async (req, res) => {
       { session, upsert: true }
     );
 
+    const hotelManager = await HotelManagerModel.findById(hotelExists.ownerId);
+
     // Ledger entry
     await TransactionModel.create(
       [
@@ -289,7 +291,7 @@ const createBooking = catchAsyncError(async (req, res) => {
             },
             {
               entityType: "HOTEL",
-              entityId: hotelExists.ownerId,
+              entityId: hotelManager?.managerId || hotelExists?.ownerId,
               type: "CREDIT",
               amount: operatorShare,
             },
@@ -307,7 +309,7 @@ const createBooking = catchAsyncError(async (req, res) => {
             },
             to: {
               name: hotelExists?.hotelName,
-              id: hotelExists?.ownerId,
+              id: hotelManager?.managerId || hotelExists?.ownerId,
             },
             hotel: {
               bookingId: booking[0].bookingId,
