@@ -46,7 +46,14 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
 
   const bookings = await BusBookingModel.find({ bookedBy: userId })
     .sort({ createdAt: -1 })
-    .populate("busId", "busName")
+    .populate({
+      path: "busId",
+      select: "busName ownerId",
+      populate: {
+        path: "ownerId",
+        select: "companyName companyAddress",
+      },
+    })
     .populate("routeId", "startLocation endLocation departureTime arrivalTime")
     .select(
       " bookingId seatNumbers paymentStatus journeyDate createdAt updatedAt routeId busId"
@@ -81,10 +88,16 @@ const getUserBusBookings = catchAsyncError(async (req, res, next) => {
           { busId },
           { images: 1 }
         ).lean();
+
         transformedBooking.busId = {
           ...transformedBooking.busId,
           busImages: busImagesDoc?.images?.map((img) => img.url) || [],
+          companyName: transformedBooking.busId?.ownerId?.companyName || null,
+          companyAddress:
+            transformedBooking.busId?.ownerId?.companyAddress || null,
         };
+
+        delete transformedBooking.busId.ownerId;
       }
 
       return transformedBooking;
@@ -584,10 +597,15 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
   }
 
   const booking = await BusBookingModel.findById(bookingId)
-    .populate(
-      "busId",
-      "busName busRegNumber busModelNumber cancellationWindowInHours"
-    )
+    .populate({
+      path: "busId",
+      select:
+        "busName busRegNumber busModelNumber cancellationWindowInHours ownerId",
+      populate: {
+        path: "ownerId",
+        select: "companyName companyAddress",
+      },
+    })
     .populate("bookedBy", "fullName email phoneNumber")
     .populate("routeId", "startLocation endLocation departureTime arrivalTime")
     .lean();
@@ -614,6 +632,13 @@ const getBusBookingDetails = catchAsyncError(async (req, res, next) => {
     ).lean();
 
     booking.busId.busImages = busImagesDoc?.images?.map((img) => img.url) || [];
+
+    booking.busId.companyName = booking.busId?.ownerId?.companyName || null;
+
+    booking.busId.companyAddress =
+      booking.busId?.ownerId?.companyAddress || null;
+
+    delete booking.busId.ownerId;
   }
 
   const genderMap = {
@@ -925,7 +950,11 @@ const UpcomingBusBookings = catchAsyncError(async (req, res) => {
     .populate({
       path: "busId",
       model: "Bus",
-      select: "busName busModelNumber busRegNumber cancellationWindowInHours",
+      select: "busName busModelNumber busRegNumber cancellationWindowInHours,ownerId",
+      populate: {
+        path: "ownerId",
+        select: "companyName companyAddress",
+      },
     })
     .populate({
       path: "routeId",
@@ -948,8 +977,7 @@ const UpcomingBusBookings = catchAsyncError(async (req, res) => {
         const [dh, dm] = booking.routeId.departureTime.split(":").map(Number);
         startDate.setHours(dh || 0, dm || 0, 0, 0);
       }
-
-      let endDate = new Date(journeyDate);
+            let endDate = new Date(journeyDate);
       if (booking.routeId?.arrivalTime) {
         const [ah, am] = booking.routeId.arrivalTime.split(":").map(Number);
         endDate.setHours(ah || 0, am || 0, 0, 0);
@@ -957,7 +985,6 @@ const UpcomingBusBookings = catchAsyncError(async (req, res) => {
           endDate.setDate(endDate.getDate() + 1);
         }
       }
-
       const now = new Date();
       const diffMs = startDate - now;
       const hoursLeft = diffMs > 0 ? Math.floor(diffMs / (1000 * 60 * 60)) : 0;
@@ -981,16 +1008,22 @@ const UpcomingBusBookings = catchAsyncError(async (req, res) => {
         );
       }
 
+      const updatedBusId = {
+        ...booking.busId,
+        busImages: imageUrls,
+        companyName: booking.busId?.ownerId?.companyName || null,
+        companyAddress: booking.busId?.ownerId?.companyAddress || null,
+      };
+
+      delete updatedBusId.ownerId;
+
       return {
         ...booking,
         startDate,
         endDate,
         hoursLeft,
         isCancellable,
-        busId: {
-          ...booking.busId,
-          busImages: imageUrls,
-        },
+        busId: updatedBusId,
         journeyDate: undefined,
       };
     })
