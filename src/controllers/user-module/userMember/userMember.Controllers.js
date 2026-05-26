@@ -287,6 +287,7 @@ const getAllMembersUnderUser = catchAsyncError(async (req, res, next) => {
       )
     );
 });
+
 const deleteMemberByUserId = catchAsyncError(async (req, res, next) => {
   const { _id: parentId } = req.user; // Parent user ID from token
   const { userId } = req.params; // userId from URL
@@ -332,6 +333,7 @@ const deleteMemberByUserId = catchAsyncError(async (req, res, next) => {
       )
     );
 });
+
 const getUserProfile = catchAsyncError(async (req, res, next) => {
   const { _id } = req.user; // Get user ID from JWT
 
@@ -405,7 +407,7 @@ const getTransactions = catchAsyncError(async (req, res) => {
       $elemMatch: {
         entityType: "USER",
         entityId: targetUserId,
-        type: "CREDIT",
+        // type: "CREDIT",
       },
     },
   };
@@ -435,6 +437,7 @@ const getTransactions = catchAsyncError(async (req, res) => {
   }
 
   const sortField = sortBy === "amount" ? "amount" : "createdAt";
+
   const sortOrder = order === "asc" ? 1 : -1;
 
   const totalCount = await Transaction.countDocuments(txFilter);
@@ -449,7 +452,8 @@ const getTransactions = catchAsyncError(async (req, res) => {
     transactionId: tx.transactionId || "N/A",
     userName: parentUser.fullName,
     email: parentUser.email,
-    amount: tx.totalAmount,
+    type: tx.entries?.[0]?.type || "N/A",
+    amount: Number(tx.totalAmount.toFixed(2)),
     description: tx.description,
     status: tx.status,
     createdAt: tx.createdAt,

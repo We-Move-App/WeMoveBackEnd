@@ -338,8 +338,6 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
   const _id = req.user._id;
   const ln = await fetchLn(_id);
 
-  console.log("serach: busFrom user-searchbooking");
-
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
   const startIndex = (page - 1) * limit;
@@ -405,7 +403,14 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
     .skip(startIndex)
     .limit(limit)
     .populate("seats", "bookedSeats availableSeats noOfSeats")
-    .populate("busId", "busRegNumber busName busModelNumber rating noOfSeats")
+    .populate({
+      path: "busId",
+      select: "busRegNumber busName busModelNumber rating noOfSeats ownerId",
+      populate: {
+        path: "ownerId",
+        select: "companyName companyAddress",
+      },
+    })
     .lean();
 
   const BusSeatsLayoutModel = require("../../../models/bus-module/bus-seats-management/buses-seats.model");
@@ -464,6 +469,10 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
 
       if (typeof route.busId === "object") {
         route.busId.busImages = imageUrls;
+        route.busId.companyName = route.busId?.ownerId?.companyName || null;
+        route.busId.companyAddress =
+          route.busId?.ownerId?.companyAddress || null;
+        delete route.busId.ownerId;
       } else {
         route.busImages = imageUrls;
       }
@@ -539,6 +548,7 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
       // Clean up undefined fields
       delete transformedRoute.startLocation;
       delete transformedRoute.endLocation;
+      delete transformedRoute.busRegNumber;
 
       return transformedRoute;
     })
@@ -613,7 +623,7 @@ const deletePermanentBus = catchAsyncError(async (req, res, next) => {
 
       await driver.save();
     }
-  } 
+  }
   await BusRouteModel.deleteMany({ busId });
   await BusSeatsLayoutModel.deleteMany({ busId });
 
