@@ -19,6 +19,7 @@ const {
 const { isUserAuthenticated } = require("../../../middlewares/authUser");
 
 const BusesRoutes = express.Router();
+
 BusesRoutes.route("/search-bus").get(isUserAuthenticated,searchBuses);
 
 BusesRoutes.route("/add").post(

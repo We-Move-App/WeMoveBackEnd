@@ -7,7 +7,7 @@ const StopSchema = new Schema(
     name: { type: String, required: true, trim: true },
     time: { type: String, required: true },
   },
-  { _id: true } 
+  { _id: true }
 );
 
 // Main Route Schema
@@ -82,7 +82,7 @@ const RouteSchema = new Schema(
       ],
       default: [],
     },
-    seats:{
+    seats: {
       type: Schema.Types.ObjectId,
       ref: "BusSeatLayout",
     }

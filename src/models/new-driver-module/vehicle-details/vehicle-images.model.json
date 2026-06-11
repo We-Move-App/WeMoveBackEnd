@@ -1,0 +1,14 @@
+[
+  {
+    "vehicleType": "taxi",
+    "url": "https://wemoveallbucket.blr1.digitaloceanspaces.com/wemove/1779167253574-ec3f876705f9925bd62ffb28a97a6d5f",
+    "text": "Taxi",
+    "colorCode": "0xffD2E4F9"
+  },
+  {
+    "vehicleType": "bike",
+    "url": "https://wemoveallbucket.blr1.digitaloceanspaces.com/wemove/1779167600665-062eadcfd80f4d5806c1e7723b4af7e9",
+    "text": "Bike",
+    "colorCode": "0xffFFF9EA"
+  }
+]

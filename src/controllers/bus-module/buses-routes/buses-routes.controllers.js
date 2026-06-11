@@ -9,10 +9,11 @@ const ApiResponse = require("../../../utils/response/ApiResponse");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const mongoose = require("mongoose");
 const { getFinalPrice } = require("../../../utils/services/prices.services");
+const moment = require("moment");
 
 // =============|| CREATE BUS ROUTE ||=============================
 
-const  createBusRoute = catchAsyncError(async (req, res, next) => {
+const createBusRoute = catchAsyncError(async (req, res, next) => {
   const {
     busId,
     startLocation,
@@ -114,11 +115,12 @@ const updateBusRoute = catchAsyncError(async (req, res, next) => {
     endLocation,
     departureTime,
     arrivalTime,
-    pricePerSeat,
+    // pricePerSeat,
     pickups,
     drops,
     routeName,
   } = req.body;
+  console.log("id:", req.body);
 
   const { _id } = req.user;
 
@@ -128,7 +130,7 @@ const updateBusRoute = catchAsyncError(async (req, res, next) => {
     "endLocation",
     "departureTime",
     "arrivalTime",
-    "pricePerSeat",
+    // "pricePerSeat",
   ];
 
   validateRequestBody(reqFields, req.body);
@@ -190,7 +192,7 @@ const updateBusRoute = catchAsyncError(async (req, res, next) => {
     endLocation,
     departureTime,
     arrivalTime,
-    pricePerSeat,
+    // pricePerSeat,
     updatedBy: _id,
     pickups,
     routeName,
@@ -213,7 +215,6 @@ const updateBusRoute = catchAsyncError(async (req, res, next) => {
 // =============|| DELETE BUS ROUTE ||=============================
 const deleteBusRoute = catchAsyncError(async (req, res, next) => {
   const { routeId } = req.params;
-
 
   // Find the route by ID
   const existingRoute = await BusRouteModel.findById(routeId);
@@ -242,7 +243,6 @@ const deleteBusRoute = catchAsyncError(async (req, res, next) => {
 // =============|| GET ALL BUS ROUTES ||=============================
 const getAllBusRoutes = catchAsyncError(async (req, res, next) => {
   const { busId } = req.params;
-
 
   const busRoutes = await BusRouteModel.find({ busId });
   console.log("Bus Routes:", busRoutes);
@@ -376,26 +376,43 @@ const getPickUpAndDrops = catchAsyncError(async (req, res, next) => {
 });
 
 const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
-  const { _id } = req.user;
+  const { _id, parentUserId, role } = req.user;
+
+  const operatorId =
+    role === "bus-operator-member" && parentUserId ? parentUserId : _id;
+
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const startIndex = (page - 1) * limit;
-  let { status, search, filter } = req.query;
 
+  let { status, search, filter, date, from, to } = req.query;
 
   status = status || "active";
 
-  const query = { createdBy: _id, status };
-
+  const query = {
+    createdBy: operatorId,
+    status,
+  };
   if (search) {
     query.$or = [
       { startLocation: { $regex: search, $options: "i" } },
       { endLocation: { $regex: search, $options: "i" } },
+      { "pickups.name": { $regex: search, $options: "i" } },
+      { "drops.name": { $regex: search, $options: "i" } },
     ];
-  
-    if (mongoose.Types.ObjectId.isValid(search)) {
-      query.$or.push({ busId: new mongoose.Types.ObjectId(search) });
-    }
+  }
+
+  if (from) {
+    query.startLocation = { $regex: from, $options: "i" };
+  }
+
+  if (to) {
+    query.endLocation = { $regex: to, $options: "i" };
+  }
+
+  if (date) {
+    const day = moment(date, "DD-MM-YYYY").format("dddd");
+    query.runningDays = day;
   }
 
   const [routes, totalBus] = await Promise.all([
@@ -423,7 +440,6 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
 
   const newRoutes = await Promise.all(
     routes?.map(async (route) => {
-     
       const pricePerSeat = await getFinalPrice(
         "bus",
         route.pricePerSeat,
@@ -434,8 +450,7 @@ const getRoutesOfBusOperator = catchAsyncError(async (req, res, next) => {
         pricePerSeat,
       };
     })
-  ) 
-
+  );
 
   const result = {
     routes: newRoutes,
@@ -472,6 +487,43 @@ const updateRouteStatus = catchAsyncError(async (req, res, next) => {
     );
 });
 
+const updateRoutePrice = catchAsyncError(async (req, res, next) => {
+  const { routeId, pricePerSeat } = req.body;
+
+  if (!routeId || pricePerSeat === undefined) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "routeId and pricePerSeat are required"
+    );
+  }
+
+  const price = Number(pricePerSeat);
+  if (!Number.isFinite(price) || price < 0) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      "pricePerSeat must be a positive number"
+    );
+  }
+
+  const busRoute = await BusRouteModel.findById(routeId);
+  if (!busRoute) {
+    throw new ApiError(statusCode.NOT_FOUND, "Bus route not found");
+  }
+
+  busRoute.pricePerSeat = price;
+  await busRoute.save();
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        busRoute,
+        "Bus route price updated successfully"
+      )
+    );
+});
+
 module.exports = {
   createBusRoute,
   updateBusRoute,
@@ -483,4 +535,5 @@ module.exports = {
   getRoutesOfBusOperator,
   getSingleBusRoutesByBusId,
   updateRouteStatus,
+  updateRoutePrice,
 };

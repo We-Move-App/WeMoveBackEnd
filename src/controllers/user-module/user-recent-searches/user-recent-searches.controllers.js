@@ -6,48 +6,93 @@ const catchAsyncError = require("../../../utils/response/catchAsyncError");
 
 const getRecentSearch = catchAsyncError(async (req, res, next) => {
   const { _id } = req.user;
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 5;
-  const startIndex = (page - 1) * limit;
-  const { type } = req.query;
 
-  const query = type ? { user: _id, category: type } : { user: _id };
+  const validTypes = ["vehicle", "bus", "hotel"];
+  const type = req.query.type?.toLowerCase();
 
-  const recentSearch = await UserRecentSearchModel.find(query)
-    .sort({ createdAt: -1 })
-    .limit(limit)
-    .skip(startIndex);
-
-  if (recentSearch?.length === 0) {
-    throw new ApiError(statusCode.NOT_FOUND, `Data not found`);
+  if (!type || !validTypes.includes(type)) {
+    return res.status(statusCode.BAD_REQUEST).json(
+      new ApiResponse(
+        statusCode.BAD_REQUEST,
+        null,
+        "Valid 'type' query parameter is required"
+      )
+    );
   }
 
-  return res
-    .status(statusCode.OK)
-    .json(
-      new ApiResponse(statusCode.OK, recentSearch, `Data found Successfully`)
+  // Pagination
+  const page = Math.max(parseInt(req.query.page) || 1, 1);
+  const limit = Math.max(parseInt(req.query.limit) || 5, 1);
+  const skip = (page - 1) * limit;
+
+  const recentSearch = await UserRecentSearchModel.find({
+    user: _id,
+    category: type,
+  })
+    .sort({ createdAt: -1 })
+    .skip(skip)
+    .limit(limit);
+
+  if (!recentSearch.length) {
+    return res.status(statusCode.OK).json(
+      new ApiResponse(statusCode.OK, [], "No recent searches found")
     );
+  }
+
+  // Deduplicate by hotelName (case insensitive)
+  let seen = new Set();
+  let uniqueResults = [];
+
+  for (const item of recentSearch) {
+    let uniqueKey;
+
+    if (type === "hotel") {
+      const hotelName = item?.searchDetails?.hotel?.location?.hotelName?.toLowerCase();
+      uniqueKey = hotelName; // dedupe by hotel name instead of raw address
+    } else if (type === "bus") {
+      uniqueKey =
+        (item?.searchDetails?.bus?.from?.address || "").toLowerCase() +
+        "-" +
+        (item?.searchDetails?.bus?.to?.address || "").toLowerCase();
+    } else if (type === "vehicle") {
+      uniqueKey =
+        (item?.searchDetails?.vehicle?.pickup?.address || "").toLowerCase() +
+        "-" +
+        (item?.searchDetails?.vehicle?.drop?.address || "").toLowerCase();
+    }
+
+    if (uniqueKey && !seen.has(uniqueKey)) {
+      seen.add(uniqueKey);
+      uniqueResults.push(item); // keep full object
+    }
+  }
+
+  return res.status(statusCode.OK).json(
+    new ApiResponse(statusCode.OK, uniqueResults, "Data found successfully")
+  );
 });
 
 const deleteRecentSearches = catchAsyncError(async (req, res, next) => {
   const { id } = req.params;
-  const { _id } = req.user;
+  const { _id: userId } = req.user;
 
-  const deletedCount = await UserRecentSearchModel.deleteOne({
+  const deleteResult = await UserRecentSearchModel.deleteOne({
     _id: id,
-    user: _id,
+    user: userId,
   });
 
-  if (deletedCount?.deletedCount === 0) {
-    throw new ApiError(statusCode.NOT_FOUND, "Not Found");
+  if (deleteResult.deletedCount === 0) {
+    throw new ApiError(statusCode.NOT_FOUND, "Recent search not found");
   }
 
-  if (!deletedCount) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Error occurred while deleting");
-  }
-  return res
-    .status(statusCode.OK)
-    .json(new ApiResponse(statusCode.OK, deletedCount, "Deleted successfully"));
+  return res.status(statusCode.OK).json(
+    new ApiResponse(
+      statusCode.OK,
+      deleteResult,
+      "Deleted successfully"
+    )
+  );
 });
-
 module.exports = { getRecentSearch, deleteRecentSearches };
+
+

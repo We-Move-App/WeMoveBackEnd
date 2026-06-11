@@ -27,7 +27,7 @@ const sendOtpToPhoneNumbers = async (phoneNumber, otp) => {
     console.log(`✅ OTP sent successfully: ${message.sid}`);
     return { success: true, messageId: message.sid };
   } catch (error) {
-    console.error(`❌ Error sending OTP: ${error.message}`, {
+    console.error(` Error sending OTP: ${error.message}`, {
       phoneNumber,
       error: error.message,
       stack: error.stack,
@@ -36,25 +36,26 @@ const sendOtpToPhoneNumbers = async (phoneNumber, otp) => {
   }
 };
 
-const getOtp = () =>{
-  let otp
+// const getOtp = () =>{
+//   let otp
 
-  if(node_env!=='production')
-    {
-      otp = "1234"
-    }
-    else
-    {
-      const generateOtp = () => {
-        return Math.floor(1000 + Math.random() * 9000).toString();
-      };
-      otp = generateOtp
-    }
+//   if(node_env!=='production')
+//     {
+//       otp = "1234"
+//     }
+//     else
+//     {
+//       const generateOtp = () => {
+//         return Math.floor(1000 + Math.random() * 9000).toString();
+//       };
+//       otp = generateOtp
+//     }
 
-    return otp
-}
-// const getOtp = () => {
-//   return Math.floor(1000 + Math.random() * 9000).toString();
-// };
+//     return otp
+// }
+const getOtp = () => {
+  // return Math.floor(1000 + Math.random() * 9000).toString();
+  return "1234";
+};
 
 module.exports = { sendOtpToPhoneNumbers, getOtp };

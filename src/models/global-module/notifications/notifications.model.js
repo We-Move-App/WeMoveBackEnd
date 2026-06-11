@@ -8,7 +8,6 @@ const NotificationSchema = new mongoose.Schema({
   readStatus: { type: String, enum: ["read", "unread"], default: "unread" },
   sentAt: { type: Date, default: Date.now },
 });
-
 const NotificationModel = mongoose.model("Notification", NotificationSchema);
 
 module.exports = { NotificationModel };

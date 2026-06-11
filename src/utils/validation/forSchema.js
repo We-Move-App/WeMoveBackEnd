@@ -1,5 +1,6 @@
 const mongoose = require("mongoose");
 const { Schema } = mongoose;
+const { parsePhoneNumberFromString } = require("libphonenumber-js");
 
 // Validation for full name
 function validateFullName(fullName) {
@@ -7,10 +8,9 @@ function validateFullName(fullName) {
   return regex.test(fullName);
 }
 
-function validateIfscCode()
-{
- const regex =[/^[A-Z]{4}0[A-Z0-9]{6}$/, "Please provide a valid IFSC code"]
- return regex
+function validateIfscCode() {
+  const regex = [/^[A-Z]{4}0[A-Z0-9]{6}$/, "Please provide a valid IFSC code"];
+  return regex;
 }
 
 // Validation for email
@@ -21,8 +21,15 @@ function validateEmail(email) {
 
 // Validation for phone number
 function validatePhoneNumber(phoneNumber) {
-  const regex = /^\+?[1-9]\d{8,14}$/;
-  return regex.test(phoneNumber);
+  try {
+    if (!phoneNumber) return false;
+
+    const parsed = parsePhoneNumberFromString(phoneNumber);
+
+    return parsed?.isValid() || false;
+  } catch (error) {
+    return false;
+  }
 }
 
 function securePinValidator(pin) {
@@ -84,5 +91,5 @@ module.exports = {
   validateDOB,
   validateDOBForUser,
   ImageSchema,
-  validateIfscCode
+  validateIfscCode,
 };

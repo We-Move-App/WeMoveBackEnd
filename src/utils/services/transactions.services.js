@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const DigitalWalletModel = require("../../models/user-module/digitalWallet/digitalWallet.model");
+const DigitalWalletModel = require("../../models/user-module/user-wallets/user-wallets.model");
 const TransactionModel = require("../../models/user-module/transactions/transactions.model");
 const UserModel = require("../../models/user-module/user/user.model");
 const statusCode = require("../constants/statusCode");
@@ -69,14 +69,17 @@ const isTransactionProcess = async ({
     const transaction = await TransactionModel.create(
       [
         {
-          sender:senderId,
+          sender: senderId,
           recipient: finalRecipientId,
           senderWallet: senderWallet._id,
           recipientWallet: recipientWallet._id,
           amount: amount,
           type: type,
-          currency: "USD",
-          description: description[type] || "Transaction",
+          currency: process.env.MOMO_CURRENCY,
+          description: {
+            en: "Transaction",
+            fr: "Transaction",
+          },
           status: "completed",
           referenceId: refId,
         },

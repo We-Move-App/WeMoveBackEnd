@@ -7,6 +7,7 @@ const {
   ImageSchema,
 } = require("../../../utils/validation/forSchema");
 const { hash_rounds } = require("../../../config/config");
+const { LnEnum } = require("../../../utils/constants/ENUM");
 const { Schema } = mongoose;
 
 // Define default permissions
@@ -21,10 +22,21 @@ const defaultPermissions = {
 
 const busOperatorSchema = new mongoose.Schema(
   {
+    operatorId: {
+      type: String,
+      unique: true,
+      index: true,
+    },
     fullName: {
       type: String,
       trim: true,
       minlength: [3, "fullName must be at least 3 characters long"],
+    },
+    companyName: {
+      type: String,
+    },
+    companyAddress: {
+      type: String,
     },
     email: {
       type: String,
@@ -66,6 +78,13 @@ const busOperatorSchema = new mongoose.Schema(
       enum: ["submitted", "processing", "approved", "rejected", "blocked"],
       default: "submitted",
     },
+
+    remarks: {
+      type: String,
+      default: "", // optional by default
+      trim: true,
+    },
+
     authorities: { type: Schema.Types.Mixed, default: {} },
     permissions: {
       type: defaultPermissions,
@@ -80,7 +99,7 @@ const busOperatorSchema = new mongoose.Schema(
     },
     parentUserId: {
       type: Schema.Types.ObjectId,
-      ref: "bus-operator",
+      ref: "BusOperator", // ✔ correct
       required: function () {
         return this.role === "bus-operator-member";
       },
@@ -94,19 +113,47 @@ const busOperatorSchema = new mongoose.Schema(
         message: (props) => validateDOB(props.value).message,
       },
     },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
+      default: null,
+    },
+    batchVerified: {
+      type: Boolean,
+      default: false,
+    },
+    batchVerifiedBy: {
+      // admin: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
+      default: null,
+      // },
+    },
+
     idNumber: { type: String },
     nationality: { type: String },
     termAndCondition: {
       type: Boolean,
       default: false,
     },
+    ln: {
+      type: String,
+      enum: Object.values(LnEnum),
+      default: LnEnum.EN,
+    },
+
+    branch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+    },
     nationIdExpiry: { type: Date },
     businessLicenseNumber: {
       type: String,
     },
     verifiedBy: {
-      createdAt: { type: Date },
-      admin: { type: Schema.Types.ObjectId, ref: "Admin" },
+      // createdAt: { type: Date },
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
     },
     gender: {
       type: String,

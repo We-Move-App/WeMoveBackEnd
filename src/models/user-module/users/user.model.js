@@ -7,6 +7,7 @@ const {
   ImageSchema,
 } = require("../../../utils/validation/forSchema");
 const { hash_rounds } = require("../../../config/config");
+const { LnEnum } = require("../../../utils/constants/ENUM");
 const { Schema } = mongoose;
 
 // Define the user schema
@@ -16,6 +17,11 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
       minlength: [3, "fullName must be at least 3 characters long"],
+    },
+    userId: {
+      type: String,
+      unique: true,
+      index: true,
     },
     email: {
       type: String,
@@ -30,8 +36,15 @@ const userSchema = new mongoose.Schema(
     phoneNumber: {
       type: String,
       unique: true,
+      trim: true,
       validate: {
-        validator: validatePhoneNumber,
+        validator: function (value) {
+          if (!value) return true;
+
+          const cleanedPhone = value.replace(/[\s()-]/g, "");
+
+          return validatePhoneNumber(cleanedPhone);
+        },
         message: (props) => `${props.value} is not a valid phone number!`,
       },
       sparse: true,
@@ -39,9 +52,10 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       minlength: [6, "Password must be at least 6 characters long"],
+      select: false, // Exclude password field by default when querying
     },
     avatar: {
-        type:ImageSchema
+      type: ImageSchema,
     },
     role: {
       type: String,
@@ -64,10 +78,34 @@ const userSchema = new mongoose.Schema(
       ],
       default: "submitted",
     },
+    batchVerified: {
+      type: Boolean,
+      default: false,
+    },
+    batchVerifiedBy: {
+      // admin: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
+      default: null,
+      // },
+    },
+    remarks: {
+      type: String,
+      default: "", // optional by default
+      trim: true,
+    },
+
+    accessForView: {
+      type: Boolean,
+      default: false,
+    },
     authorities: { type: Schema.Types.Mixed, default: {} },
     parentUserId: {
       type: Schema.Types.ObjectId,
       ref: "User",
+      required: function () {
+        return this.role === "user-member"; // mandatory for user-member
+      },
     },
     dob: {
       type: Date,
@@ -91,8 +129,9 @@ const userSchema = new mongoose.Schema(
     },
     gender: {
       type: String,
-      enum: ["male", "female", "not say"],
+      enum: ["male", "female"],
     },
+
     emailVerified: { type: Boolean, default: false },
     phoneVerified: { type: Boolean, default: false },
     branch: {
@@ -100,11 +139,17 @@ const userSchema = new mongoose.Schema(
       ref: "Branch",
     },
     socketId: {
-      type:String
-    }
+      type: String,
+    },
+    ln: {
+      type: String,
+      enum: Object.values(LnEnum),
+      default: LnEnum.EN,
+    },
   },
   {
     timestamps: true,
+    versionKey: false,
     toJSON: { virtuals: false },
     toObject: { virtuals: false },
   }

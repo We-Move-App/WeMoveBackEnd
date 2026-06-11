@@ -24,6 +24,9 @@ const BusRouteModel = require("../../../models/bus-module/bus-routes/bus-routes.
 const BusSeatsLayoutModel = require("../../../models/bus-module/bus-seats-management/buses-seats.model");
 const { getFinalPrice } = require("../../../utils/services/prices.services");
 const UserRecentSearchModel = require("../../../models/user-module/user-recent-search/user-recent-search.model");
+const { fetchLn } = require("../../../utils/services/user.services");
+const { translateLn } = require("../../../utils/services/translator.service");
+const BusDriverModel = require("../../../models/bus-module/bus-drivers/bus-drivers.model");
 
 // =================|| ADD BUS ||==================
 const addBus = catchAsyncError(async (req, res, next) => {
@@ -39,7 +42,6 @@ const addBus = catchAsyncError(async (req, res, next) => {
     runningDays,
     noOfSeats,
   } = req.body;
-
 
   const { busImages, bus_license_front } = req.files;
 
@@ -215,18 +217,26 @@ const getAllBuses = catchAsyncError(async (req, res, next) => {
 
   const query = { ownerId: userId, status };
 
-  if (search) {
+  if (search && search.trim() !== "") {
+    function escapeRegex(str) {
+      return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    }
+    console.log("Search Term:", search);
+    const regex = new RegExp(escapeRegex(search), "i");
+
     query.$or = [
-      { busRegNumber: { $regex: search, $options: "i" } },
-      { busName: { $regex: search, $options: "i" } },
-      { busModelNumber: { $regex: search, $options: "i" } },
+      { busRegNumber: regex }, // ✅ registration number
+      { busName: regex }, // ✅ bus name
+      { busModelNumber: regex }, // ✅ model number
+      { status: regex }, // ✅ status
     ];
   }
+
   const buses = await BusModel.find(query)
     .sort({ createdAt: -1 })
     .limit(limit)
     .skip(startIndex)
-    .populate("assignedDriver", "fullName ")
+    .populate("assignedDriver", "fullName")
     .populate("busImages", "images")
     .select(
       "assignedDriver busRegNumber busName busModelNumber status noOfSeats"
@@ -236,7 +246,20 @@ const getAllBuses = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.NOT_FOUND, "No buses found");
   }
 
-  const busesWithFirstImage = buses.map((bus) => ({
+  let filteredBuses = buses;
+  if (search && search.trim() !== "") {
+    const regex = new RegExp(search, "i");
+    filteredBuses = buses.filter(
+      (bus) =>
+        bus.assignedDriver?.fullName?.match(regex) ||
+        bus.busRegNumber?.match(regex) ||
+        bus.busName?.match(regex) ||
+        bus.busModelNumber?.match(regex) ||
+        bus.status?.match(regex)
+    );
+  }
+
+  const busesWithFirstImage = filteredBuses.map((bus) => ({
     ...bus.toObject(),
     busImages: bus.busImages?.images?.[0] || null,
   }));
@@ -247,6 +270,8 @@ const getAllBuses = catchAsyncError(async (req, res, next) => {
     totalPages: Math.ceil(totalBus / limit),
     currentPage: page,
     totalCount: totalBus,
+    page,
+    limit,
   };
 
   return res
@@ -310,6 +335,8 @@ const changeBusStatus = catchAsyncError(async (req, res, next) => {
 // =================|| SEARCHES BUS BY USERS||==================
 const searchBuses = catchAsyncError(async (req, res, next) => {
   const { from, to, dateOfJourney } = req.query;
+  const _id = req.user._id;
+  const ln = await fetchLn(_id);
 
   const page = parseInt(req.query.page, 10) || 1;
   const limit = parseInt(req.query.limit, 10) || 10;
@@ -324,13 +351,13 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
     $and: [
       {
         $or: [
-          { startLocation: { $regex: from, $options: "i" } }, // Keep original field name in query
+          { startLocation: { $regex: from, $options: "i" } },
           { "pickups.name": { $regex: from, $options: "i" } },
         ],
       },
       {
         $or: [
-          { endLocation: { $regex: to, $options: "i" } }, // Keep original field name in query
+          { endLocation: { $regex: to, $options: "i" } },
           { "drops.name": { $regex: to, $options: "i" } },
         ],
       },
@@ -376,8 +403,57 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
     .skip(startIndex)
     .limit(limit)
     .populate("seats", "bookedSeats availableSeats noOfSeats")
-    .populate("busId", "busRegNumber busName busModelNumber rating")
+    .populate({
+      path: "busId",
+      select: "busRegNumber busName busModelNumber rating noOfSeats ownerId",
+      populate: {
+        path: "ownerId",
+        select: "companyName companyAddress",
+      },
+    })
     .lean();
+
+  const BusSeatsLayoutModel = require("../../../models/bus-module/bus-seats-management/buses-seats.model");
+
+  const startOfDay = new Date(dateOfJourney);
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const endOfDay = new Date(dateOfJourney);
+  endOfDay.setHours(23, 59, 59, 999);
+
+  await Promise.all(
+    findRoutes.map(async (route) => {
+      const seatLayout = await BusSeatsLayoutModel.findOne({
+        routeId: route._id,
+        journeyDate: {
+          $gte: startOfDay,
+          $lte: endOfDay,
+        },
+      })
+        .select("seats bookedSeats availableSeats noOfSeats")
+        .lean();
+
+      if (seatLayout) {
+        route.seats = {
+          bookedSeats: seatLayout.bookedSeats,
+          availableSeats: seatLayout.availableSeats,
+          noOfSeats: Number(seatLayout.noOfSeats || 0),
+        };
+
+        route.seatLayout = seatLayout.seats;
+      } else {
+        const totalSeats = Number(route.busId?.noOfSeats || 0);
+
+        route.seats = {
+          bookedSeats: 0,
+          availableSeats: totalSeats,
+          noOfSeats: totalSeats,
+        };
+
+        route.seatLayout = [];
+      }
+    })
+  );
 
   // Add bus images
   await Promise.all(
@@ -393,6 +469,10 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
 
       if (typeof route.busId === "object") {
         route.busId.busImages = imageUrls;
+        route.busId.companyName = route.busId?.ownerId?.companyName || null;
+        route.busId.companyAddress =
+          route.busId?.ownerId?.companyAddress || null;
+        delete route.busId.ownerId;
       } else {
         route.busImages = imageUrls;
       }
@@ -401,38 +481,66 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
 
   if (!findRoutes.length) {
     return next(
-      new ApiError(statusCode.NOT_FOUND, "No matching bus routes found")
+      new ApiError(statusCode.NOT_FOUND, translateLn(ln, "NO_BUS_ROUTES_FOUND"))
     );
   }
 
   const updatedRoutes = await Promise.all(
     findRoutes.map(async (route) => {
       // Calculate journey dates
+      // const startDate = new Date(dateOfJourney);
+      // const [depHour, depMin] = route.departureTime.split(":").map(Number);
+      // startDate.setHours(depHour, depMin, 0, 0);
+
+      // const [arrHour, arrMin] = route.arrivalTime.split(":").map(Number);
+      // let diffInMinutes = arrHour * 60 + arrMin - (depHour * 60 + depMin);
+      // if (diffInMinutes < 0) diffInMinutes += 24 * 60;
+
       const startDate = new Date(dateOfJourney);
-      const [depHour, depMin] = route.departureTime.split(":").map(Number);
+
+      // parse AM/PM time
+      const depDate = new Date(`2000-01-01 ${route.departureTime}`);
+      const arrDate = new Date(`2000-01-01 ${route.arrivalTime}`);
+
+      if (isNaN(depDate.getTime()) || isNaN(arrDate.getTime())) {
+        throw new ApiError(statusCode.BAD_REQUEST, "Invalid route time format");
+      }
+
+      const depHour = depDate.getHours();
+      const depMin = depDate.getMinutes();
+
+      const arrHour = arrDate.getHours();
+      const arrMin = arrDate.getMinutes();
+
       startDate.setHours(depHour, depMin, 0, 0);
 
-      const [arrHour, arrMin] = route.arrivalTime.split(":").map(Number);
-      let diffInMinutes = (arrHour * 60 + arrMin) - (depHour * 60 + depMin);
+      let diffInMinutes = arrHour * 60 + arrMin - (depHour * 60 + depMin);
+
       if (diffInMinutes < 0) diffInMinutes += 24 * 60;
-      
+
       const endDate = new Date(startDate);
       endDate.setMinutes(endDate.getMinutes() + diffInMinutes);
 
       // Get price
-      const pricePerSeat = await getFinalPrice("bus", route.pricePerSeat, new Date());
+      const pricePerSeat = await getFinalPrice(
+        "bus",
+        route.pricePerSeat,
+        new Date()
+      );
 
       // Transform the route object
       const transformedRoute = {
         ...route,
-        // Rename location fields
+
         from: route.startLocation,
         to: route.endLocation,
-        // Remove original fields
+
         startLocation: undefined,
         endLocation: undefined,
-        // Add calculated fields
-        pricePerSeat,
+
+        pricePerSeat: {
+          finalAmount: pricePerSeat.toString(),
+        },
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
       };
@@ -440,18 +548,21 @@ const searchBuses = catchAsyncError(async (req, res, next) => {
       // Clean up undefined fields
       delete transformedRoute.startLocation;
       delete transformedRoute.endLocation;
+      delete transformedRoute.busRegNumber;
 
       return transformedRoute;
     })
   );
 
-  return res.status(statusCode.OK).json(
-    new ApiResponse(
-      statusCode.OK,
-      updatedRoutes,
-      "Bus routes found successfully"
-    )
-  );
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(
+        statusCode.OK,
+        updatedRoutes,
+        translateLn(ln, "BUS_ROUTES_FOUND")
+      )
+    );
 });
 
 const deletePermanentBus = catchAsyncError(async (req, res, next) => {
@@ -488,6 +599,31 @@ const deletePermanentBus = catchAsyncError(async (req, res, next) => {
   }
 
   // Delete all associated routes directly
+  // Handle drivers from bus.assignedDriver array
+  if (Array.isArray(bus.assignedDriver) && bus.assignedDriver.length > 0) {
+    for (const driverId of bus.assignedDriver) {
+      const driver = await BusDriverModel.findById(driverId);
+
+      if (!driver) continue;
+
+      const otherBus = await BusModel.findOne({
+        _id: { $ne: bus._id },
+        assignedDriver: driver._id,
+      });
+
+      if (otherBus) {
+        // Driver exists in another bus
+        driver.assignedBus = otherBus._id;
+        driver.status = "assigned";
+      } else {
+        // No other bus
+        driver.assignedBus = null;
+        driver.status = "unassigned";
+      }
+
+      await driver.save();
+    }
+  }
   await BusRouteModel.deleteMany({ busId });
   await BusSeatsLayoutModel.deleteMany({ busId });
 
@@ -500,7 +636,6 @@ const deletePermanentBus = catchAsyncError(async (req, res, next) => {
 });
 
 module.exports = {
-
   addBus,
   updateBus,
   getAllBuses,

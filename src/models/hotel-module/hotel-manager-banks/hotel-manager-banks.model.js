@@ -8,25 +8,30 @@ const HotelManagerBankSchema = new mongoose.Schema(
       required: true,
       ref: "Hotel-Manager",
     },
-     
+
     bankDocs: {
+      required: false,
       type: ImageSchema,
     },
-     bankName: {
+    bankName: {
       type: String,
-      required: true,
-     },
+      required: false,
+    },
     accountHolderName: {
       type: String,
       trim: true,
     },
     accountNumber: {
       type: String,
-      required: true,
+      required: false,
+      sparse: true,
       unique: true,
-      match: [/^\d{10,18}$/, "Please provide a valid account number"],
+      match: [
+        /^\d{8,30}$/,
+        "Account number must be between 8 and 30 digits and contain only numbers",
+      ],
     },
-   
+
     // ifscCode: {
     //   type: String,
     //   required: true,
@@ -46,7 +51,7 @@ const HotelManagerBankSchema = new mongoose.Schema(
     },
   },
   {
-    timestamps: true, 
+    timestamps: true,
   }
 );
 

@@ -7,10 +7,6 @@ const {
 } = require("../../config/config");
 
 const jwt = require("jsonwebtoken");
-const ApiError = require("../response/ApiError");
-const redis = require("../../config/redisClient");
-const statusCode = require("../constants/statusCode");
-const logger = require("../logger/logger");
 
 const ACCESS_TOKEN_SECRET = access_token_secret;
 const REFRESH_TOKEN_SECRET = refresh_token_secret;
@@ -22,6 +18,7 @@ const REFRESH_TOKEN_EXPIRATION = refresh_token_expiration_time;
 const generateTokens = async (user, userType) => {
   const payload = {
     _id: user?._id,
+    userId: user.userId,
     email: user?.email,
     role: user?.role,
     authorities: user?.authorities,
@@ -29,7 +26,9 @@ const generateTokens = async (user, userType) => {
     isVerfilled: user?.isVerfilled,
     userType: userType,
     phoneNumber: user?.phoneNumber,
-    verificationStatus: user?.verificationStatus
+    verificationStatus: user?.verificationStatus,
+    permissions: user.permissions || {},
+    branch: user?.branch?._id || user?.branch || null,
   };
 
   const refreshTokenPayload = {
@@ -88,4 +87,31 @@ const setTokenCookies = (res, accessToken, refreshToken) => {
   });
 };
 
-module.exports = { generateTokens, setTokenCookies };
+const generateUserTokens = async (user, userType) => {
+  const payload = {
+    _id: user?._id,
+    userId: user.userId,
+    email: user?.email,
+    role: user?.role,
+    authorities: user?.authorities,
+    parentUserId: user?.parentUserId,
+    isVerfilled: user?.isVerfilled,
+    userType: userType,
+    phoneNumber: user?.phoneNumber,
+    verificationStatus: user?.verificationStatus,
+    permissions: user.permissions || {},
+    branch: user?.branch?._id || user?.branch || null,
+  };
+
+  const refreshTokenPayload = {
+    _id: user?._id,
+  };
+
+  const accessToken = jwt.sign(payload, ACCESS_TOKEN_SECRET);
+
+  const refreshToken = jwt.sign(refreshTokenPayload, REFRESH_TOKEN_SECRET);
+
+  return { accessToken, refreshToken };
+};
+
+module.exports = { generateUserTokens, generateTokens, setTokenCookies };

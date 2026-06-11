@@ -9,19 +9,23 @@ const logger = require("../../../utils/logger/logger");
 const ApiError = require("../../../utils/response/ApiError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
+const { translateLn } = require("../../../utils/services/translator.service");
+const { fetchLn } = require("../../../utils/services/user.services");
 
 const createAddress = catchAsyncError(async (req, res, next) => {
   const { _id } = req.user;
-  const { address, townCity, landmark, pincode, coordinates, state, country } =
-    req.body;
+  const { zoneCode, area, townCity, landmark } = req.body;
 
-  if (!address || !townCity || !pincode || !landmark) {
+  if (!zoneCode || !townCity || !area) {
     logger.warn(
       "Validation failed. Missing required fields in the request body."
     );
+
+    const ln = await fetchLn(_id);
+
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Address, townCity, landmark, pincode are required."
+      translateLn(ln, "ADDRESS_REQUIRED_FIELDS")
     );
   }
 
@@ -29,20 +33,17 @@ const createAddress = catchAsyncError(async (req, res, next) => {
   if (existingAddress?.address) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "This address already exists for the user."
+      translateLn(ln, "ADDRESS_ALREADY_EXISTS")
     );
   }
 
   // Create new address document
   const newAddress = new AddressModel({
     // userId: _id,
-    address,
+    zoneCode,
+    area,
     townCity,
     landmark,
-    pincode,
-    coordinates,
-    state,
-    country,
   });
 
   const userAddress = new UserAddressModel({
@@ -61,7 +62,7 @@ const createAddress = catchAsyncError(async (req, res, next) => {
       new ApiResponse(
         statusCode.CREATED,
         userAddress,
-        "Address created successfully."
+        translateLn(ln, "ADDRESS_CREATED")
       )
     );
 });
@@ -69,51 +70,57 @@ const createAddress = catchAsyncError(async (req, res, next) => {
 const getAddress = catchAsyncError(async (req, res, next) => {
   const { _id: userId } = req.user;
 
+  const ln = await fetchLn(_id);
+
   const address = await UserAddressModel.findOne({ userId }).populate(
     "address"
   );
   if (!address) {
-    throw new ApiError(statusCode.NOT_FOUND, "Address not found");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "ADDRESS_NOT_FOUND")
+    );
   }
 
   return res
     .status(statusCode.OK)
     .json(
-      new ApiResponse(statusCode.OK, address, "Addresses fetched successfully.")
+      new ApiResponse(
+        statusCode.OK,
+        address,
+        translateLn(ln, "ADDRESSES_FETCHED")
+      )
     );
 });
 
 const updateAddress = catchAsyncError(async (req, res, next) => {
   const userId = req.user?._id;
-  const { address, townCity, landmark, pincode, coordinates, state, country } =
-    req.body;
+  const { zoneCode, area, townCity } = req.body;
+  console.log(zoneCode, area, townCity);
 
-  if (!address || !townCity || !landmark || !pincode) {
+  const ln = await fetchLn(userId);
+
+  if (!zoneCode || !townCity || !area) {
     throw new ApiError(
       statusCode.BAD_REQUEST,
-      "Address, townCity, landmark, and pincode are required."
+      translateLn(ln, "ADDRESS_REQUIRED_FIELDS")
     );
   }
   const userAddress = await UserAddressModel.findOne({ userId });
   if (!userAddress) {
-    throw new ApiError(statusCode.NOT_FOUND, "User not found.");
+    throw new ApiError(statusCode.NOT_FOUND, translateLn(ln, "USER_NOT_FOUND"));
   }
   const addressId = userAddress.address?._id;
   let addressToUpdate = await AddressModel.findById(addressId);
   if (!addressToUpdate) {
     throw new ApiError(
       statusCode.NOT_FOUND,
-      "Address not found for the provided user."
+      translateLn(ln, "ADDRESS_NOT_FOUND")
     );
   }
-
-  addressToUpdate.address = address;
+  addressToUpdate.zoneCode = zoneCode;
+  addressToUpdate.area = area;
   addressToUpdate.townCity = townCity;
-  addressToUpdate.landmark = landmark;
-  addressToUpdate.pincode = pincode;
-  addressToUpdate.coordinates = coordinates;
-  addressToUpdate.state = state;
-  addressToUpdate.country = country;
 
   await addressToUpdate.save();
 
@@ -123,7 +130,7 @@ const updateAddress = catchAsyncError(async (req, res, next) => {
       new ApiResponse(
         statusCode.OK,
         addressToUpdate,
-        "Address updated successfully."
+        translateLn(ln, "ADDRESS_UPDATED")
       )
     );
 });
@@ -131,25 +138,33 @@ const updateAddress = catchAsyncError(async (req, res, next) => {
 const deleteAddress = catchAsyncError(async (req, res, next) => {
   const userId = req.user?._id;
 
+  const ln = await fetchLn(userId);
+
   const userAddress = await UserAddressModel.findOne({ userId });
 
   if (!userAddress) {
     throw new ApiError(
       statusCode.NOT_FOUND,
-      "Address not found for the provided user."
+      translateLn(ln, "ADDRESS_NOT_FOUND")
     );
   }
 
   const addressId = userAddress.address?._id;
 
   if (!addressId) {
-    throw new ApiError(statusCode.BAD_REQUEST, "Address ID is missing.");
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "ADDRESS_ID_MISSING")
+    );
   }
 
   // Delete Address first
   const deletedAddress = await AddressModel.findByIdAndDelete(addressId);
   if (!deletedAddress) {
-    throw new ApiError(statusCode.NOT_FOUND, "Address record not found.");
+    throw new ApiError(
+      statusCode.NOT_FOUND,
+      translateLn(ln, "ADDRESS_NOT_FOUND")
+    );
   }
 
   // Then delete UserAddress record
@@ -158,7 +173,7 @@ const deleteAddress = catchAsyncError(async (req, res, next) => {
   return res
     .status(statusCode.OK)
     .json(
-      new ApiResponse(statusCode.OK, {}, "Addresses deleted successfully.")
+      new ApiResponse(statusCode.OK, {}, translateLn(ln, "ADDRESSES_DELETED"))
     );
 });
 

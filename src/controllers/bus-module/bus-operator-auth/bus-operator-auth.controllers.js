@@ -4,6 +4,7 @@ const statusCode = require("../../../utils/constants/statusCode");
 const logger = require("../../../utils/logger/logger");
 const ApiResponse = require("../../../utils/response/ApiResponse");
 const BusOperatorModel = require("../../../models/bus-module/bus-operator/bus-operator.model");
+const Wallet = require("../../../models/wallet-module/wallets.model");
 const {
   validateRequestBody,
 } = require("../../../utils/reqFunctions/reqFunction");
@@ -44,6 +45,8 @@ const {
 } = require("../../../utils/services/functions.services");
 const ejs = require("ejs");
 const path = require("path");
+const generateUniqueCardNumber = require("../../../utils/customId/generateUniqueCardNumber");
+const busOperatorHistoryModel = require("../../../models/bus-module/bus-operator/bus-operatorHistory.model");
 
 // =====================|| REGISTER DRIVER ||==========================
 const registerBusOperator = catchAsyncError(async (req, res, next) => {
@@ -53,6 +56,17 @@ const registerBusOperator = catchAsyncError(async (req, res, next) => {
     reqModel: BusOperatorModel,
     typeOfUser: TypeOfUser.BUSOPERATOR,
   });
+
+  // Populate branch before sending response
+  if (result?.data?.user?._id) {
+    const populatedUser = await BusOperatorModel.findById(result.data.user._id)
+      .select("-password")
+      .populate("branch");
+
+    if (populatedUser) {
+      result.data.user = populatedUser; // overwrite with populated version
+    }
+  }
 
   return res.status(statusCode.OK).json(result);
 });
@@ -125,7 +139,10 @@ const verificationBusOperator = catchAsyncError(async (req, res, next) => {
   for (const key of keys) {
     const imgFile = docsToUpload[key][0];
 
-    const cloudImage = await uploadImageOnAws(imgFile.path);
+    const cloudImage = await uploadImageOnAws(
+      imgFile.path,
+      imgFile.originalname
+    );
 
     const uploadedDoc = await DocumentsModel.create({
       documentName: key,
@@ -241,7 +258,10 @@ const updateVerificationDetails = catchAsyncError(async (req, res, next) => {
         }
 
         // Upload new image
-        const cloudImage = await uploadImageOnAws(imgFile.path);
+        const cloudImage = await uploadImageOnAws(
+          imgFile.path,
+          imgFile.originalname
+        );
         existingDoc.file = {
           public_id: cloudImage?.public_id,
           url: cloudImage?.secure_url,
@@ -340,6 +360,8 @@ const addEmailOrPhone = catchAsyncError(async (req, res, next) => {
     req,
     res,
     reqModel: BusOperatorModel,
+    historyModel: busOperatorHistoryModel,
+    req,
   });
   return res.status(statusCode.OK).json(result);
 });

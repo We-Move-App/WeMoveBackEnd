@@ -1,5 +1,9 @@
 const mongoose = require("mongoose");
-const { ImageSchema } = require("../../../utils/validation/forSchema");
+const bcrypt = require("bcrypt");
+const {
+  ImageSchema,
+  validatePhoneNumber,
+} = require("../../../utils/validation/forSchema");
 
 const busDriverSchema = new mongoose.Schema(
   {
@@ -13,32 +17,34 @@ const busDriverSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    password: {
+
+    busDriverId: {
       type: String,
-      minlength: [6, "Password must be at least 6 characters long"],
+      unique: true,
+      index: true,
     },
     phoneNumber: {
       type: String,
-      required: true,
       unique: true,
-      match: /^[0-9]{8,15}$/,
+      validate: {
+        validator: validatePhoneNumber,
+        message: (props) => `${props.value} is not a valid phone number!`,
+      },
       sparse: true,
     },
+    assignedBus: { type: mongoose.Schema.Types.ObjectId, ref: "Bus" },
 
+    status: {
+      type: String,
+      enum: ["unassigned", "assigned"],
+      default: "unassigned",
+    },
     licenseExpiry: {
       type: Date,
-    },
-    assignedBus: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Bus",
     },
     isActive: {
       type: Boolean,
       default: true,
-    },
-    createdAt: {
-      type: Date,
-      default: Date.now,
     },
     driverLicenseFront: {
       type: ImageSchema,

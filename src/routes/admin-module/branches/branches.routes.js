@@ -9,7 +9,7 @@ const {
 } = require("../../../controllers/admin-module/branches/branches.controllers");
 const adminBranchesRoutes = express.Router();
 
-adminBranchesRoutes.route("/all").get(isAdminAuthenticated, getAllBranches);
+adminBranchesRoutes.route("/all").get(getAllBranches);
 adminBranchesRoutes
   .route("/:branchId")
   .get(isAdminAuthenticated, getBranchById);

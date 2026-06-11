@@ -12,10 +12,15 @@ const roomSchema = new mongoose.Schema(
       enum: ["standard","luxury"],
       required: true,
     },
+     standardRoomPrice:{
+      type: Number
 
-    
+     },
+  luxuryRoomPrice:{
+    type: Number
 
-    numberOfRoom: { type: String, required: true },
+  },
+    numberOfRoom: { type: Number},
 
 
     roomPrice: { type: Number, required: true, min: 0 },
@@ -24,6 +29,7 @@ const roomSchema = new mongoose.Schema(
       {
         name: { type: String, required: true },
         status: { type: Boolean, default: false },
+       
       },
         
     ],

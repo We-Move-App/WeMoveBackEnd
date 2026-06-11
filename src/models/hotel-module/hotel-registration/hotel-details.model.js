@@ -10,7 +10,8 @@ const hotelSchema = new mongoose.Schema(
     hotelName: { type: String, required: true, unique: true },
     businessLicense: { type: String, required: true, unique: true },
     totalRoom: { type: Number, required: true },
-    Description:
+    
+    description:
     {
       type: String,
 

@@ -1,6 +1,7 @@
 const express = require("express");
 
 const {
+  getBeneficiary,
   getProfile,
   getAvatar,
   updateYourProfile,
@@ -10,19 +11,22 @@ const {
   updateAvatar,
   assignBranch,
   resetPassword2,
+  getAvailableModules,
+  deleteProfile,
+  changeLanguage,
 } = require("../../../controllers/user-module/users/users.controllers");
+const {
+  addMemberUnderUser,
+} = require("../../../controllers/user-module/userMember/userMember.Controllers");
 const { isUserAuthenticated } = require("../../../middlewares/authUser");
 const {
   uploadDocuments,
   uploadAvatar,
 } = require("../../../utils/uploadFiles/multer");
-
 const userRoutes = express.Router();
 
 userRoutes.route("/profile").get(isUserAuthenticated, getProfile);
-
 userRoutes.route("/get-avatar").get(isUserAuthenticated, getAvatar);
-
 userRoutes
   .route("/update-profile")
   .put(isUserAuthenticated, uploadDocuments, updateYourProfile);
@@ -35,6 +39,12 @@ userRoutes.route("/assign-branch").put(isUserAuthenticated, assignBranch);
 
 userRoutes.route("/reset-password").put(isUserAuthenticated, resetPassword);
 userRoutes.route("/reset-password-without-auth").put(resetPassword2);
+userRoutes.route("/beneficiary").post(getBeneficiary);
+userRoutes
+  .route("/available-modules")
+  .get(isUserAuthenticated, getAvailableModules);
+userRoutes.route("/delete-profile").delete(deleteProfile);
+userRoutes.route("/change-language").post(changeLanguage);
 
 userRoutes
   .route("/update-avatar")

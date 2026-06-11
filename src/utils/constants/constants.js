@@ -13,7 +13,7 @@ const documentTypes = [
   "bus_license_front",
   "bus_license_back",
   "busImages",
-  "vehicle_photo"
+  "vehicle_photo",
 ];
 
 const userRolesTypes = [
@@ -47,7 +47,9 @@ const adminAuthorities = [
   "walletManagement",
   "reportsAnalytics",
   "notifications",
-  "roleManagement"
+  "roleManagement",
+  "commissionManagement",
+  "couponManagement",
 ];
 
 const busOperatorAuthoritiesFields = {
@@ -74,16 +76,17 @@ const PaymentStatus = {
   REFUND_REQUESTED: "REFUND_REQUESTED",
   REFUND_PROCESSING: "REFUND_PROCESSING",
   REFUNDED: "REFUNDED",
-  PAID:'PAID',
+  PAID: "PAID",
+  OFFLINE: "OFFLINE",
 };
 
-const TypeOfUser={
-    USER: "user",
-    DRIVER:"driver",
-    BUSOPERATOR:'busOperator',
-    HOTELMANAGER:'hotelManager',
-    ADMIN:'admin'
-}
+const TypeOfUser = {
+  USER: "user",
+  DRIVER: "driver",
+  BUSOPERATOR: "busOperator",
+  HOTELMANAGER: "hotelManager",
+  ADMIN: "admin",
+};
 
 module.exports = {
   documentTypes,
@@ -94,5 +97,5 @@ module.exports = {
   RideStatus,
   PaymentStatus,
   TypeOfUser,
-  adminAuthorities
+  adminAuthorities,
 };

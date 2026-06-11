@@ -11,11 +11,6 @@ const deviceTokenSchema = new Schema(
       type: String,
       required: true,
     },
-    deviceType: {
-      type: String,
-      enum: ["android", "ios", "web"],
-      required: true,
-    },
     createdAt: {
       type: Date,
       default: Date.now,
@@ -25,6 +20,7 @@ const deviceTokenSchema = new Schema(
     timestamps: true,
   }
 );
+deviceTokenSchema.index({ user: 1, token: 1 }, { unique: true });
 
 const DeviceTokensModel = mongoose.model("DeviceToken", deviceTokenSchema);
 module.exports = DeviceTokensModel;

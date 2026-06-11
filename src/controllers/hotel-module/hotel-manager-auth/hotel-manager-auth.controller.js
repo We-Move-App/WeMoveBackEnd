@@ -31,6 +31,7 @@ const emailVerifyModel = require("../../../models/global-module/verifications/em
 const phoneNumberVerifyModel = require("../../../models/global-module/verifications/phoneNumberVerification");
 const HotelManagerDeviceTokenModel = require("../../../models/hotel-module/hotel-device-tokens/hotel-device-tokens.model");
 const { TypeOfUser } = require("../../../utils/constants/constants");
+const Wallet = require("../../../models/wallet-module/wallets.model");
 const {
   registerUserWithEmailAndPhoneNumber,
   loginUserWithEmailAndPhoneNumber,
@@ -44,6 +45,12 @@ const {
   resendOtpWithoutTokenFunc,
   verifyEmailExistFunc,
 } = require("../../../utils/services/functions.services");
+const generateUniqueCardNumber = require("../../../utils/customId/generateUniqueCardNumber");
+const {
+  BranchModel,
+} = require("../../../models/admin-module/branch/branches.model");
+const generateCustomId = require("../../../utils/customId/generateCustomId");
+const { EntityCodeEnum } = require("../../../utils/constants/ENUM");
 
 const generateOtp = () => {
   return Math.floor(1000 + Math.random() * 9000).toString();
@@ -51,12 +58,35 @@ const generateOtp = () => {
 
 // =====================|| REGISTER HOTEL-MANAGER ||==========================
 const registerHotelManager = catchAsyncError(async (req, res, next) => {
-  const { email, fullName, password, address, phoneNumber } = req.body;
+  let {
+    email,
+    fullName,
+    password,
+    address: companyAddress,
+    phoneNumber,
+    branch,
+    companyName,
+  } = req.body;
 
-  const reqField = ["email", "fullName", "password", "address", "phoneNumber"];
+  const reqField = [
+    "email",
+    "fullName",
+    "password",
+    "address",
+    "phoneNumber",
+    "branch",
+    "companyName",
+  ];
   validateRequestBody(reqField, req.body);
+  email = email?.trim().toLowerCase();
+  phoneNumber = phoneNumber?.trim();
 
-  // Check if email or phone number exists and is verified
+  const branchDoc = await BranchModel.findById(branch);
+  if (!branchDoc) {
+    throw new ApiError(statusCode.BAD_REQUEST, "Invalid branch selected");
+  }
+
+  // ✅ Check email and phone verification
   const isEmailVerified = await emailVerifyModel.findOne({
     email,
     verified: true,
@@ -74,9 +104,23 @@ const registerHotelManager = catchAsyncError(async (req, res, next) => {
     );
   }
 
+  // ✅ Check if user already exists
   const existingUser = await HotelManagerModel.findOne({
-    $or: [{ email: email }, { phoneNumber: phoneNumber }],
+    $or: [{ email }, { phoneNumber }],
   }).select("-password");
+
+  if (existingUser) {
+    if (existingUser.email === email) {
+      throw new ApiError(statusCode.BAD_REQUEST, "Email already registered");
+    }
+
+    if (existingUser.phoneNumber === phoneNumber) {
+      throw new ApiError(
+        statusCode.BAD_REQUEST,
+        "Phone number already registered"
+      );
+    }
+  }
 
   if (existingUser) {
     if (["approved", "processing"].includes(existingUser.verificationStatus)) {
@@ -90,33 +134,69 @@ const registerHotelManager = catchAsyncError(async (req, res, next) => {
       existingUser,
       TypeOfUser.HOTELMANAGER
     );
-
     setTokenCookies(res, accessToken, refreshToken);
 
-    const data = {
-      accessToken,
-      refreshToken,
-      hotelmanager: existingUser,
-    };
+    const populatedUser = await HotelManagerModel.findById(
+      existingUser._id
+    ).populate("branch");
+
     return res
       .status(statusCode.OK)
-      .json(new ApiResponse(statusCode.OK, data, `Data found`));
+      .json(
+        new ApiResponse(
+          statusCode.OK,
+          { accessToken, refreshToken, hotelmanager: populatedUser },
+          "Data found"
+        )
+      );
   }
 
+  // ✅ Create new hotel manager
+  const managerId = await generateCustomId(EntityCodeEnum.HOTEL_MANAGER, "HM");
+
   const newUser = new HotelManagerModel({
+    managerId,
     email,
     fullName,
     password,
-    address,
-    //temporarily setting verificationStatus to approved
-    // verificationStatus: "approved",
     phoneNumber,
+    branch: branchDoc._id,
+    companyName,
+    companyAddress,
   });
+  try {
+    await newUser.save();
+  } catch (error) {
+    if (error.code === 11000) {
+      if (error.keyPattern?.email) {
+        throw new ApiError(statusCode.BAD_REQUEST, "Email already registered");
+      }
 
-  await newUser.save();
+      if (error.keyPattern?.phoneNumber) {
+        throw new ApiError(
+          statusCode.BAD_REQUEST,
+          "Phone number already registered"
+        );
+      }
+    }
+    throw error;
+  }
 
-  const userObject = newUser.toObject();
-  delete userObject.password;
+  // ✅ Ensure wallet
+  let wallet = await Wallet.findOne({ userId: newUser._id });
+  if (!wallet) {
+    wallet = await Wallet.create({
+      userId: newUser._id,
+      balance: 0,
+      currency: process.env.MOMO_CURRENCY,
+      cardNumber: await generateUniqueCardNumber(),
+    });
+  }
+
+  // ✅ Populate branch before sending response
+  const populatedUser = await HotelManagerModel.findById(newUser._id)
+    .select("-password")
+    .populate("branch");
 
   const { accessToken, refreshToken } = await generateTokens(
     newUser,
@@ -124,19 +204,13 @@ const registerHotelManager = catchAsyncError(async (req, res, next) => {
   );
   setTokenCookies(res, accessToken, refreshToken);
 
-  const data = {
-    accessToken,
-    refreshToken,
-    hotelmanager: userObject,
-  };
-
   return res
     .status(statusCode.OK)
     .json(
       new ApiResponse(
         statusCode.OK,
-        data,
-        `Hotel Manager registered successfully`
+        { accessToken, refreshToken, hotelmanager: populatedUser },
+        "Hotel Manager registered successfully"
       )
     );
 });
@@ -144,6 +218,7 @@ const registerHotelManager = catchAsyncError(async (req, res, next) => {
 // =====================|| LOGIN USER ||=====================================
 const loginHotelManager = catchAsyncError(async (req, res, next) => {
   const { emailOrPhone, password } = req.body;
+  console.log("emailOrPhone, password", emailOrPhone, password);
 
   if (!emailOrPhone) {
     throw new ApiError(statusCode.BAD_REQUEST, "Please enter email or phone");
@@ -192,6 +267,7 @@ const loginHotelManager = catchAsyncError(async (req, res, next) => {
   }
 
   const isPasswordMatch = await existingUser.comparePassword(password);
+  console.log("isPasswordMatch", isPasswordMatch);
 
   if (!isPasswordMatch) {
     throw new ApiError(statusCode.BAD_REQUEST, `Invalid Credentials`);
@@ -204,7 +280,7 @@ const loginHotelManager = catchAsyncError(async (req, res, next) => {
     existingUser,
     TypeOfUser.HOTELMANAGER
   );
-  setTokenCookies(res, accessToken, refreshToken);
+  // setTokenCookies(res, accessToken, refreshToken);
 
   const data = {
     accessToken,

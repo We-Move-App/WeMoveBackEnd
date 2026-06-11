@@ -2,7 +2,7 @@ const DriverModel = require("../../../models/driver-module/drivers/drivers.model
 const RidesReview = require("../../../models/global-module/ride-reviews/ride-reviews.model");
 const UserRecentSearchModel = require("../../../models/user-module/user-recent-search/user-recent-search.model");
 const RideModel = require("../../../models/user-module/user-rides/user-ride.model");
-const { getIo } = require("../../../socket/socketHandler");
+// const { getIo } = require("../../../socket/socketHandler");
 const statusCode = require("../../../utils/constants/statusCode");
 const {
   formatDistanceTime,
@@ -17,6 +17,9 @@ const {
 const {
   calculateFareForVehicle,
 } = require("../../../utils/services/ride.services");
+const {
+  createNotification,
+} = require("../../global-notification-module/global-notification.controller");
 
 const generateOtp = () => {
   return Math.floor(1000 + Math.random() * 9000).toString();
@@ -53,7 +56,6 @@ const getVehicleFaresForRide = catchAsyncError(async (req, res, next) => {
   });
 
   if (recentSearch) {
-    // Update timestamp instead of adding duplicate entry
     recentSearch.searchDetails.vehicle.pickup = {
       address: pickup,
       latitude: pickupCoordinates.ltd,
@@ -197,6 +199,23 @@ const createRide = catchAsyncError(async (req, res, next) => {
 
   // Save to the database
   await newRide.save();
+
+  try {
+    await createNotification(
+      req.user._id,
+      {
+        en: "Ride Requested",
+        fr: "Course demandée",
+      },
+      {
+        en: `Your ride from ${pickup} to ${drop} has been created`,
+        fr: `Votre course de ${pickup} à ${drop} a été créée`,
+      }
+    );
+  } catch (err) {
+    console.error("Notification error:", err.message);
+  }
+
   const io = getIo();
   io.emit("searchCaptain", newRide._id);
 
@@ -463,7 +482,6 @@ const addRidesReview = catchAsyncError(async (req, res, next) => {
 });
 
 const userActiveRide = catchAsyncError(async (req, res, next) => {
-
   const activeRide = await RideModel.findOne({
     user: req.user._id,
     status: {

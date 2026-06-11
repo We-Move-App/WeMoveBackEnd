@@ -5,23 +5,32 @@ const {
   ImageSchema,
 } = require("../../../utils/validation/forSchema");
 const { hash_rounds } = require("../../../config/config");
-const { Schema } = mongoose;
 const bcrypt = require("bcrypt");
+const { boolean, required } = require("joi");
 
 const defaultPermissions = {
   userManagement: { type: Boolean, default: false },
   busManagement: { type: Boolean, default: false },
   taxiManagement: { type: Boolean, default: false },
+  bikeManagement: { type: Boolean, default: false },
   hotelManagement: { type: Boolean, default: false },
   walletManagement: { type: Boolean, default: false },
   reportsAnalytics: { type: Boolean, default: false },
   notifications: { type: Boolean, default: false },
   roleManagement: { type: Boolean, default: false },
+  commissionManagement: { type: Boolean, default: false },
+  couponManagement: { type: Boolean, default: false },
+  // referralManagement: { type: Boolean, default: false },
 };
 
 // Admin Schema
 const AdminSchema = new mongoose.Schema(
   {
+    adminId: {
+      type: String,
+      unique: true,
+      index: true,
+    },
     userName: {
       type: String,
       trim: true,
@@ -56,6 +65,18 @@ const AdminSchema = new mongoose.Schema(
       enum: ["SuperAdmin", "Admin", "SubAdmin"],
       required: true,
     },
+    reportingManager: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Admin",
+      default: null,
+    },
+
+    // isSpecialAdmin: {
+    //   type: Boolean,
+    //   default: false,
+    //   required: false,
+    // },
+
     branch: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Branch",
@@ -63,6 +84,9 @@ const AdminSchema = new mongoose.Schema(
         return this.role !== "SuperAdmin";
       },
     },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Admin" },
+
     permissions: defaultPermissions,
     verificationStatus: {
       type: String,
@@ -80,6 +104,7 @@ const AdminSchema = new mongoose.Schema(
     socketId: {
       type: String,
     },
+    ln: { type: String, default: "en" },
   },
   {
     timestamps: true,
@@ -93,13 +118,18 @@ AdminSchema.pre("save", function (next) {
       userManagement: true,
       busManagement: true,
       taxiManagement: true,
+      bikeManagement: true,
       hotelManagement: true,
       walletManagement: true,
       reportsAnalytics: true,
       notifications: true,
       roleManagement: true,
+      commissionManagement: true,
+      couponManagement: true,
+      // referralManagement: true,
     };
   }
+  this.isSpecialAdmin = true;
   next();
 });
 
@@ -127,4 +157,4 @@ AdminSchema.methods.comparePassword = async function (candidatePassword) {
 
 const AdminModel = mongoose.model("Admin", AdminSchema);
 
-module.exports = { AdminModel };
+module.exports = { AdminModel, defaultPermissions };

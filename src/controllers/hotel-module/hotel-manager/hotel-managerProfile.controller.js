@@ -2,8 +2,12 @@ const HotelManagerModel = require("../../../models/hotel-module/hotel-manager/ho
 const {
   HotelManagerDocumentModel,
 } = require("../../../models/hotel-module/hotel-manager-documents/hotel-manager-documents.model");
-const{ DocumentsModel}= require("../../../models/global-module/documents/document.model");
-const { HotelManagerBankModel}= require("../../../models/hotel-module/hotel-manager-banks/hotel-manager-banks.model")
+const {
+  DocumentsModel,
+} = require("../../../models/global-module/documents/document.model");
+const {
+  HotelManagerBankModel,
+} = require("../../../models/hotel-module/hotel-manager-banks/hotel-manager-banks.model");
 const statusCode = require("../../../utils/constants/statusCode");
 const {
   validateRequestBody,
@@ -37,7 +41,6 @@ const getProfile = catchAsyncError(async (req, res, next) => {
     reqModel: HotelManagerModel,
     reqDocModel: HotelManagerDocumentModel,
     bankModel: HotelManagerBankModel,
-  
   });
 
   return res.status(statusCode.OK).json(result);
@@ -103,7 +106,10 @@ const updateYourProfile = catchAsyncError(async (req, res, next) => {
   if (keys.length > 0) {
     for (const key of keys) {
       const imgFile = docsToUpload[key][0];
-      const cloudImage = await uploadImageOnAws(imgFile.path);
+      const cloudImage = await uploadImageOnAws(
+        imgFile.path,
+        imgFile.originalname
+      );
 
       const uploadedDoc = await DocumentsModel.create({
         documentName: key,
@@ -205,12 +211,10 @@ const updateAvatar = catchAsyncError(async (req, res, next) => {
   return res.status(statusCode.OK).json(result);
 });
 const assignBranch = catchAsyncError(async (req, res, next) => {
-
   const result = await assignBranchToUserFunc({
-  
     req,
     res,
-    
+
     reqModel: HotelManagerModel,
   });
 
@@ -245,7 +249,7 @@ const deleteAccount = catchAsyncError(async (req, res, next) => {
       if (key?.file?.public_id) {
         await deleteImageFromAws(key.file.public_id);
       }
-      await DocumentsModel.deleteOne({_id:key._id})
+      await DocumentsModel.deleteOne({ _id: key._id });
     }
     await HotelManagerDocumentModel.deleteMany({ userId: _id });
   }

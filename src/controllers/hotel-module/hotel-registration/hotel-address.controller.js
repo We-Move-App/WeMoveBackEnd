@@ -1,23 +1,23 @@
 const mongoose = require("mongoose");
 const HotelModel = require("../../../models/hotel-module/hotel-registration/hotel-details.model");
 const HotelAddressModel = require("../../../models/hotel-module/hotel-registration/hotel-location.model");
-const {AddressModel} = require("../../../models/global-module/address/address.model");
+const { AddressModel } = require("../../../models/global-module/address/address.model");
 const HotelManagerModel = require("../../../models/hotel-module/hotel-manager/hotel-manager.model");
 const statusCode = require("../../../utils/constants/statusCode");
 const ApiError = require("../../../utils/response/ApiError");
 const catchAsyncError = require("../../../utils/response/catchAsyncError");
 const ApiResponse = require("../../../utils/response/ApiResponse");
-const logger = require("../../../utils/logger/logger"); 
+const logger = require("../../../utils/logger/logger");
 
 
 const createOrUpdateLocation = catchAsyncError(async (req, res, next) => {
     const { _id } = req.user;
     const { hotelId, address, city, locality, landmark, pincode, country, state, longitude, latitude } = req.body;
 
-    if (!hotelId || !city || !state || !country || !pincode) {
+    if (!hotelId || !city || !state || !country) {
         return res.status(statusCode.BAD_REQUEST).json({
             success: false,
-            message: "hotelId, city, state, country, and pincode are required"
+            message: "hotelId, city, state, country, and are required"
         });
     }
 
@@ -77,24 +77,25 @@ const createOrUpdateLocation = catchAsyncError(async (req, res, next) => {
 
 const getAddressByHotelId = catchAsyncError(async (req, res, next) => {
     const { _id } = req.user;
-    let { hotelId } = req.params;
+    const { hotelId } = req.params;
 
-    if (!hotelId || typeof hotelId !== "string") {
-        return res.status(statusCode.BAD_REQUEST).json({
-            success: false,
-            message: "Hotel ID is required"
-        });
+    if (!hotelId || !mongoose.Types.ObjectId.isValid(hotelId)) {
+        return next(new ApiError(statusCode.BAD_REQUEST, "Invalid hotelId format"));
     }
 
-    hotelId = hotelId.trim();
-    const hotelAddress = await HotelAddressModel.findOne({ hotelId }).populate("address");
+    const hotelAddress = await HotelAddressModel.findOne({
+        hotelId: new mongoose.Types.ObjectId(hotelId)
+    }).populate("address");
 
     if (!hotelAddress) {
-        throw new ApiError(statusCode.NOT_FOUND, "No address found for this hotel");
+        return next(new ApiError(statusCode.NOT_FOUND, "No address found for this hotel"));
     }
 
-    res.status(statusCode.OK).json(new ApiResponse(statusCode.OK, hotelAddress.address, "Address retrieved successfully."));
+    res.status(statusCode.OK).json(
+        new ApiResponse(statusCode.OK, hotelAddress.address, "Address retrieved successfully.")
+    );
 });
+
 
 const deleteAddressByHotelId = catchAsyncError(async (req, res, next) => {
     const { _id } = req.user;
@@ -125,7 +126,7 @@ const deleteAddressByHotelId = catchAsyncError(async (req, res, next) => {
 });
 
 const updateAddressByHotelId = catchAsyncError(async (req, res, next) => {
-    const { address, city:townCity, locality, landmark, pincode, country, state, longitude, latitude, postalCode } = req.body;
+    const { address, city: townCity, locality, landmark, pincode, country, state, longitude, latitude, postalCode } = req.body;
     const { hotelId } = req.params;
 
     if (!hotelId || typeof hotelId !== "string") {

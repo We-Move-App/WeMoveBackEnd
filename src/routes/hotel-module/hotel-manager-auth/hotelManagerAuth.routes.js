@@ -32,9 +32,11 @@ hotelManagerAuthRoutes
   .route("/logout")
   .post(isHotelManagerAuthenticated, logoutUser);
 hotelManagerAuthRoutes.route("/refresh-token").post(refreshToken);
+
 hotelManagerAuthRoutes
   .route("/verify-status")
   .get(isHotelManagerAuthenticated, verifyStatus);
+
 hotelManagerAuthRoutes
   .route("/update-email-phone")
   .put(isHotelManagerAuthenticated, addEmailOrPhone);
@@ -47,9 +49,12 @@ hotelManagerAuthRoutes
 hotelManagerAuthRoutes
   .route("/verify-otp-without-auth")
   .post(verifyOTPWithoutToken);
+
 hotelManagerAuthRoutes
   .route("/resend-otp-without-auth")
   .post(resendOtpWithoutToken);
+
+
 hotelManagerAuthRoutes.route("/check-email-exist").get(verifyEmailExist);
 
 module.exports = hotelManagerAuthRoutes;

@@ -3,7 +3,6 @@ const statusCode = require("../../../utils/constants/statusCode");
 const logger = require("../../../utils/logger/logger");
 const UserModel = require("../../../models/user-module/users/user.model");
 const ApiResponse = require("../../../utils/response/ApiResponse");
-const UserBankModel  = require( "../../../models/user-module/user-banks/user-banks.model");
 const {
   saveDeviceToken,
   removeDeviceToken,
@@ -15,7 +14,6 @@ const {
 const { TypeOfUser } = require("../../../utils/constants/constants");
 const {
   registerUserWithEmailOrPhoneAndOtp,
-  sendOtpOnlyWithoutUserCreation ,
   registerUserWithEmailAndPhoneNumber,
   loginUserWithEmailAndPhoneNumber,
   logoutUserFunc,
@@ -28,6 +26,15 @@ const {
   verifyEmailExistFunc,
   verifyOtpFunc,
 } = require("../../../utils/services/functions.services");
+const userHistoryModel = require("../../../models/user-module/users/userHistory.model");
+const { AccessTokenModel } = require("../../../models/token/token.model");
+const {
+  sendOtpToPhone,
+  verifyPhoneOtp,
+} = require("../../../utils/otpService/otpService");
+const ApiError = require("../../../utils/response/ApiError");
+const { translateLn } = require("../../../utils/services/translator.service");
+const { fetchLn } = require("../../../utils/services/user.services");
 
 //=====================|| REGISTER USER ||============================
 // const registerUserWithOtp = catchAsyncError(async (req, res, next) => {
@@ -59,33 +66,24 @@ const {
 // });
 // NewVersion of registerUserWithOtp
 const registerUserWithOtp = catchAsyncError(async (req, res, next) => {
-  logger.info("Driver is registering with OTP");
+  logger.info("User is registering with OTP");
 
   const result = await registerUserWithEmailOrPhoneAndOtp({
     req,
     res,
     reqModel: UserModel,
+    historyModel: userHistoryModel,
     typeOfUser: TypeOfUser.USER,
   });
 
-  // const { accessToken, refreshToken, reqData } = result;
   const isSuccess = result;
-  // const data = {
-  //   accessToken,
-  //   refreshToken,
-  //   user: reqData,
-  // };
+  const ln = "en";
 
   return res
     .status(statusCode.OK)
-    .json(
-      new ApiResponse(
-        statusCode.OK,
-        null,
-        `OTP is sent successfully to this ${req.body.emailOrPhone}`
-      )
-    );
+    .json(new ApiResponse(statusCode.OK, null, translateLn(ln, "OTP_SENT")));
 });
+
 const registerUser = catchAsyncError(async (req, res, next) => {
   const result = await registerUserWithEmailAndPhoneNumber({
     req,
@@ -110,10 +108,15 @@ const loginUser = catchAsyncError(async (req, res, next) => {
 });
 
 // =====================|| LOGOUT USER ||====================================
+// =====================|| LOGOUT USER ||====================================
 const logoutUser = catchAsyncError(async (req, res, next) => {
-  const result = await logoutUserFunc({ req, res });
+  const result = await logoutUserFunc({
+    req,
+    res,
+    reqModel: UserModel,
+  });
 
-  return res.status(statusCode.OK).json(result);
+  return res.status(result.statusCode || 200).json(result);
 });
 
 // =====================|| REFRESH TOKEN ||==================================
@@ -126,6 +129,47 @@ const refreshToken = catchAsyncError(async (req, res, next) => {
   });
 
   return res.status(statusCode.OK).json(result);
+});
+
+const sendOtpToPhoneHandler = catchAsyncError(async (req, res) => {
+  const { phoneNo } = req.body;
+  const userId = req.user._id;
+  const ln = await fetchLn(userId);
+
+  if (!phoneNo) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "PHONE_REQUIRED")
+    );
+  }
+
+  await sendOtpToPhone(phoneNo);
+
+  return res
+    .status(statusCode.CREATED)
+    .json(
+      new ApiResponse(statusCode.CREATED, null, translateLn(ln, "OTP_SENT"))
+    );
+});
+
+const verifyPhoneOtpHandler = catchAsyncError(async (req, res) => {
+  const ln = req.get("ln") || "en";
+  const { phoneNo, otp } = req.body;
+
+  if (!phoneNo || !otp) {
+    throw new ApiError(
+      statusCode.BAD_REQUEST,
+      translateLn(ln, "PHONE_AND_OTP_REQUIRED")
+    );
+  }
+
+  await verifyPhoneOtp(phoneNo, otp, ln);
+
+  return res
+    .status(statusCode.OK)
+    .json(
+      new ApiResponse(statusCode.OK, {}, translateLn(ln, "PHONE_VERIFIED"))
+    );
 });
 
 // =====================|| RESEND OTP ||=====================================
@@ -180,10 +224,13 @@ const verifyStatus = catchAsyncError(async (req, res, next) => {
 });
 // =====================|| ADD EMAIL  ||==================================
 const addEmailOrPhone = catchAsyncError(async (req, res, next) => {
+  const ln = req.get("ln") || "en";
   const result = await addEmailOrPhoneNumberFunc({
     req,
     res,
     reqModel: UserModel,
+    historyModel: userHistoryModel,
+    ln,
   });
   return res.status(statusCode.OK).json(result);
 });
@@ -230,11 +277,14 @@ const verifyEmailExist = catchAsyncError(async (req, res, next) => {
 
   return res.status(statusCode.OK).json(result);
 });
-const verifyOTP= catchAsyncError(async (req, res, next) => {
+
+const verifyOTP = catchAsyncError(async (req, res, next) => {
   const result = await verifyOtpFunc({
     req,
     res,
-    reqModel:UserModel,
+    reqModel: UserModel,
+    historyModel: userHistoryModel,
+    deviceTokenModel: AccessTokenModel,
     typeOfUser: TypeOfUser.USER,
   });
   const { accessToken, refreshToken, reqData } = result;
@@ -248,6 +298,7 @@ module.exports = {
   logoutUser,
   refreshToken,
   registerUser,
+  sendOtpToPhoneHandler,
   resendOtp,
   // verifyOTP,
   verifyStatus,
@@ -257,4 +308,5 @@ module.exports = {
   verifyOTPWithoutAuth,
   resendOtpWithoutAuth,
   verifyEmailExist,
+  verifyPhoneOtpHandler,
 };

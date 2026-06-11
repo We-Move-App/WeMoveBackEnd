@@ -7,6 +7,7 @@ const {
   ImageSchema,
 } = require("../../../utils/validation/forSchema");
 const { hash_rounds } = require("../../../config/config");
+const { LnEnum } = require("../../../utils/constants/ENUM");
 const { Schema } = mongoose;
 
 const hotelManagerSchema = new mongoose.Schema(
@@ -15,6 +16,11 @@ const hotelManagerSchema = new mongoose.Schema(
       type: String,
       trim: true,
       minlength: [3, "Full name must be at least 3 characters long"],
+    },
+    managerId: {
+      type: String,
+      unique: true,
+      index: true,
     },
     email: {
       type: String,
@@ -43,6 +49,13 @@ const hotelManagerSchema = new mongoose.Schema(
     avatar: {
       type: ImageSchema,
     },
+    companyName: {
+      type: String,
+    },
+    companyAddress: {
+      type: String,
+    },
+
     role: {
       type: String,
       default: "hotel-manager",
@@ -68,6 +81,23 @@ const hotelManagerSchema = new mongoose.Schema(
       ],
       default: "submitted",
     },
+    remarks: {
+      type: String,
+      default: "", // optional by default
+      trim: true,
+    },
+    batchVerified: {
+      type: Boolean,
+      default: false,
+    },
+    batchVerifiedBy: {
+      admin: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Admin", // or "User" if your admin model is in the same collection
+        default: null,
+      },
+    },
+
     authorities: { type: Schema.Types.Mixed, default: {} },
     parentUserId: {
       type: Schema.Types.ObjectId,
@@ -99,6 +129,12 @@ const hotelManagerSchema = new mongoose.Schema(
     gender: {
       type: String,
       enum: ["male", "female", "prefer not to say"],
+    },
+
+    ln: {
+      type: String,
+      enum: Object.values(LnEnum),
+      default: LnEnum.EN,
     },
     emailVerified: { type: Boolean, default: false },
     phoneNumberVerified: { type: Boolean, default: false },

@@ -16,8 +16,7 @@ const message = {
 const isAdminAuthenticated = catchAsyncError(async (req, res, next) => {
   logger.info("Hitting isAuthenticated middleware");
 
-  const token =
-    req?.cookies?.accessToken || req?.headers["authorization"]?.split(" ")[1];
+  const token = req?.headers["authorization"]?.split(" ")[1];
 
   if (!token) {
     throw new ApiError(
@@ -41,16 +40,20 @@ const isAdminAuthenticated = catchAsyncError(async (req, res, next) => {
     throw new ApiError(statusCode.UNAUTHORIZED, "Invalid access token");
   }
 
-  const user = await AdminModel.findOne({
-    _id: decodedToken?._id,
-  }).select("_id email role verificationStatus authorities parentUserId");
+  const user =
+    (await AdminModel.findOne({
+      _id: decodedToken?._id,
+    }).select(
+      "_id email role verificationStatus authorities parentUserId branch"
+    )) || (await AdminModel.findOne({ _id: decodedToken?._id }));
 
   if (!user) {
-    throw new ApiError(statusCode.UNAUTHORIZED, "Bus Operator not found");
+    throw new ApiError(statusCode.UNAUTHORIZED, "Admin not found");
   }
 
   if (["approved"].includes(user?.verificationStatus)) {
     req.user = user;
+
     return next();
   }
 

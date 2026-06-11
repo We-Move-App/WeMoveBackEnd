@@ -8,7 +8,7 @@ const UserDeviceTokenSchema = new mongoose.Schema(
       required: true,
     },
     token: { type: String, required: true, unique: true },
-    deviceType: { type: String, enum: ["android", "ios", "web"], required: true },
+    // deviceType: { type: String, enum: ["android", "ios", "web"], required: true },
     createdAt: {
       type: Date,
       default: Date.now,
