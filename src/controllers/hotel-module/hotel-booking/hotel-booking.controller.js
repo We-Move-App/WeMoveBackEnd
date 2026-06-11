@@ -1301,87 +1301,96 @@ const cancelHotelBooking = catchAsyncError(async (req, res) => {
   }
 
   // Process refund if booking was paid
-  if (booking.paymentStatus === "PAID") {
-    const refundAmount = booking.finalAmount * 0.5;
+ if (booking.paymentStatus === "PAID") {
+   const refundAmount = booking.finalAmount * 0.5;
 
-    const operatorTxn = await TransactionModel.findOne({
-      bookingId,
-      hotelManagerId: { $ne: null },
-    }).select("hotelManagerId currency amount");
+   // Get hotel owner directly from booking
+   const hotelManagerId = booking.hotelId.ownerId;
 
-    if (!operatorTxn) {
-      throw new ApiError(
-        statusCode.NOT_FOUND,
-        "Transaction not found for this booking"
-      );
-    }
+   const userWallet = await WalletModel.findOne({ userId });
 
-    const hotelManagerId = operatorTxn.hotelManagerId;
+   if (!userWallet) {
+     throw new ApiError(statusCode.NOT_FOUND, "Wallet not found for this user");
+   }
 
-    const userWallet = await WalletModel.findOne({ userId });
-    if (!userWallet) {
-      throw new ApiError(
-        statusCode.NOT_FOUND,
-        "Wallet not found for this user"
-      );
-    }
+   const hotelWallet = await WalletModel.findOne({
+     userId: hotelManagerId,
+   });
 
-    const hotelWallet = await WalletModel.findOne({ userId: hotelManagerId });
-    if (!hotelWallet) {
-      throw new ApiError(
-        statusCode.NOT_FOUND,
-        "Wallet not found for hotel owner"
-      );
-    }
+   if (!hotelWallet) {
+     throw new ApiError(
+       statusCode.NOT_FOUND,
+       "Wallet not found for hotel owner"
+     );
+   }
 
-    // ✅ First: Deduct from hotel wallet
-    if (hotelWallet.balance < refundAmount) {
-      throw new ApiError(
-        statusCode.BAD_REQUEST,
-        "Insufficient balance in hotel wallet to process refund"
-      );
-    }
+   // Check hotel has enough balance
+   if (hotelWallet.balance < refundAmount) {
+     throw new ApiError(
+       statusCode.BAD_REQUEST,
+       "Insufficient balance in hotel wallet to process refund"
+     );
+   }
 
-    hotelWallet.balance -= refundAmount;
-    await hotelWallet.save();
+   // Deduct from hotel wallet
+   hotelWallet.balance -= refundAmount;
+   await hotelWallet.save();
 
-    await TransactionModel.create({
-      userId: hotelManagerId,
-      hotelManagerId,
-      bookingId,
-      transactionId: await Transaction.generateTransactionId(),
-      type: TransactionTypeEnum.DEBIT,
-      amount: refundAmount,
-      currency: hotelWallet.currency,
-      description: {
-        en: `Deduction for 50% refund of cancelled hotel booking ${bookingId}`,
-        fr: `Déduction pour le remboursement de 50 % de la réservation d'hôtel annulée ${bookingId}`,
-      },
-      status: PaymentStatusEnum.SUCCESS,
-      refund: true,
-    });
+   // Credit user wallet
+   userWallet.balance += refundAmount;
+   await userWallet.save();
 
-    // ✅ Then: Credit to user wallet
-    userWallet.balance += refundAmount;
-    await userWallet.save();
+   // Create refund ledger transaction
+   await TransactionModel.create({
+     transactionId: await TransactionModel.generateTransactionId(),
 
-    await TransactionModel.create({
-      userId,
-      bookingId,
-      transactionId: await Transaction.generateTransactionId(),
-      type: TransactionTypeEnum.CREDIT,
-      amount: refundAmount,
-      currency: userWallet.currency,
-      description: {
-        en: `50% refund for cancelled hotel booking ${bookingId}`,
-        fr: `Remboursement de 50 % pour la réservation d'hôtel annulée ${bookingId}`,
-      },
-      status: PaymentStatusEnum.SUCCESS,
-      refund: true,
-    });
+     transactionType: "HOTEL_REFUND",
 
-    booking.paymentStatus = "REFUNDED";
-  }
+     bookingId: booking.bookingId,
+
+     status: PaymentStatusEnum.SUCCESS,
+
+     currency: hotelWallet.currency,
+
+     totalAmount: refundAmount,
+
+     refund: true,
+
+     entries: [
+       {
+         entityType: "HOTEL",
+         entityId: hotelManagerId.toString(),
+         name: booking.hotelId.hotelName,
+         type: "DEBIT",
+         amount: refundAmount,
+       },
+       {
+         entityType: "USER",
+         entityId: userId.toString(),
+         name: null,
+         type: "CREDIT",
+         amount: refundAmount,
+       },
+     ],
+
+     platformFee: 0,
+     operatorShare: 0,
+
+     description: {
+       en: `50% refund for cancelled hotel booking ${booking.bookingId}`,
+       fr: `Remboursement de 50 % pour la réservation d'hôtel annulée ${booking.bookingId}`,
+     },
+
+     meta: {
+       bookingMongoId: booking._id,
+       hotelId: booking.hotelId._id,
+       refundPercentage: 50,
+       originalAmount: booking.finalAmount,
+     },
+   });
+
+   booking.paymentStatus = "REFUNDED";
+ }
 
   // ✅ Cancel booking
   booking.status = "Cancelled";
